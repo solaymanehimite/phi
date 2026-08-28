@@ -1,6 +1,15 @@
+import { Ellipsis, Pencil, Trash2 } from "lucide-react";
 import { memo, useState } from "react";
 import { Button } from "./ui/button";
 import { ChatIcon, ComposeIcon, PanelLeftIcon } from "./ui/icons";
+import { Input } from "./ui/input";
+import { GroupCollapsibleTrigger } from "./ui/collapsible";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "./ui/dropdown-menu";
 import type { SessionGroup } from "../hooks/useSessions";
 
 type SidebarProps = {
@@ -78,15 +87,13 @@ export const Sidebar = memo(function Sidebar({
       </div>
 
       <div className="px-2 pt-3">
-        <div className="relative">
-          <input
-            value={search}
-            onChange={(e) => onSearchChange(e.target.value)}
-            placeholder="Search sessions…"
-            aria-label="Search sessions"
-            className="h-8 w-full rounded-lg border border-white/[0.07] bg-white/[0.03] px-3 text-[13px] text-[#dedee1] placeholder:text-[#5e5e63] outline-none focus:border-white/[0.14] focus:bg-white/[0.05]"
-          />
-        </div>
+        <Input
+          value={search}
+          onChange={(e) => onSearchChange(e.target.value)}
+          placeholder="Search sessions…"
+          aria-label="Search sessions"
+          variant="search"
+        />
       </div>
 
       <div className="min-h-0 flex-1 overflow-y-auto px-2 pt-4">
@@ -106,18 +113,9 @@ export const Sidebar = memo(function Sidebar({
               const isCollapsed = collapsed.has(group.cwd);
               return (
                 <div key={group.cwd}>
-                  <button
-                    type="button"
-                    onClick={() => onToggleGroup(group.cwd)}
-                    className="flex w-full items-center gap-1.5 rounded px-2 py-1 text-left text-[11px] font-medium tracking-wide text-[#535359] hover:bg-white/[0.04] hover:text-[#8b8b91]"
-                  >
-                    <span
-                      className={`inline-block text-[10px] transition-transform ${isCollapsed ? "-rotate-90" : ""}`}
-                    >
-                      ▾
-                    </span>
+                  <GroupCollapsibleTrigger collapsed={isCollapsed} onClick={() => onToggleGroup(group.cwd)}>
                     <span className="min-w-0 flex-1 truncate">{group.displayCwd}</span>
-                  </button>
+                  </GroupCollapsibleTrigger>
 
                   {!isCollapsed && (
                     <nav aria-label={group.displayCwd} className="mt-1 space-y-0.5">
@@ -141,11 +139,9 @@ export const Sidebar = memo(function Sidebar({
           </div>
         )}
       </div>
-
-
     </aside>
   );
-})
+});
 
 function SessionRow({
   active,
@@ -164,7 +160,6 @@ function SessionRow({
   onRename: (name: string) => Promise<void>;
   onDelete: () => Promise<void>;
 }) {
-  const [menuOpen, setMenuOpen] = useState(false);
   const [renaming, setRenaming] = useState(false);
   const [draft, setDraft] = useState(title);
 
@@ -173,85 +168,70 @@ function SessionRow({
     if (!name) return;
     await onRename(name);
     setRenaming(false);
-    setMenuOpen(false);
   }
 
   return (
     <div
       className={`group flex h-8 w-full items-center gap-1 rounded-lg px-1 text-left text-[13px] ${active ? "bg-white/[0.075] text-[#e3e3e5]" : "text-[#79797f] hover:bg-white/[0.045] hover:text-[#bdbdc1]"}`}
     >
-      <button
-        type="button"
-        onClick={onClick}
-        className="flex min-w-0 flex-1 items-center gap-2.5 truncate rounded-lg px-1.5 py-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#d6a85f]/40"
-      >
-        <ChatIcon className={`size-4 shrink-0 ${active ? "text-[#b9b9be]" : "text-[#5f5f65]"}`} />
-        {renaming ? (
-          <input
+      {renaming ? (
+        <div className="flex min-w-0 flex-1 items-center gap-2.5 truncate rounded-lg px-1.5 py-1">
+          <ChatIcon className={`size-4 shrink-0 ${active ? "text-[#b9b9be]" : "text-[#5f5f65]"}`} />
+          <Input
             autoFocus
             value={draft}
             onChange={(e) => setDraft(e.target.value)}
             onKeyDown={(e) => {
-              if (e.key === "Enter") handleRename();
+              if (e.key === "Enter") {
+                e.preventDefault();
+                handleRename();
+              }
               if (e.key === "Escape") setRenaming(false);
-              e.stopPropagation();
             }}
-            onClick={(e) => e.stopPropagation()}
             onBlur={() => setRenaming(false)}
-            className="min-w-0 flex-1 rounded border border-[#d6a85f]/40 bg-[#1b1b1e] px-1 py-0 text-[13px] outline-none"
+            variant="inline"
           />
-        ) : (
-          <span className="min-w-0 flex-1 truncate">{title}</span>
-        )}
-        <span className="shrink-0 text-[11px] text-[#4f4f55]">{count > 0 ? `${count}` : ""}</span>
-        <span className="shrink-0 text-[11px] text-[#4f4f55]">{time}</span>
-      </button>
-
-      <div className="relative shrink-0">
+          <span className="shrink-0 text-[11px] text-[#4f4f55]">{time}</span>
+        </div>
+      ) : (
         <button
           type="button"
-          aria-label="Session actions"
-          onClick={() => setMenuOpen((v) => !v)}
-          className={`grid size-6 place-items-center rounded text-[#5f5f65] hover:bg-white/[0.08] hover:text-[#bdbdc1] ${menuOpen ? "bg-white/[0.08] text-[#bdbdc1]" : "opacity-0 group-hover:opacity-100 focus:opacity-100"}`}
+          onClick={onClick}
+          className="flex min-w-0 flex-1 items-center gap-2.5 truncate rounded-lg px-1.5 py-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#d6a85f]/40"
         >
-          …
+          <ChatIcon className={`size-4 shrink-0 ${active ? "text-[#b9b9be]" : "text-[#5f5f65]"}`} />
+          <span className="min-w-0 flex-1 truncate">{title}</span>
+          <span className="shrink-0 text-[11px] text-[#4f4f55]">{count > 0 ? `${count}` : ""}</span>
+          <span className="shrink-0 text-[11px] text-[#4f4f55]">{time}</span>
         </button>
-        {menuOpen && (
-          <div className="absolute right-0 top-7 z-10 w-36 rounded-lg border border-white/[0.08] bg-[#1b1b1e] py-1 shadow-xl">
-            {!renaming ? (
-              <button
-                type="button"
-                onClick={() => {
-                  setDraft(title);
-                  setRenaming(true);
-                }}
-                className="w-full px-3 py-1.5 text-left text-[13px] text-[#bdbdc1] hover:bg-white/[0.06]"
-              >
-                Rename
-              </button>
-            ) : (
-              <button
-                type="button"
-                onClick={handleRename}
-                className="w-full px-3 py-1.5 text-left text-[13px] text-[#d6a85f] hover:bg-white/[0.06]"
-              >
-                Save name
-              </button>
-            )}
-            <button
-              type="button"
-              onClick={async () => {
-                if (!confirm("Delete this session?")) return;
-                setMenuOpen(false);
-                await onDelete();
-              }}
-              className="w-full px-3 py-1.5 text-left text-[13px] text-red-300 hover:bg-white/[0.06]"
-            >
-              Delete
-            </button>
-          </div>
-        )}
-      </div>
+      )}
+
+      <DropdownMenu>
+        <DropdownMenuTrigger aria-label="Session actions">
+          <Ellipsis size={14} strokeWidth={1.8} />
+        </DropdownMenuTrigger>
+        <DropdownMenuContent>
+          <DropdownMenuItem
+            icon={<Pencil size={14} className="text-white/30" />}
+            onClick={() => {
+              setDraft(title);
+              setRenaming(true);
+            }}
+          >
+            Rename
+          </DropdownMenuItem>
+          <DropdownMenuItem
+            variant="danger"
+            icon={<Trash2 size={14} className="text-white/30" />}
+            onClick={async () => {
+              if (!confirm("Delete this session?")) return;
+              await onDelete();
+            }}
+          >
+            Delete
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
     </div>
   );
 }

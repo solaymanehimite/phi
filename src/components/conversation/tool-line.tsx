@@ -25,19 +25,9 @@ function toolArgSummary(name: string, args: Record<string, unknown>): string {
     return first ? `${name} ${first.slice(0, 80)}` : name;
 }
 
-function ToolIcon({ name }: { name: string }) {
-    const isTerminal = name === "bash" || name === "powershell";
-    return (
-        <span className="grid size-3.5 place-items-center rounded bg-white/[0.06] text-[10px] leading-none text-[#8b8b91]">
-            {isTerminal ? "›_" : "≡"}
-        </span>
-    );
-}
-
 export function ToolLine({ name, args, result }: ToolLineProps) {
     const [open, setOpen] = useState(false);
     const isError = result?.isError ?? false;
-    const dot = isError ? "bg-red-400" : "bg-emerald-400";
     const summary = toolArgSummary(name, args);
 
     return (
@@ -47,9 +37,9 @@ export function ToolLine({ name, args, result }: ToolLineProps) {
                 onClick={() => setOpen((v) => !v)}
                 className="flex w-full items-center gap-2 px-3 py-1 text-left"
             >
-                <span className={`size-1 shrink-0 rounded-full ${dot}`} />
-                <ToolIcon name={name} />
-                <span className="min-w-0 flex-1 truncate font-mono text-xs leading-4 text-[#bdbdc1]">
+                <span
+                    className={`min-w-0 flex-1 truncate font-mono text-xs leading-4 text-[#bdbdc1] ${isError ? "text-[#ff5c5c]" : ""}`}
+                >
                     {summary}
                 </span>
                 <span
