@@ -1,6 +1,7 @@
 import { useRef, useState, type FormEvent, type KeyboardEvent } from "react";
 import { Button } from "./ui/button";
-import { ArrowUpIcon, ChevronDownIcon, StopIcon } from "./ui/icons";
+import { ArrowUpIcon, StopIcon } from "./ui/icons";
+import { ModelSelector } from "./model-selector";
 
 type ComposerProps = {
     onSend: (message: string) => void;
@@ -66,18 +67,7 @@ export function Composer({
             />
 
             <div className="flex items-center justify-between gap-3 px-0.5 pb-0.5">
-                <label className="relative inline-flex h-8 items-center rounded-lg text-[12px] text-phi-text-tertiary transition-colors hover:bg-phi-overlay-hover hover:text-phi-text-secondary focus-within:ring-2 focus-within:ring-phi-accent/40">
-                    <select
-                        aria-label="Model"
-                        defaultValue="auto"
-                        className="h-full cursor-pointer appearance-none bg-transparent py-0 pl-2.5 pr-7 outline-none"
-                    >
-                        <option value="auto">Auto</option>
-                        <option value="sonnet">Claude Sonnet</option>
-                        <option value="gpt">GPT-5</option>
-                    </select>
-                    <ChevronDownIcon className="pointer-events-none absolute right-1.5 size-3.5" />
-                </label>
+                <ModelSelector />
 
                 {isStreaming ? (
                     <Button

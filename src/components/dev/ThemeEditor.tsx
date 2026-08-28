@@ -59,6 +59,13 @@ const TOKENS: Token[] = [
   { name: "--color-phi-error-border", label: "error-border", group: "Status" },
   { name: "--color-phi-error-text", label: "error-text", group: "Status" },
   { name: "--color-phi-streaming", label: "streaming", group: "Status" },
+  // Thinking effort
+  { name: "--color-phi-thinking-low", label: "thinking-low", group: "Thinking" },
+  { name: "--color-phi-thinking-minimal", label: "thinking-minimal", group: "Thinking" },
+  { name: "--color-phi-thinking-medium", label: "thinking-medium", group: "Thinking" },
+  { name: "--color-phi-thinking-high", label: "thinking-high", group: "Thinking" },
+  { name: "--color-phi-thinking-xhigh", label: "thinking-xhigh", group: "Thinking" },
+  { name: "--color-phi-thinking-max", label: "thinking-max", group: "Thinking" },
 ];
 
 function getComputedVar(name: string): string {

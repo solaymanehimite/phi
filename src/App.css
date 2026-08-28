@@ -59,6 +59,14 @@
   --color-phi-separator: #3e3e41;
   --color-phi-white: #ffffff;
   --color-phi-white-muted: rgb(255 255 255 / 0.3);
+
+  /* Thinking effort — distinct ramp for slider */
+  --color-phi-thinking-low: #6b7280;
+  --color-phi-thinking-minimal: #8b8d9a;
+  --color-phi-thinking-medium: #d6a85f;
+  --color-phi-thinking-high: #e69a3a;
+  --color-phi-thinking-xhigh: #ea6e2c;
+  --color-phi-thinking-max: #ef4444;
 }
 
 @layer base {
