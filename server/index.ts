@@ -75,12 +75,35 @@ app.get("/api/health", (_req, res) => {
   res.json({ ok: true, port: PORT, agentDir: getAgentDir() });
 });
 
-// Models
+// Models — returns auth-filtered catalogue for the selector
+// Normalize to plain JSON so frontend doesn't depend on SDK class shape
+// Cached 30s to avoid hammering getAvailable/checkAuth on every rerender/poll.
+let modelsCache: { at: number; payload: any } | null = null;
+const MODELS_TTL_MS = 30_000;
 app.get("/api/models", async (_req, res) => {
   try {
+    const now = Date.now();
+    if (modelsCache && now - modelsCache.at < MODELS_TTL_MS) {
+      return res.json(modelsCache.payload);
+    }
     const mr = await getModelRuntime();
-    const available = await (mr as any).getAvailable?.() ?? [];
-    res.json({ available });
+    const availableRaw: any[] = await (mr as any).getAvailable?.() ?? [];
+    const available = availableRaw.map((m: any) => ({
+      provider: m.provider,
+      id: m.id,
+      name: m.name ?? m.id,
+      api: m.api,
+      reasoning: !!m.reasoning,
+      input: m.input ?? ["text"],
+      output: m.output,
+      cost: m.cost ?? { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+      contextWindow: m.contextWindow ?? 0,
+      maxTokens: m.maxTokens ?? 0,
+      thinkingLevelMap: m.thinkingLevelMap ?? null,
+    }));
+    const payload = { available, error: (mr as any).getError?.() ?? null };
+    modelsCache = { at: now, payload };
+    res.json(payload);
   } catch (e: any) {
     res.status(500).json({ error: e?.message ?? String(e) });
   }
@@ -196,7 +219,10 @@ app.post("/api/abort", async (_req, res) => {
   }
 });
 
-// Model switch
+// Model switch — supports changing model and/or thinkingLevel in one call
+// Body: { provider, modelId, thinkingLevel? } where provider+modelId changes model.
+// A bare { thinkingLevel } only changes effort for the current model.
+// Effort visibility is filtered to the CURRENT model's thinkingLevelMap (gap B).
 app.post("/api/model", async (req, res) => {
   try {
     const { provider, modelId, thinkingLevel } = req.body as {
@@ -204,16 +230,67 @@ app.post("/api/model", async (req, res) => {
       modelId?: string;
       thinkingLevel?: string;
     };
+
+    if (!provider && !modelId && !thinkingLevel) {
+      return res.status(400).json({ error: "missing provider/modelId or thinkingLevel" });
+    }
+
     const mr = await getModelRuntime();
-    const target = runtime?.session ?? singleSession;
-    if (provider && modelId && target && (target as any).setModel) {
-      const model = (mr as any).getModel?.(provider, modelId) ?? { provider, modelId };
-      await (target as any).setModel(model);
+    // Ensure a session exists even if user sets model before first prompt
+    let target: any = runtime?.session ?? singleSession;
+    if (!target) {
+      const rt = await getRuntime(process.cwd());
+      target = rt.session;
     }
-    if (thinkingLevel && target && (target as any).setThinkingLevel) {
+    if (!target) return res.status(500).json({ error: "no session available" });
+
+    let nextModel: any = target.model;
+    let nextLevel: string | undefined = target.thinkingLevel;
+
+    if (provider && modelId) {
+      const found = (mr as any).getModel?.(provider, modelId);
+      if (!found) return res.status(404).json({ error: `unknown model ${provider}/${modelId}` });
+      // Disallow switch while streaming — matches sidebar abort guard (App.tsx)
+      if (target.isStreaming) return res.status(409).json({ error: "cannot switch model while streaming" });
+      await (target as any).setModel(found);
+      nextModel = found;
+    }
+
+    if (thinkingLevel) {
+      // Validate against current/next model's supported levels when map exists
+      const map = nextModel?.thinkingLevelMap as Record<string, string | null> | undefined;
+      if (map) {
+        const supported = Object.entries(map)
+          .filter(([, v]) => v !== null)
+          .map(([k]) => k);
+        // if map is present and non-empty, enforce membership (allow "off" as well)
+        if (supported.length && !supported.includes(thinkingLevel) && !(thinkingLevel in map)) {
+          // Be lenient: still allow via clamp on frontend, but warn here with 400 for strictness
+          // For gap B we reject unsupported to keep slider honest
+          return res.status(400).json({ error: `thinkingLevel "${thinkingLevel}" not supported by ${nextModel?.provider}/${nextModel?.id}` });
+        }
+      }
       (target as any).setThinkingLevel(thinkingLevel);
+      nextLevel = thinkingLevel;
     }
-    res.json({ ok: true });
+
+    // Return canonical post-mutation view so frontend can optimistically sync
+    const outModel = nextModel
+      ? {
+          provider: nextModel.provider,
+          id: nextModel.id,
+          name: nextModel.name ?? nextModel.id,
+          api: nextModel.api,
+          reasoning: !!nextModel.reasoning,
+          input: nextModel.input ?? ["text"],
+          cost: nextModel.cost ?? { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+          contextWindow: nextModel.contextWindow ?? 0,
+          maxTokens: nextModel.maxTokens ?? 0,
+          thinkingLevelMap: nextModel.thinkingLevelMap ?? null,
+        }
+      : null;
+
+    res.json({ ok: true, model: outModel ?? target.model ?? null, thinkingLevel: nextLevel ?? target.thinkingLevel });
   } catch (e: any) {
     res.status(500).json({ error: e?.message ?? String(e) });
   }

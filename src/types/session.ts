@@ -32,10 +32,34 @@ export type SessionEntry = {
   [key: string]: unknown;
 };
 
+export type ThinkingLevel = "minimal" | "low" | "medium" | "high" | "xhigh" | "max";
+export type ModelThinkingLevel = "off" | ThinkingLevel;
+
+export type ModelCost = {
+  input: number;
+  output: number;
+  cacheRead: number;
+  cacheWrite: number;
+};
+
+export type ModelInfo = {
+  provider: string;
+  id: string;
+  name: string;
+  api: string;
+  reasoning: boolean;
+  input: Array<"text" | "image">;
+  output?: Array<"text" | "image">;
+  cost: ModelCost;
+  contextWindow: number;
+  maxTokens: number;
+  thinkingLevelMap?: Partial<Record<ModelThinkingLevel, string | null>> | null;
+};
+
 export type SessionContext = {
   messages: AgentMessage[];
-  thinkingLevel: string;
-  model: { provider: string; modelId: string } | null;
+  thinkingLevel: ThinkingLevel | string;
+  model: ModelInfo | { provider: string; modelId: string; id?: string; name?: string } | null;
 };
 
 export type AgentMessage = {

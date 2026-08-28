@@ -1,4 +1,4 @@
-import type { SessionInfo, SessionMessagesResponse } from "../types/session";
+import type { ModelInfo, SessionInfo, SessionMessagesResponse, ThinkingLevel } from "../types/session";
 
 const BASE = "/api";
 
@@ -66,8 +66,36 @@ export async function deleteSession(file: string): Promise<{ ok: boolean }> {
   return jsonOrThrow(res);
 }
 
-export async function getModels(): Promise<{ available: unknown[] }> {
+export type ModelsResponse = {
+  available: ModelInfo[];
+  error?: string | null;
+  providers?: Array<{ id: string; name: string; hasAuth: boolean }>;
+};
+
+export async function getModels(): Promise<ModelsResponse> {
   const res = await fetch(`${BASE}/models`);
+  return jsonOrThrow(res);
+}
+
+export async function setModel(opts: {
+  provider: string;
+  modelId: string;
+  thinkingLevel?: ThinkingLevel;
+}): Promise<{ ok: boolean; model?: ModelInfo; thinkingLevel?: string }> {
+  const res = await fetch(`${BASE}/model`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(opts),
+  });
+  return jsonOrThrow(res);
+}
+
+export async function setThinkingLevel(thinkingLevel: ThinkingLevel): Promise<{ ok: boolean; thinkingLevel: string }> {
+  const res = await fetch(`${BASE}/model`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ thinkingLevel }),
+  });
   return jsonOrThrow(res);
 }
 

@@ -90,6 +90,21 @@ export function useChat() {
     await openFile(activeFile);
   }, [activeFile, openFile]);
 
+  // Optimistic patch for model/thinking without full refetch — keeps UI snappy
+  const patchModel = useCallback((model: any, thinkingLevel?: string) => {
+    setData((prev) => {
+      if (!prev) return prev;
+      return {
+        ...prev,
+        context: {
+          ...prev.context,
+          model: model ?? prev.context.model,
+          thinkingLevel: thinkingLevel ?? (prev.context as any).thinkingLevel,
+        },
+      } as typeof prev;
+    });
+  }, []);
+
   const abort = useCallback(async () => {
     if (abortRef.current) {
       try { abortRef.current.abort(); } catch {}
@@ -254,5 +269,5 @@ export function useChat() {
     [activeFile, flush, scheduleFlush],
   );
 
-  return { activeFile, data, loading, error, isStreaming, streaming, openFile, clear, refresh, setActiveFile, prompt, abort };
+  return { activeFile, data, loading, error, isStreaming, streaming, openFile, clear, refresh, patchModel, setActiveFile, prompt, abort };
 }

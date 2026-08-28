@@ -8,6 +8,8 @@ import { PanelLeftIcon } from "./components/ui/icons";
 import { ThemeEditor } from "./components/dev/ThemeEditor";
 import { useSessions } from "./hooks/useSessions";
 import { useChat } from "./hooks/useChat";
+import { useModels } from "./hooks/useModels";
+import { createSession } from "./lib/api";
 
 function formatCwd(cwd: string | undefined): string {
     if (!cwd) return "";
@@ -19,6 +21,12 @@ export default function App() {
     const [sidebarOpen, setSidebarOpen] = useState(true);
     const sessions = useSessions();
     const chat = useChat();
+    const models = useModels();
+    const [modelError, setModelError] = useState<string | null>(null);
+    // Draft selection for "New chat" (no activeFile) — so the pill still reflects user choice
+    // before the first session exists. Applied on next prompt / create.
+    const [draftModelKey, setDraftModelKey] = useState<string | undefined>(undefined);
+    const [draftThinking, setDraftThinking] = useState<import("./types/session").ThinkingLevel | undefined>(undefined);
 
     const activeTitle =
         chat.data?.sessionName ||
@@ -26,6 +34,71 @@ export default function App() {
         chat.activeFile?.split("/").pop() ||
         "New chat";
     const activeCwd = chat.data?.cwd || chat.data?.header?.cwd;
+
+    // Derive "provider/id" key for the selector from session context; fall back to draft for New chat
+    const ctxModel: any = (chat.data?.context as any)?.model;
+    const ctxModelKey = ctxModel ? `${ctxModel.provider}/${ctxModel.modelId ?? ctxModel.id}` : undefined;
+    const selectedModelKey = ctxModelKey ?? draftModelKey;
+    const ctxThinking = (chat.data?.context as any)?.thinkingLevel as string | undefined;
+    const thinkingLevel = ctxThinking ?? draftThinking;
+
+    const handleSelectModel = useCallback(
+        async (provider: string, id: string) => {
+            const key = `${provider}/${id}`;
+            // New chat: no session yet — keep draft so pill updates immediately and next prompt uses it
+            if (!chat.activeFile) {
+                setDraftModelKey(key);
+                setModelError(null);
+                return;
+            }
+            setModelError(null);
+            // Optimistic — update pill instantly, don't block UI on server round-trip
+            const info = models.models.find((m) => m.provider === provider && m.id === id);
+            const optimistic: any = info ?? { provider, id, modelId: id, name: id };
+            chat.patchModel(optimistic, undefined);
+            try {
+                const res: any = await models.setModel(provider, id);
+                if (res?.model) chat.patchModel(res.model, res.thinkingLevel);
+                // silent background sync, not awaited
+                chat.refresh().catch(() => {});
+            } catch (e) {
+                const msg = e instanceof Error ? e.message : String(e);
+                setModelError(msg);
+                chat.refresh().catch(() => {});
+            }
+        },
+        [chat.activeFile, chat.patchModel, chat.refresh, models.models, models.setModel],
+    );
+
+    const handleThinkingChange = useCallback(
+        async (level: import("./types/session").ThinkingLevel) => {
+            if (!chat.activeFile) {
+                setDraftThinking(level);
+                return;
+            }
+            setModelError(null);
+            // Optimistic — slider moves instantly
+            chat.patchModel(null as any, level);
+            try {
+                const res: any = await models.setThinkingLevel(level);
+                if (res?.thinkingLevel) chat.patchModel(null as any, res.thinkingLevel);
+                chat.refresh().catch(() => {});
+            } catch (e) {
+                const msg = e instanceof Error ? e.message : String(e);
+                setModelError(msg);
+                chat.refresh().catch(() => {});
+            }
+        },
+        [chat.activeFile, chat.patchModel, chat.refresh, models.setThinkingLevel],
+    );
+
+    // When a session is opened, its context becomes authoritative — clear draft
+    useEffect(() => {
+        if (chat.activeFile && chat.data?.context) {
+            setDraftModelKey(undefined);
+            setDraftThinking(undefined);
+        }
+    }, [chat.activeFile, chat.data?.context]);
 
     const handleSelect = useCallback(
         async (file: string) => {
@@ -85,6 +158,41 @@ export default function App() {
 
     const handleSend = useCallback(
         async (content: string) => {
+            // If starting a new session with a draft model/thinking, materialize the session first
+            // so setModel targets the correct file before the first prompt.
+            if (!chat.activeFile && draftModelKey) {
+                try {
+                    const res = await createSession();
+                    const file = res.file;
+                    // Make runtime point at the new file
+                    try {
+                        await sessions.switchTo(file);
+                    } catch {}
+                    await chat.openFile(file);
+                    sessions.addOptimistic(file, "/home/solaymanehimite/Dev/ship/Phi", content);
+                    const parsed = draftModelKey.includes("/") ? { provider: draftModelKey.split("/")[0], id: draftModelKey.split("/").slice(1).join("/") } : null;
+                    if (parsed) {
+                        try {
+                            await models.setModel(parsed.provider, parsed.id);
+                        } catch (e) {
+                            setModelError(e instanceof Error ? e.message : String(e));
+                        }
+                    }
+                    if (draftThinking) {
+                        try {
+                            await models.setThinkingLevel(draftThinking);
+                        } catch (e) {
+                            setModelError(e instanceof Error ? e.message : String(e));
+                        }
+                    }
+                    setDraftModelKey(undefined);
+                    setDraftThinking(undefined);
+                    await chat.refresh();
+                } catch (e) {
+                    // fallback to normal prompt path if pre-materialization fails
+                    console.warn("draft model pre-create failed", e);
+                }
+            }
             await chat.prompt(content, {
                 onNewFile: (file, cwd, firstMessage) => {
                     // optimistic insert so session appears immediately (before server indexes it)
@@ -99,7 +207,7 @@ export default function App() {
             // silent recency refresh after prompt completes (no flash)
             sessions.refresh({ silent: true });
         },
-        [chat.prompt, chat.data?.cwd, sessions.addOptimistic, sessions.refresh],
+        [chat.prompt, chat.data?.cwd, sessions.addOptimistic, sessions.refresh, chat.activeFile, draftModelKey, draftThinking, models.setModel, models.setThinkingLevel, chat.openFile, chat.refresh, sessions.switchTo],
     );
 
     // auto-scroll while streaming and after history replaces streaming
@@ -243,10 +351,31 @@ export default function App() {
                     </div>
 
                     <div className="shrink-0 px-4 sm:px-7">
+                        {(modelError || (!models.loading && models.models.length === 0 && !models.error)) && (
+                            <div className="mx-auto mb-2 w-full max-w-3xl">
+                                {modelError ? (
+                                    <div className="flex items-center justify-between gap-2 rounded-lg border border-phi-error-border bg-phi-error-bg px-3 py-2 text-[12.5px] text-phi-error-text">
+                                        <span className="truncate">{modelError}</span>
+                                        <button onClick={() => setModelError(null)} className="shrink-0 text-[11px] underline opacity-80 hover:opacity-100">Dismiss</button>
+                                    </div>
+                                ) : (
+                                    <div className="rounded-lg border border-amber-500/20 bg-amber-500/10 px-3 py-2 text-[12.5px] text-amber-200/90">
+                                        No models available — check auth (run <code className="rounded bg-black/20 px-1">pi auth</code>) or configure API keys. The model selector will populate after auth.
+                                    </div>
+                                )}
+                            </div>
+                        )}
                         <Composer
                             onSend={handleSend}
                             onAbort={chat.abort}
                             isStreaming={chat.isStreaming}
+                            models={models.models}
+                            modelsLoading={models.loading}
+                            modelsError={models.error}
+                            selectedModelKey={selectedModelKey}
+                            thinkingLevel={thinkingLevel}
+                            onSelectModel={handleSelectModel}
+                            onThinkingChange={handleThinkingChange}
                         />
                     </div>
                 </section>

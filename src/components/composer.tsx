@@ -2,12 +2,20 @@ import { useRef, useState, type FormEvent, type KeyboardEvent } from "react";
 import { Button } from "./ui/button";
 import { ArrowUpIcon, StopIcon } from "./ui/icons";
 import { ModelSelector } from "./model-selector";
+import type { ModelInfo, ThinkingLevel } from "../types/session";
 
 type ComposerProps = {
     onSend: (message: string) => void;
     onAbort?: () => void;
     isStreaming?: boolean;
     disabled?: boolean;
+    models?: ModelInfo[];
+    modelsLoading?: boolean;
+    modelsError?: string | null;
+    selectedModelKey?: string;
+    thinkingLevel?: string;
+    onSelectModel?: (provider: string, id: string) => void | Promise<void>;
+    onThinkingChange?: (level: ThinkingLevel) => void | Promise<void>;
 };
 
 export function Composer({
@@ -15,6 +23,13 @@ export function Composer({
     onAbort,
     isStreaming,
     disabled,
+    models,
+    modelsLoading,
+    modelsError,
+    selectedModelKey,
+    thinkingLevel,
+    onSelectModel,
+    onThinkingChange,
 }: ComposerProps) {
     const [message, setMessage] = useState("");
     const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -67,7 +82,17 @@ export function Composer({
             />
 
             <div className="flex items-center justify-between gap-3 px-0.5 pb-0.5">
-                <ModelSelector />
+                <ModelSelector
+                    models={models}
+                    value={selectedModelKey}
+                    thinkingLevel={thinkingLevel}
+                    onSelect={onSelectModel}
+                    onThinkingChange={onThinkingChange}
+                    disabled={!!disabled}
+                    isStreaming={!!isStreaming}
+                    loading={!!modelsLoading}
+                    error={modelsError ?? null}
+                />
 
                 {isStreaming ? (
                     <Button
