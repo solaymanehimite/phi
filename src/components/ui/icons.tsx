@@ -56,3 +56,11 @@ export function ArrowUpIcon(props: IconProps) {
     </svg>
   );
 }
+
+export function StopIcon(props: IconProps) {
+  return (
+    <svg {...defaults} {...props}>
+      <rect x="8" y="8" width="8" height="8" rx="1" fill="currentColor" stroke="none" />
+    </svg>
+  );
+}

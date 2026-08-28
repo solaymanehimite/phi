@@ -70,3 +70,8 @@ export async function getModels(): Promise<{ available: unknown[] }> {
   const res = await fetch(`${BASE}/models`);
   return jsonOrThrow(res);
 }
+
+export async function abortPrompt(): Promise<{ ok: boolean }> {
+  const res = await fetch(`${BASE}/abort`, { method: "POST" });
+  return jsonOrThrow(res);
+}

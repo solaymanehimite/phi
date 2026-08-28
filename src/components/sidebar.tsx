@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { memo, useState } from "react";
 import { Button } from "./ui/button";
 import { ChatIcon, ComposeIcon, PanelLeftIcon } from "./ui/icons";
 import type { SessionGroup } from "../hooks/useSessions";
@@ -39,7 +39,7 @@ function titleFor(s: { name?: string; firstMessage: string }): string {
   return t.length > 42 ? `${t.slice(0, 42).trim()}…` : t;
 }
 
-export function Sidebar({
+export const Sidebar = memo(function Sidebar({
   groups,
   activeFile,
   onSelect,
@@ -145,7 +145,7 @@ export function Sidebar({
 
     </aside>
   );
-}
+})
 
 function SessionRow({
   active,

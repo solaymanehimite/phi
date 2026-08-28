@@ -50,8 +50,9 @@ export function useSessions() {
   const [search, setSearch] = useState("");
   const [collapsed, setCollapsed] = useState<Set<string>>(() => new Set());
 
-  const refresh = useCallback(async () => {
-    setLoading(true);
+  const refresh = useCallback(async (opts?: { silent?: boolean }) => {
+    const silent = !!opts?.silent;
+    if (!silent) setLoading(true);
     setError(null);
     try {
       // all=1 for grouped sidebar (PRD 6.1); server decodes cwd
@@ -60,7 +61,7 @@ export function useSessions() {
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   }, []);
 
@@ -93,7 +94,7 @@ export function useSessions() {
   const createNew = useCallback(
     async (cwd?: string) => {
       const res = await createSession(cwd);
-      await refresh();
+      await refresh({ silent: true });
       return res.file;
     },
     [refresh],
@@ -106,7 +107,7 @@ export function useSessions() {
   const rename = useCallback(
     async (file: string, name: string) => {
       await renameSession(file, name);
-      await refresh();
+      await refresh({ silent: true });
     },
     [refresh],
   );
@@ -114,10 +115,30 @@ export function useSessions() {
   const remove = useCallback(
     async (file: string) => {
       await deleteSession(file);
-      await refresh();
+      await refresh({ silent: true });
     },
     [refresh],
   );
+
+  const addOptimistic = useCallback((file: string, cwd: string, firstMessage: string) => {
+    setSessions((prev) => {
+      if (prev.some((s) => s.path === file)) return prev;
+      const now = new Date().toISOString();
+      const raw = file.split("/").pop() ?? file;
+      const id = raw.replace(".jsonl", "").split("_").pop() ?? raw;
+      const info: SessionInfo = {
+        path: file,
+        id,
+        cwd,
+        created: now,
+        modified: now,
+        messageCount: 1,
+        firstMessage: firstMessage.slice(0, 200),
+        allMessagesText: firstMessage,
+      };
+      return [info, ...prev];
+    });
+  }, []);
 
   return {
     sessions,
@@ -134,5 +155,6 @@ export function useSessions() {
     switchTo,
     rename,
     remove,
+    addOptimistic,
   };
 }
