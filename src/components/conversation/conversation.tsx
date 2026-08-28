@@ -92,7 +92,7 @@ export function Conversation({ messages }: Props) {
     }
 
     return (
-        <div className="space-y-6 pb-8 pt-3 max-w-2xl">
+        <div className="w-full max-w-2xl min-w-0 space-y-6 pb-8 pt-3">
             {msgs.map((m, idx) => {
                 const role = String(m.role ?? "");
 
