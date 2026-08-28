@@ -5,6 +5,7 @@ import { Streaming } from "./components/conversation/streaming";
 import { Sidebar } from "./components/sidebar";
 import { Button } from "./components/ui/button";
 import { PanelLeftIcon } from "./components/ui/icons";
+import { ThemeEditor } from "./components/dev/ThemeEditor";
 import { useSessions } from "./hooks/useSessions";
 import { useChat } from "./hooks/useChat";
 
@@ -250,6 +251,7 @@ export default function App() {
                     </div>
                 </section>
             </main>
+            <ThemeEditor />
         </div>
     );
 }

@@ -57,7 +57,7 @@ export function DropdownMenuItem({
                 onClick={onClick}
                 className="group flex w-full items-center gap-3 rounded-lg px-3 py-1 text-left text-[13px] text-phi-text-secondary data-focus:bg-phi-overlay-strong"
             >
-                {icon}
+                {icon ? <span className="shrink-0 text-phi-text-tertiary group-hover:text-phi-text-secondary group-data-[focus]:text-phi-text-secondary">{icon}</span> : null}
                 {children}
             </button>
         </MenuItem>

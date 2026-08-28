@@ -17,7 +17,7 @@ export function SidebarItem({ active = false, label, onClick }: SidebarItemProps
           : "text-phi-text-tertiary hover:bg-phi-overlay-hover hover:text-phi-text-secondary"
       }`}
     >
-      <ChatIcon className={active ? "text-phi-icon-active" : "text-phi-icon"} />
+      <ChatIcon className={active ? "text-phi-icon-active" : "text-phi-icon group-hover:text-phi-text-secondary"} />
       <span className="min-w-0 flex-1 truncate">{label}</span>
     </button>
   );

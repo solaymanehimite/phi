@@ -1,7 +1,7 @@
-import { Ellipsis, Pencil, Trash2 } from "lucide-react";
+import { Ellipsis, LoaderCircle, PencilLine, Plus, Trash } from "lucide-react";
 import { memo, useState } from "react";
 import { Button } from "./ui/button";
-import { ChatIcon, ComposeIcon, PanelLeftIcon } from "./ui/icons";
+import { PanelLeftIcon } from "./ui/icons";
 import { Input } from "./ui/input";
 import { GroupCollapsibleTrigger } from "./ui/collapsible";
 import {
@@ -88,12 +88,12 @@ export const Sidebar = memo(function Sidebar({
           title={isStreaming ? "A response is streaming — starting a new chat will abort it" : undefined}
 
         >
-          <ComposeIcon />
+          <Plus size={16} strokeWidth={2.25} />
           New chat
         </Button>
       </div>
 
-      <div className="px-2 pt-3">
+      <div className="px-4 pt-3">
         <Input
           value={search}
           onChange={(e) => onSearchChange(e.target.value)}
@@ -186,7 +186,7 @@ function SessionRow({
     >
       {renaming ? (
         <div className="flex min-w-0 flex-1 items-center gap-2.5 truncate rounded-lg px-1.5 py-1">
-          <ChatIcon className={`size-4 shrink-0 ${active ? "text-phi-icon-active" : "text-phi-icon"}`} />
+          {isStreaming && active ? <LoaderCircle size={16} strokeWidth={2.25} className="size-4 shrink-0 animate-spin text-phi-text-secondary" /> : null}
           <Input
             autoFocus
             value={draft}
@@ -210,11 +210,8 @@ function SessionRow({
           title={isStreaming && !active ? "A response is streaming — switching will abort it" : undefined}
           className={`flex min-w-0 flex-1 items-center gap-2.5 truncate rounded-lg px-1.5 py-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-phi-accent/40 ${isStreaming && !active ? "opacity-60" : ""}`}
         >
-          <ChatIcon className={`size-4 shrink-0 ${active ? "text-phi-icon-active" : "text-phi-icon"}`} />
+          {isStreaming && active ? <LoaderCircle size={16} strokeWidth={2.25} className="size-4 shrink-0 animate-spin text-phi-text-secondary" /> : null}
           <span className="min-w-0 flex-1 truncate">{title}</span>
-          {isStreaming && active && (
-            <span className="size-1.5 shrink-0 animate-pulse rounded-full bg-phi-streaming" aria-label="Streaming" />
-          )}
           <span className="shrink-0 text-[11px] text-phi-text-faint">{count > 0 ? `${count}` : ""}</span>
           <span className="shrink-0 text-[11px] text-phi-text-faint">{time}</span>
         </button>
@@ -222,11 +219,11 @@ function SessionRow({
 
       <DropdownMenu>
         <DropdownMenuTrigger aria-label="Session actions">
-          <Ellipsis size={14} strokeWidth={1.8} />
+          <Ellipsis size={14} strokeWidth={2.25} />
         </DropdownMenuTrigger>
         <DropdownMenuContent>
           <DropdownMenuItem
-            icon={<Pencil size={14} className="text-phi-white-muted" />}
+            icon={<PencilLine size={15} strokeWidth={2.25} />}
             onClick={() => {
               setDraft(title);
               setRenaming(true);
@@ -235,7 +232,7 @@ function SessionRow({
             Rename
           </DropdownMenuItem>
           <DropdownMenuItem
-            icon={<Trash2 size={14} className="text-phi-white-muted" />}
+            icon={<Trash size={15} strokeWidth={2.25} />}
             onClick={async () => {
               if (!confirm("Delete this session?")) return;
               await onDelete();
