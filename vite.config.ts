@@ -29,5 +29,12 @@ export default defineConfig(async () => ({
             // 3. tell Vite to ignore watching `src-tauri`
             ignored: ["**/src-tauri/**"],
         },
+        proxy: {
+            // Dev sidecar — Vite forwards /api to the Express Node process
+            "/api": {
+                target: "http://127.0.0.1:3001",
+                changeOrigin: true,
+            },
+        },
     },
 }));

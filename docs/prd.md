@@ -22,17 +22,23 @@ Inspired by Codex sidebar grouping, but lighter. Built for personal use first, p
 - **Shell:** Tauri (window + OS glue only)
 - **Frontend:** Vite + React + plain Tailwind CSS
 - **No UI library:** No Radix, no shadcn. Minimal dependencies to keep bundle small and startup fast.
-- **Agent:** Pi SDK directly (`@earendil-works/pi-coding-agent`) — `AgentSession`, `AgentSessionRuntime`, `SessionManager`, `ModelRuntime`
-- **No custom backend:** No Rust HTTP server, no Node sidecar. React calls SDK directly to avoid hop latency.
+- **Sidecar:** Node.js + Express owning the Pi SDK (`@earendil-works/pi-coding-agent`) — `AgentSession`, `AgentSessionRuntime`, `SessionManager`, `ModelRuntime`. Single local hop over `127.0.0.1` via REST + SSE.
+- **Tauri stays thin:** No Rust HTTP server, no session indexing in Rust. Window/drag/icon only; sidecar is a plain Node process.
 
-> Lesson from opencode attempt: extra layers (Rust → HTTP → server → SDK) compound latency. Direct SDK → React is required.
+> Lesson from opencode attempt: 3 hops (WebView → Rust → HTTP → Node → SDK) compound latency. Tauri's WebView is sandboxed with no Node runtime — `pi` SDK needs `node:fs`/`child_process`/`~/.pi` — so direct import in React is impossible. A single `localhost` hop (1–5ms) to an Express sidecar is the minimal fix. No Electron rewrite needed for Alpha.
 
 ## 5. Architecture
-- Frontend imports SDK. `SessionManager.create(cwd)` is source of truth for listing sessions.
-- Sessions stored where Pi stores them: `~/.pi/agent/sessions/<encoded-cwd>/` as JSONL tree files. No custom DB, no mirror index.
-- `AgentSessionRuntime` owns lifecycle: `newSession()`, `switchSession()`, `prompt()`, `abort()`. Re-subscribe to events after session switches.
-- Subscribe to SDK events: `message_update` (text_delta, thinking_delta), `tool_execution_start/update/end`, `turn_start/end`, `agent_start/end`.
-- Rust only for Tauri window config. No session indexing in Rust unless proven slow at 1000+ sessions.
+```
+Tauri WebView (Vite + React)  --fetch/SSE-->  Node sidecar (Express)  --in-process-->  Pi SDK
+  localhost:1420 / 1420 proxy                 localhost:3001 (dev)                         ~/.pi/agent/sessions
+```
+- **Sidecar owns the SDK.** `server/index.ts` (Node 20+ ESM) creates `ModelRuntime` and exposes `SessionManager`/`AgentSessionRuntime` over HTTP. React never imports the SDK — WebView has no `fs`/`child_process`.
+- **Source of truth:** `~/.pi/agent/sessions/<encoded-cwd>/` JSONL trees, same as Pi CLI. No custom DB, no mirror index. Sidecar is the only process that touches `~/.pi`.
+- **Lifecycle:** `AgentSessionRuntime` in sidecar owns `newSession()` / `switchSession()` / `prompt()` / `abort()`. Frontend re-subscribes to SSE stream after each switch (never cache old `session` object).
+- **Events streamed via SSE:** `message_update` (text_delta, thinking_delta), `tool_execution_start/update/end`, `turn_start/end`, `agent_start/end` → `res.write(`data: ${JSON.stringify(e)}\n\n`)`. Frontend buffers with `requestAnimationFrame` (16–32ms) to avoid thrash.
+- **Dev:** Sidecar runs as plain Node alongside Vite. `bun --watch server/index.ts` + `vite` via `concurrently`; Vite proxies `/api` → `127.0.0.1:3001`. Iterate in browser at `http://localhost:1420` — no Rust needed.
+- **Prod (later):** Bundle sidecar with `@yao-pkg/pkg` (or `node:sea`) to `src-tauri/binaries/server-<target-triple>` and spawn via `tauri-plugin-shell` `Command.sidecar()` with a dynamic port arg. Tauri kills it on app close. `externalBin` is deferred — not needed for Alpha.
+- **Rust stays thin:** Tauri window config only. No session indexing in Rust unless proven slow at 1000+ sessions.
 
 ## 6. UI Structure
 ### Layout
@@ -84,11 +90,13 @@ No right drawer, no dense TUI footer. Chat is the hero.
 - Fork / Clone / Tree navigation with branch summaries
 - proper steer/followUp queue UI if needed
 
-## 8. Data Flow
-- List: `SessionManager` → decode cwd → render groups.
-- Open: `runtime.switchSession(id)` → subscribe to new `session` events → render `session.agent.state.messages`.
-- Prompt: `session.prompt(text, { images? })` → stream via `subscribe`.
-- Abort: `session.abort()`.
+## 8. Data Flow (via Express sidecar)
+- **List:** `GET /api/sessions?cwd=...` → sidecar `SessionManager.list()` / `listAll()` → decode cwd → render grouped sidebar (recency sort). No cwd decoding in frontend.
+- **Open:** `POST /api/sessions/switch { file }` → sidecar `runtime.switchSession(file)` → SSE stream re-attached → render `session.agent.state.messages`.
+- **New / Rename / Delete:** `POST /api/sessions/new` → `runtime.newSession()` / `POST /api/sessions/:id/rename` → `appendSessionInfo(name)` / `DELETE /api/sessions/:id` → trash/unlink with confirm dialog.
+- **Prompt:** `POST /api/prompt { text, sessionFile, images }` → sidecar `session.prompt(text, { images, streamingBehavior })` → SSE `message_update` deltas → frontend reassembles markdown + thinking + tool lines.
+- **Abort / Model:** `POST /api/abort` → `session.abort()` / `POST /api/model` → `setModel()` / `setThinkingLevel()` / `GET /api/models` → `modelRuntime.getAvailable()`.
+- **Contract:** All endpoints on `127.0.0.1` only (Vite proxies `/api` in dev; prod uses dynamic port passed as sidecar arg). No Rust IPC for agent data.
 
 ## 9. States & Error Handling
 - No blocking modals. Preserve fast feel.
@@ -99,22 +107,23 @@ No right drawer, no dense TUI footer. Chat is the hero.
 
 ## 10. Performance Principles
 - Fast = feel. Typing, switching sessions, and streaming must be instant; TUI is the baseline, only UI can be blamed.
-- Direct SDK → React, no backend hops.
+- **Single local hop:** WebView → `127.0.0.1` Express sidecar (1–5ms) → SDK in-process. No Rust HTTP layer. The 3-hop opencode pattern is the anti-pattern, not 1 hop.
 - Plain Tailwind, no heavy component lib.
-- Virtualize sidebar list if >200 sessions.
+- Virtualize sidebar list if >200 sessions; buffer `message_update` deltas with `requestAnimationFrame`.
 - No spinners on streaming; optimistic updates.
 
 ## 11. Distribution
-- V1 is local personal tool — reads `~/.pi` directly, single user, no auth screen, no remote daemon.
-- Later: stabilize, then publish with website + auto-update (Tauri updater). No scope creep before V1 feels right.
+- V1 is local personal tool — sidecar reads `~/.pi` directly, single user, no auth screen, no remote daemon. No `externalBin` bundling yet — dev runs `bun run dev:all` (Vite + Node sidecar, browser iteration).
+- Later: stabilize, then publish with website + auto-update (Tauri updater) and bundled sidecar binary (`pkg`/`sea` + `bundle.externalBin` + `plugin-shell`). No scope creep before V1 feels right.
 
 ## 12. Open Questions for Build
-- Confirm SDK event batching rate to avoid React render thrashing during fast deltas.
+- Confirm SSE vs. WebSocket for prod (SSE suffices for Alpha — V1 defers steer/followUp; WS needed later for bidirectional abort while streaming).
+- Confirm SDK event batching rate → `requestAnimationFrame` buffer to avoid React thrash on fast `text_delta` bursts.
 - Decide markdown renderer (e.g. react-markdown + highlight.js to match Pi's own highlighting).
-- File for `getAgentDir()` discovery when grouping — ensure decode matches Pi's encoding exactly.
+- Verify `SessionManager` cwd encode/decode — delegate entirely to sidecar, don't re-implement in frontend.
 
 ## 13. Success Criteria for V1
-- Can list and resume any existing Pi session created via CLI.
-- Can start new session, send prompt, see streaming text/thinking/tools inline, and abort.
-- Switching sessions feels instant on a typical `~/.pi/agent/sessions` with <500 sessions.
-- No Rust backend, no HTTP layer, minimal JS bundle.
+- Can list and resume any existing Pi session created via CLI (via sidecar `SessionManager`).
+- Can start new session, send prompt, see streaming text/thinking/tools inline via SSE, and abort.
+- Switching sessions feels instant on a typical `~/.pi/agent/sessions` with <500 sessions (single localhost hop, buffered deltas).
+- No Rust backend; minimal JS bundle; sidecar is plain Node + Express in dev, bundled only at publish time.
