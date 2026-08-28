@@ -1,5 +1,6 @@
 import { useCallback, useState } from "react";
 import { Composer } from "./components/composer";
+import { Conversation } from "./components/conversation/conversation";
 import { Sidebar } from "./components/sidebar";
 import { Button } from "./components/ui/button";
 import { PanelLeftIcon } from "./components/ui/icons";
@@ -12,32 +13,7 @@ function formatCwd(cwd: string | undefined): string {
   return m ? cwd.replace(m[0], "~") : cwd;
 }
 
-function getMessageText(msg: unknown): string {
-  if (!msg || typeof msg !== "object") return "";
-  const m = msg as Record<string, unknown>;
-  // SDK AgentMessage shapes: try common fields
-  if (typeof m.text === "string") return m.text;
-  if (typeof m.content === "string") return m.content;
-  if (Array.isArray(m.content)) {
-    // TextContent[] like [{type:"text", text:"..."}]
-    return m.content
-      .map((c: unknown) => {
-        if (c && typeof c === "object" && "text" in (c as Record<string, unknown>)) {
-          return String((c as Record<string, unknown>).text ?? "");
-        }
-        if (typeof c === "string") return c;
-        return "";
-      })
-      .join("");
-  }
-  // fallback: stringify but truncate
-  try {
-    const s = JSON.stringify(m).slice(0, 400);
-    return s;
-  } catch {
-    return "";
-  }
-}
+
 
 export default function App() {
   const [sidebarOpen, setSidebarOpen] = useState(true);
@@ -159,31 +135,7 @@ export default function App() {
                 <p className="mt-1 text-[12px] text-[#5e5e63]">Prompt streaming lands in Phase C.</p>
               </div>
             ) : (
-              <div className="space-y-8 pb-8 pt-3">
-                {messages.map((m, idx) => {
-                  const text = getMessageText(m);
-                  if (!text) return null;
-                  const role = (m as { role?: string }).role;
-                  if (role === "user") {
-                    return (
-                      <div key={idx} className="flex justify-end">
-                        <div className="max-w-[80%] whitespace-pre-wrap rounded-2xl rounded-br-md border border-white/[0.06] bg-[#1b1b1e] px-4 py-2.5 text-[14px] leading-6 text-[#dedee1]">
-                          {text}
-                        </div>
-                      </div>
-                    );
-                  }
-                  // assistant + toolResult etc — Phase B will split thinking/tool lines; Phase 1 renders as assistant
-                  return (
-                    <div key={idx} className="max-w-2xl whitespace-pre-wrap text-[14px] leading-6 text-[#b9b9be]">
-                      {text}
-                    </div>
-                  );
-                })}
-                {chat.data?.entries.length === 0 && (
-                  <p className="text-[12px] text-[#5e5e63]">No entries — session is empty.</p>
-                )}
-              </div>
+              <Conversation messages={messages} />
             )}
           </div>
 
