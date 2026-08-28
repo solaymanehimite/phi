@@ -1,110 +1,118 @@
-import { useMemo, useState } from "react";
+import { useCallback, useState } from "react";
 import { Composer } from "./components/composer";
 import { Sidebar } from "./components/sidebar";
 import { Button } from "./components/ui/button";
 import { PanelLeftIcon } from "./components/ui/icons";
+import { useSessions } from "./hooks/useSessions";
+import { useChat } from "./hooks/useChat";
 
-type Message = {
-  id: number;
-  role: "user" | "assistant";
-  content: string;
-};
-
-type Chat = {
-  id: string;
-  title: string;
-  messages: Message[];
-};
-
-const initialChats: Chat[] = [
-  {
-    id: "keyboard-shortcuts",
-    title: "Add keyboard shortcuts",
-    messages: [
-      { id: 1, role: "user", content: "Add keyboard shortcuts to the command menu." },
-      {
-        id: 2,
-        role: "assistant",
-        content: "I can help with that. Which commands should get shortcuts first?",
-      },
-    ],
-  },
-  {
-    id: "auth-flow",
-    title: "Simplify the auth flow",
-    messages: [
-      { id: 1, role: "user", content: "Can you simplify the auth flow?" },
-      {
-        id: 2,
-        role: "assistant",
-        content: "Yes. I’ll start by tracing the current sign-in and session states.",
-      },
-    ],
-  },
-  {
-    id: "empty-state",
-    title: "Fix the empty state",
-    messages: [
-      { id: 1, role: "user", content: "The project empty state needs clearer copy." },
-      {
-        id: 2,
-        role: "assistant",
-        content: "I’ll keep it short and make the next action obvious.",
-      },
-    ],
-  },
-];
-
-function titleFromMessage(message: string) {
-  const trimmed = message.trim();
-  return trimmed.length > 36 ? `${trimmed.slice(0, 36).trim()}…` : trimmed;
+function formatCwd(cwd: string | undefined): string {
+  if (!cwd) return "";
+  const m = cwd.match(/^\/home\/[^/]+/);
+  return m ? cwd.replace(m[0], "~") : cwd;
 }
 
-function App() {
-  const [chats, setChats] = useState(initialChats);
-  const [activeChatId, setActiveChatId] = useState<string | null>(null);
-  const [sidebarOpen, setSidebarOpen] = useState(true);
+function getMessageText(msg: unknown): string {
+  if (!msg || typeof msg !== "object") return "";
+  const m = msg as Record<string, unknown>;
+  // SDK AgentMessage shapes: try common fields
+  if (typeof m.text === "string") return m.text;
+  if (typeof m.content === "string") return m.content;
+  if (Array.isArray(m.content)) {
+    // TextContent[] like [{type:"text", text:"..."}]
+    return m.content
+      .map((c: unknown) => {
+        if (c && typeof c === "object" && "text" in (c as Record<string, unknown>)) {
+          return String((c as Record<string, unknown>).text ?? "");
+        }
+        if (typeof c === "string") return c;
+        return "";
+      })
+      .join("");
+  }
+  // fallback: stringify but truncate
+  try {
+    const s = JSON.stringify(m).slice(0, 400);
+    return s;
+  } catch {
+    return "";
+  }
+}
 
-  const activeChat = useMemo(
-    () => chats.find((chat) => chat.id === activeChatId) ?? null,
-    [activeChatId, chats],
+export default function App() {
+  const [sidebarOpen, setSidebarOpen] = useState(true);
+  const sessions = useSessions();
+  const chat = useChat();
+
+  const activeTitle = chat.data?.sessionName || chat.data?.header?.id || chat.activeFile?.split("/").pop() || "New chat";
+  const activeCwd = chat.data?.cwd || chat.data?.header?.cwd;
+
+  const handleSelect = useCallback(
+    async (file: string) => {
+      try {
+        await sessions.switchTo(file);
+      } catch (e) {
+        // switch failure is non-blocking — still try to load
+        console.warn("switchSession failed", e);
+      }
+      await chat.openFile(file);
+    },
+    [sessions, chat],
   );
 
-  function startNewChat() {
-    setActiveChatId(null);
-  }
+  const handleNewChat = useCallback(() => {
+    chat.clear();
+  }, [chat]);
 
-  function sendMessage(content: string) {
-    const message: Message = { id: Date.now(), role: "user", content };
+  const handleRename = useCallback(
+    async (file: string, name: string) => {
+      await sessions.rename(file, name);
+      if (chat.activeFile === file) await chat.refresh();
+    },
+    [sessions, chat],
+  );
 
-    if (activeChatId) {
-      setChats((current) =>
-        current.map((chat) =>
-          chat.id === activeChatId
-            ? { ...chat, messages: [...chat.messages, message] }
-            : chat,
-        ),
-      );
-      return;
-    }
+  const handleDelete = useCallback(
+    async (file: string) => {
+      await sessions.remove(file);
+      if (chat.activeFile === file) chat.clear();
+    },
+    [sessions, chat],
+  );
 
-    const id = crypto.randomUUID();
-    setChats((current) => [
-      { id, title: titleFromMessage(content), messages: [message] },
-      ...current,
-    ]);
-    setActiveChatId(id);
-  }
+  // Phase 1: composer does not yet stream via POST /api/prompt (Phase C). Show placeholder behavior.
+  const handleSend = useCallback(
+    (_content: string) => {
+      // Keep fast feel: if no active chat, create one first, then prompt will be wired in Phase C.
+      // For now, just inform.
+      if (!chat.activeFile) {
+        alert("Phase 1: sessions are read-only. Prompt streaming lands in Phase C (POST /api/prompt SSE). Select a session to view its history.");
+        return;
+      }
+      alert("Prompt streaming not yet wired in Phase 1. Will land in Phase C (SSE).");
+    },
+    [chat.activeFile],
+  );
+
+  const messages = chat.data?.context.messages ?? [];
 
   return (
     <div className="flex h-screen min-h-[480px] overflow-hidden bg-[#0c0c0d] text-[#e9e9eb] antialiased selection:bg-[#d6a85f]/25">
       {sidebarOpen && (
         <Sidebar
-          chats={chats}
-          activeChatId={activeChatId}
-          onChatSelect={setActiveChatId}
+          groups={sessions.groups}
+          activeFile={chat.activeFile}
+          onSelect={handleSelect}
           onClose={() => setSidebarOpen(false)}
-          onNewChat={startNewChat}
+          onNewChat={handleNewChat}
+          search={sessions.search}
+          onSearchChange={sessions.setSearch}
+          collapsed={sessions.collapsed}
+          onToggleGroup={sessions.toggleGroup}
+          onRename={handleRename}
+          onDelete={handleDelete}
+          loading={sessions.loading}
+          error={sessions.error}
         />
       )}
 
@@ -114,68 +122,76 @@ function App() {
           className="flex h-13 shrink-0 items-center border-b border-white/[0.055] px-3"
         >
           {!sidebarOpen && (
-            <Button
-              variant="icon"
-              aria-label="Open sidebar"
-              title="Open sidebar"
-              onClick={() => setSidebarOpen(true)}
-            >
+            <Button variant="icon" aria-label="Open sidebar" title="Open sidebar" onClick={() => setSidebarOpen(true)}>
               <PanelLeftIcon />
             </Button>
           )}
-          <p className="pointer-events-none mx-auto truncate px-10 text-[13px] font-medium text-[#8b8b91]">
-            {activeChat?.title ?? "New chat"}
-          </p>
+          <div className="pointer-events-none mx-auto flex max-w-[60%] items-center gap-2 truncate px-10 text-[13px]">
+            {activeCwd ? (
+              <>
+                <span className="truncate font-medium text-[#8b8b91]">{formatCwd(activeCwd)}</span>
+                <span className="text-[#3e3e44]">/</span>
+              </>
+            ) : null}
+            <span className="truncate font-medium text-[#8b8b91]">{chat.activeFile ? activeTitle : "New chat"}</span>
+          </div>
+          <div className="w-8" />
         </header>
 
         <section className="flex min-h-0 flex-1 flex-col">
-          <div className="mx-auto flex w-full max-w-3xl flex-1 flex-col overflow-y-auto px-6 pt-10">
-            {activeChat ? (
-              <div className="space-y-8 pb-8 pt-3">
-                {activeChat.messages.map((message) => (
-                  <MessageRow key={message.id} message={message} />
-                ))}
+          <div className="mx-auto flex w-full max-w-3xl flex-1 flex-col overflow-y-auto px-6 pt-6">
+            {!chat.activeFile ? (
+              <div className="flex flex-1 flex-col items-center justify-center pb-16 text-center">
+                <h1 className="text-[32px] font-semibold tracking-[-0.03em] text-[#dedee1]">Build, Fix and Ship</h1>
+                {!sessions.loading && sessions.groups.length === 0 && !sessions.error && (
+                  <p className="mt-6 text-[12px] text-[#5e5e63]">No sessions found — run `pi` in a project to create one.</p>
+                )}
+              </div>
+            ) : chat.loading ? (
+              <p className="py-10 text-center text-[13px] text-[#5e5e63]">Loading messages…</p>
+            ) : chat.error ? (
+              <div className="mx-auto mt-6 max-w-xl rounded-lg border border-red-500/20 bg-red-500/10 px-4 py-3 text-[13px] text-red-300">
+                {chat.error}
+              </div>
+            ) : messages.length === 0 ? (
+              <div className="flex flex-1 flex-col items-center justify-center pb-16 text-center">
+                <p className="text-[13px] text-[#707076]">No messages in this session yet.</p>
+                <p className="mt-1 text-[12px] text-[#5e5e63]">Prompt streaming lands in Phase C.</p>
               </div>
             ) : (
-              <div className="flex flex-1 flex-col items-center justify-center pb-16 text-center">
-                <div className="mb-5">
-                  <span className="font-serif text-[56px] leading-none text-[#d6a85f]">Φ</span>
-                </div>
-                <h1 className="text-[19px] font-medium tracking-[-0.02em] text-[#dedee1]">
-                  What can I help with?
-                </h1>
-                <p className="mt-2 text-[13px] text-[#707076]">
-                  Ask Pi about your codebase.
-                </p>
+              <div className="space-y-8 pb-8 pt-3">
+                {messages.map((m, idx) => {
+                  const text = getMessageText(m);
+                  if (!text) return null;
+                  const role = (m as { role?: string }).role;
+                  if (role === "user") {
+                    return (
+                      <div key={idx} className="flex justify-end">
+                        <div className="max-w-[80%] whitespace-pre-wrap rounded-2xl rounded-br-md border border-white/[0.06] bg-[#1b1b1e] px-4 py-2.5 text-[14px] leading-6 text-[#dedee1]">
+                          {text}
+                        </div>
+                      </div>
+                    );
+                  }
+                  // assistant + toolResult etc — Phase B will split thinking/tool lines; Phase 1 renders as assistant
+                  return (
+                    <div key={idx} className="max-w-2xl whitespace-pre-wrap text-[14px] leading-6 text-[#b9b9be]">
+                      {text}
+                    </div>
+                  );
+                })}
+                {chat.data?.entries.length === 0 && (
+                  <p className="text-[12px] text-[#5e5e63]">No entries — session is empty.</p>
+                )}
               </div>
             )}
           </div>
 
           <div className="shrink-0 px-4 pb-4 sm:px-7 sm:pb-6">
-            <Composer onSend={sendMessage} />
+            <Composer onSend={handleSend} />
           </div>
         </section>
       </main>
     </div>
   );
 }
-
-function MessageRow({ message }: { message: Message }) {
-  if (message.role === "user") {
-    return (
-      <div className="flex justify-end">
-        <div className="max-w-[80%] rounded-2xl rounded-br-md border border-white/[0.06] bg-[#1b1b1e] px-4 py-2.5 text-[14px] leading-6 text-[#dedee1]">
-          {message.content}
-        </div>
-      </div>
-    );
-  }
-
-  return (
-    <p className="max-w-2xl text-[14px] leading-6 text-[#b9b9be]">
-      {message.content}
-    </p>
-  );
-}
-
-export default App;
