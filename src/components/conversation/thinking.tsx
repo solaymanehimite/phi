@@ -9,11 +9,11 @@ export function ThinkingBlock({ text }: { text: string }) {
   return (
     <Surface>
       <CollapsibleTrigger open={open} onClick={() => setOpen((v) => !v)}>
-        <span className="text-[12px] font-medium tracking-wide text-[#6b6b71]">Thinking</span>
-        {!open && <span className="min-w-0 flex-1 truncate text-[12px] text-[#4f4f55]">{preview}…</span>}
+        <span className="text-[12px] font-medium tracking-wide text-phi-text-faint">Thinking</span>
+        {!open && <span className="min-w-0 flex-1 truncate text-[12px] text-phi-text-faint">{preview}…</span>}
       </CollapsibleTrigger>
       {open && (
-        <CollapsibleContent className="text-[13px] leading-6 whitespace-pre-wrap text-[#8b8b91]">
+        <CollapsibleContent className="text-[13px] leading-6 whitespace-pre-wrap text-phi-text-tertiary">
           {text}
         </CollapsibleContent>
       )}

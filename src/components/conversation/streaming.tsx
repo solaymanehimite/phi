@@ -25,8 +25,8 @@ export function Streaming({
 }) {
   if (!text && !thinking && tools.length === 0 && !error) {
     return (
-      <div className="flex items-center gap-2 py-2 text-[13px] text-[#5e5e63]">
-        <span className="size-2 animate-pulse rounded-full bg-amber-400" />
+      <div className="flex items-center gap-2 py-2 text-[13px] text-phi-text-muted">
+        <span className="size-2 animate-pulse rounded-full bg-phi-streaming" />
         Thinking…
       </div>
     );
@@ -49,7 +49,7 @@ export function Streaming({
       )}
       {text && <Markdown text={text} />}
       {error && (
-        <div className="rounded-lg border border-red-500/20 bg-red-500/10 px-3 py-2 text-[13px] text-red-300">
+        <div className="rounded-lg border border-phi-error-border bg-phi-error-bg px-3 py-2 text-[13px] text-phi-error-text">
           {error}
         </div>
       )}

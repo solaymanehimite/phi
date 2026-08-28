@@ -6,9 +6,9 @@ type InputProps = InputHTMLAttributes<HTMLInputElement> & {
 
 const variants = {
   search:
-    "h-8 w-full rounded-lg border border-white/[0.07] bg-white/[0.03] px-3 text-[13px] text-[#dedee1] placeholder:text-[#5e5e63] outline-none focus:border-white/[0.14] focus:bg-white/[0.05]",
+    "h-8 w-full rounded-lg border border-phi-input-border bg-phi-input-bg px-3 text-[13px] text-phi-text-primary placeholder:text-phi-text-muted outline-none focus:border-phi-input-border-focus focus:bg-phi-input-bg-focus",
   inline:
-    "min-w-0 flex-1 rounded border border-[#d6a85f]/40 bg-[#1b1b1e] px-1 py-0 text-[13px] text-[#dedee1] outline-none",
+    "min-w-0 flex-1 rounded border border-phi-accent/40 bg-phi-bg-elevated px-1 py-0 text-[13px] text-phi-text-primary outline-none",
 };
 
 export function Input({ variant = "search", className = "", ...props }: InputProps) {

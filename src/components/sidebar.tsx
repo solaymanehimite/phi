@@ -26,6 +26,7 @@ type SidebarProps = {
   onDelete: (file: string) => Promise<void>;
   loading: boolean;
   error: string | null;
+  isStreaming?: boolean;
 };
 
 function relativeTime(iso: string): string {
@@ -62,17 +63,18 @@ export const Sidebar = memo(function Sidebar({
   onDelete,
   loading,
   error,
+  isStreaming,
 }: SidebarProps) {
   return (
-    <aside className="flex w-[268px] shrink-0 flex-col border-r border-white/[0.055] bg-[#0a0a0b] max-sm:absolute max-sm:inset-y-0 max-sm:z-20 max-sm:shadow-[18px_0_50px_rgba(0,0,0,0.45)]">
+    <aside className="flex w-[268px] shrink-0 flex-col border-r border-phi-border-subtle bg-phi-bg-sidebar max-sm:absolute max-sm:inset-y-0 max-sm:z-20 max-sm:shadow-[18px_0_50px_rgba(0,0,0,0.45)]">
       <div data-tauri-drag-region className="flex h-13 shrink-0 items-center justify-between px-3">
         <button
           type="button"
           onClick={onNewChat}
-          className="flex items-center gap-2 rounded-lg p-1 pr-2 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#d6a85f]/40"
+          className="flex items-center gap-2 rounded-lg p-1 pr-2 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-phi-accent/40"
         >
-          <span className="font-serif text-xl text-[#d6a85f]">Φ</span>
-          <span className="text-[13px] font-semibold tracking-[-0.01em] text-[#d6d6d9]">Phi</span>
+          <span className="font-serif text-xl text-phi-accent">Φ</span>
+          <span className="text-[13px] font-semibold tracking-[-0.01em] text-phi-text-brand">Phi</span>
         </button>
         <Button variant="icon" aria-label="Close sidebar" title="Close sidebar" onClick={onClose}>
           <PanelLeftIcon />
@@ -80,7 +82,12 @@ export const Sidebar = memo(function Sidebar({
       </div>
 
       <div className="px-2 pt-2">
-        <Button className="w-full justify-start" onClick={onNewChat}>
+        <Button
+          className="w-full justify-start"
+          onClick={onNewChat}
+          title={isStreaming ? "A response is streaming — starting a new chat will abort it" : undefined}
+
+        >
           <ComposeIcon />
           New chat
         </Button>
@@ -98,13 +105,13 @@ export const Sidebar = memo(function Sidebar({
 
       <div className="min-h-0 flex-1 overflow-y-auto px-2 pt-4">
         {loading ? (
-          <p className="px-2 py-6 text-center text-[12px] text-[#5e5e63]">Loading sessions…</p>
+          <p className="px-2 py-6 text-center text-[12px] text-phi-text-muted">Loading sessions…</p>
         ) : error ? (
-          <div className="mx-2 rounded-lg border border-red-500/20 bg-red-500/10 px-3 py-2 text-[12px] leading-4 text-red-300">
+          <div className="mx-2 rounded-lg border border-phi-error-border bg-phi-error-bg px-3 py-2 text-[12px] leading-4 text-phi-error-text">
             {error}
           </div>
         ) : groups.length === 0 ? (
-          <p className="px-2 py-6 text-center text-[12px] text-[#5e5e63]">
+          <p className="px-2 py-6 text-center text-[12px] text-phi-text-muted">
             {search ? "No matches" : "No sessions yet"}
           </p>
         ) : (
@@ -129,6 +136,7 @@ export const Sidebar = memo(function Sidebar({
                           onClick={() => onSelect(s.path)}
                           onRename={(name) => onRename(s.path, name)}
                           onDelete={() => onDelete(s.path)}
+                          isStreaming={isStreaming}
                         />
                       ))}
                     </nav>
@@ -151,6 +159,7 @@ function SessionRow({
   onClick,
   onRename,
   onDelete,
+  isStreaming,
 }: {
   active: boolean;
   title: string;
@@ -159,6 +168,7 @@ function SessionRow({
   onClick: () => void;
   onRename: (name: string) => Promise<void>;
   onDelete: () => Promise<void>;
+  isStreaming?: boolean;
 }) {
   const [renaming, setRenaming] = useState(false);
   const [draft, setDraft] = useState(title);
@@ -172,11 +182,11 @@ function SessionRow({
 
   return (
     <div
-      className={`group flex h-8 w-full items-center gap-1 rounded-lg px-1 text-left text-[13px] ${active ? "bg-white/[0.075] text-[#e3e3e5]" : "text-[#79797f] hover:bg-white/[0.045] hover:text-[#bdbdc1]"}`}
+      className={`group flex h-8 w-full items-center gap-1 rounded-lg px-1 text-left text-[13px] ${active ? "bg-phi-overlay-active text-phi-text-primary" : "text-phi-text-tertiary hover:bg-phi-overlay-hover hover:text-phi-text-secondary"}`}
     >
       {renaming ? (
         <div className="flex min-w-0 flex-1 items-center gap-2.5 truncate rounded-lg px-1.5 py-1">
-          <ChatIcon className={`size-4 shrink-0 ${active ? "text-[#b9b9be]" : "text-[#5f5f65]"}`} />
+          <ChatIcon className={`size-4 shrink-0 ${active ? "text-phi-icon-active" : "text-phi-icon"}`} />
           <Input
             autoFocus
             value={draft}
@@ -191,18 +201,22 @@ function SessionRow({
             onBlur={() => setRenaming(false)}
             variant="inline"
           />
-          <span className="shrink-0 text-[11px] text-[#4f4f55]">{time}</span>
+          <span className="shrink-0 text-[11px] text-phi-text-faint">{time}</span>
         </div>
       ) : (
         <button
           type="button"
           onClick={onClick}
-          className="flex min-w-0 flex-1 items-center gap-2.5 truncate rounded-lg px-1.5 py-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#d6a85f]/40"
+          title={isStreaming && !active ? "A response is streaming — switching will abort it" : undefined}
+          className={`flex min-w-0 flex-1 items-center gap-2.5 truncate rounded-lg px-1.5 py-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-phi-accent/40 ${isStreaming && !active ? "opacity-60" : ""}`}
         >
-          <ChatIcon className={`size-4 shrink-0 ${active ? "text-[#b9b9be]" : "text-[#5f5f65]"}`} />
+          <ChatIcon className={`size-4 shrink-0 ${active ? "text-phi-icon-active" : "text-phi-icon"}`} />
           <span className="min-w-0 flex-1 truncate">{title}</span>
-          <span className="shrink-0 text-[11px] text-[#4f4f55]">{count > 0 ? `${count}` : ""}</span>
-          <span className="shrink-0 text-[11px] text-[#4f4f55]">{time}</span>
+          {isStreaming && active && (
+            <span className="size-1.5 shrink-0 animate-pulse rounded-full bg-phi-streaming" aria-label="Streaming" />
+          )}
+          <span className="shrink-0 text-[11px] text-phi-text-faint">{count > 0 ? `${count}` : ""}</span>
+          <span className="shrink-0 text-[11px] text-phi-text-faint">{time}</span>
         </button>
       )}
 
@@ -212,7 +226,7 @@ function SessionRow({
         </DropdownMenuTrigger>
         <DropdownMenuContent>
           <DropdownMenuItem
-            icon={<Pencil size={14} className="text-white/30" />}
+            icon={<Pencil size={14} className="text-phi-white-muted" />}
             onClick={() => {
               setDraft(title);
               setRenaming(true);
@@ -221,8 +235,7 @@ function SessionRow({
             Rename
           </DropdownMenuItem>
           <DropdownMenuItem
-            variant="danger"
-            icon={<Trash2 size={14} className="text-white/30" />}
+            icon={<Trash2 size={14} className="text-phi-white-muted" />}
             onClick={async () => {
               if (!confirm("Delete this session?")) return;
               await onDelete();

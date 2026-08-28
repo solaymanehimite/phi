@@ -28,6 +28,18 @@ export default function App() {
 
     const handleSelect = useCallback(
         async (file: string) => {
+            if (file === chat.activeFile) return;
+            if (chat.isStreaming) {
+                const ok = window.confirm(
+                    "A response is still streaming. Switching sessions will abort it. Switch anyway?",
+                );
+                if (!ok) return;
+                try {
+                    await chat.abort();
+                } catch {
+                    // abort failure is non-blocking — still switch
+                }
+            }
             try {
                 await sessions.switchTo(file);
             } catch (e) {
@@ -36,12 +48,21 @@ export default function App() {
             }
             await chat.openFile(file);
         },
-        [sessions.switchTo, chat.openFile],
+        [sessions.switchTo, chat.openFile, chat.isStreaming, chat.abort, chat.activeFile],
     );
 
-    const handleNewChat = useCallback(() => {
+    const handleNewChat = useCallback(async () => {
+        if (chat.isStreaming) {
+            const ok = window.confirm(
+                "A response is still streaming. Starting a new chat will abort it. Continue?",
+            );
+            if (!ok) return;
+            try {
+                await chat.abort();
+            } catch {}
+        }
         chat.clear();
-    }, [chat.clear]);
+    }, [chat.clear, chat.isStreaming, chat.abort]);
 
     const handleRename = useCallback(
         async (file: string, name: string) => {
@@ -112,7 +133,7 @@ export default function App() {
     const messages = chat.data?.context.messages ?? [];
 
     return (
-        <div className="flex h-screen min-h-[480px] overflow-hidden bg-[#0c0c0d] text-[#e9e9eb] antialiased selection:bg-[#d6a85f]/25">
+        <div className="flex h-screen min-h-[480px] overflow-hidden bg-phi-bg-app text-phi-text-primary antialiased selection:bg-phi-accent/25">
             {sidebarOpen && (
                 <Sidebar
                     groups={sessions.groups}
@@ -128,13 +149,14 @@ export default function App() {
                     onDelete={handleDelete}
                     loading={sessions.loading}
                     error={sessions.error}
+                    isStreaming={chat.isStreaming}
                 />
             )}
 
-            <main className="relative flex min-w-0 flex-1 flex-col bg-[#0e0e0f]">
+            <main className="relative flex min-w-0 flex-1 flex-col bg-phi-bg-main">
                 <header
                     data-tauri-drag-region
-                    className="flex h-13 shrink-0 items-center border-b border-white/[0.055] px-3"
+                    className="flex h-13 shrink-0 items-center border-b border-phi-border-subtle px-3"
                 >
                     {!sidebarOpen && (
                         <Button
@@ -149,13 +171,13 @@ export default function App() {
                     <div className="pointer-events-none mx-auto flex max-w-[60%] items-center gap-2 truncate px-10 text-[13px]">
                         {activeCwd ? (
                             <>
-                                <span className="truncate font-medium text-[#8b8b91]">
+                                <span className="truncate font-medium text-phi-text-tertiary">
                                     {formatCwd(activeCwd)}
                                 </span>
-                                <span className="text-[#3e3e44]">/</span>
+                                <span className="text-phi-separator">/</span>
                             </>
                         ) : null}
-                        <span className="truncate font-medium text-[#8b8b91]">
+                        <span className="truncate font-medium text-phi-text-tertiary">
                             {chat.activeFile ? activeTitle : "New chat"}
                         </span>
                     </div>
@@ -169,31 +191,31 @@ export default function App() {
                     >
                         {!chat.activeFile ? (
                             <div className="flex flex-1 flex-col items-center justify-center pb-16 text-center">
-                                <h1 className="text-[32px] font-semibold tracking-[-0.03em] text-[#dedee1]">
+                                <h1 className="text-[32px] font-semibold tracking-[-0.03em] text-phi-text-primary">
                                     Build, Fix and Ship
                                 </h1>
                                 {!sessions.loading &&
                                     sessions.groups.length === 0 &&
                                     !sessions.error && (
-                                        <p className="mt-6 text-[12px] text-[#5e5e63]">
+                                        <p className="mt-6 text-[12px] text-phi-text-muted">
                                             No sessions found — run `pi` in a project to create one.
                                         </p>
                                     )}
                             </div>
                         ) : chat.loading ? (
-                            <p className="py-10 text-center text-[13px] text-[#5e5e63]">
+                            <p className="py-10 text-center text-[13px] text-phi-text-muted">
                                 Loading messages…
                             </p>
                         ) : chat.error ? (
-                            <div className="mx-auto mt-6 max-w-xl rounded-lg border border-red-500/20 bg-red-500/10 px-4 py-3 text-[13px] text-red-300">
+                            <div className="mx-auto mt-6 max-w-xl rounded-lg border border-phi-error-border bg-phi-error-bg px-4 py-3 text-[13px] text-phi-error-text">
                                 {chat.error}
                             </div>
                         ) : messages.length === 0 ? (
                             <div className="flex flex-1 flex-col items-center justify-center pb-16 text-center">
-                                <p className="text-[13px] text-[#707076]">
+                                <p className="text-[13px] text-phi-text-muted">
                                     No messages in this session yet.
                                 </p>
-                                <p className="mt-1 text-[12px] text-[#5e5e63]">
+                                <p className="mt-1 text-[12px] text-phi-text-muted">
                                     Prompt streaming lands in Phase C.
                                 </p>
                             </div>
@@ -211,7 +233,7 @@ export default function App() {
                                     </div>
                                 )}
                                 {chat.error && !chat.isStreaming && (
-                                    <div className="rounded-lg border border-red-500/20 bg-red-500/10 px-3 py-2 text-[13px] text-red-300">
+                                    <div className="rounded-lg border border-phi-error-border bg-phi-error-bg px-3 py-2 text-[13px] text-phi-error-text">
                                         {chat.error}
                                     </div>
                                 )}

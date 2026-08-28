@@ -12,7 +12,7 @@ export function CollapsibleTrigger({ open, children, className = "", ...props }:
       className={`flex w-full items-center gap-2 px-3 py-2 text-left ${className}`}
       {...props}
     >
-      <span className={`text-[11px] text-[#5e5e63] transition-transform ${open ? "rotate-90" : ""}`}>▸</span>
+      <span className={`text-[11px] text-phi-text-muted transition-transform ${open ? "rotate-90" : ""}`}>▸</span>
       {children}
     </button>
   );
@@ -24,7 +24,7 @@ type CollapsibleContentProps = HTMLAttributes<HTMLDivElement> & {
 
 export function CollapsibleContent({ children, className = "", ...props }: CollapsibleContentProps) {
   return (
-    <div className={`border-t border-white/[0.04] px-3 py-2.5 ${className}`} {...props}>
+    <div className={`border-t border-phi-border-faint px-3 py-2.5 ${className}`} {...props}>
       {children}
     </div>
   );
@@ -39,7 +39,7 @@ export function GroupCollapsibleTrigger({ collapsed, children, className = "", .
   return (
     <button
       type="button"
-      className={`flex w-full items-center gap-1.5 rounded px-2 py-1 text-left text-[11px] font-medium tracking-wide text-[#535359] hover:bg-white/[0.04] hover:text-[#8b8b91] ${className}`}
+      className={`flex w-full items-center gap-1.5 rounded px-2 py-1 text-left text-[11px] font-medium tracking-wide text-phi-text-muted hover:bg-phi-border-faint hover:text-phi-text-tertiary ${className}`}
       {...props}
     >
       <span className={`inline-block text-[10px] transition-transform ${collapsed ? "-rotate-90" : ""}`}>▾</span>

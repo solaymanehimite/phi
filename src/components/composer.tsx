@@ -43,7 +43,7 @@ export function Composer({
     return (
         <form
             onSubmit={submit}
-            className="mx-auto w-full max-w-3xl rounded-[17px] rounded-b-none border border-white/[0.095] bg-[#151516] p-2 shadow-[0_14px_45px_rgba(0,0,0,0.3),inset_0_1px_0_rgba(255,255,255,0.025)] transition-[border-color,box-shadow] focus-within:border-white/[0.16] focus-within:shadow-[0_16px_50px_rgba(0,0,0,0.36),0_0_0_1px_rgba(255,255,255,0.018)]"
+            className="mx-auto w-full max-w-3xl rounded-[17px] rounded-b-none border border-phi-border-strong bg-phi-bg-surface p-2 shadow-[0_14px_45px_rgba(0,0,0,0.3),inset_0_1px_0_rgba(255,255,255,0.025)] transition-[border-color,box-shadow] focus-within:border-phi-border-strong focus-within:shadow-[0_16px_50px_rgba(0,0,0,0.36),0_0_0_1px_rgba(255,255,255,0.018)]"
         >
             <textarea
                 ref={textareaRef}
@@ -62,11 +62,11 @@ export function Composer({
                     event.currentTarget.style.height = "auto";
                     event.currentTarget.style.height = `${Math.min(event.currentTarget.scrollHeight, 180)}px`;
                 }}
-                className="block max-h-[180px] min-h-16 w-full resize-none bg-transparent px-2.5 py-2 text-[14px] leading-6 text-[#e1e1e3] outline-none placeholder:text-[#5e5e63] disabled:opacity-60"
+                className="block max-h-[180px] min-h-16 w-full resize-none bg-transparent px-2.5 py-2 text-[14px] leading-6 text-phi-text-primary outline-none placeholder:text-phi-text-muted disabled:opacity-60"
             />
 
             <div className="flex items-center justify-between gap-3 px-0.5 pb-0.5">
-                <label className="relative inline-flex h-8 items-center rounded-lg text-[12px] text-[#8b8b91] transition-colors hover:bg-white/[0.05] hover:text-[#bdbdc1] focus-within:ring-2 focus-within:ring-[#d6a85f]/40">
+                <label className="relative inline-flex h-8 items-center rounded-lg text-[12px] text-phi-text-tertiary transition-colors hover:bg-phi-overlay-hover hover:text-phi-text-secondary focus-within:ring-2 focus-within:ring-phi-accent/40">
                     <select
                         aria-label="Model"
                         defaultValue="auto"
@@ -85,7 +85,7 @@ export function Composer({
                         variant="primary"
                         aria-label="Stop"
                         title="Stop"
-                        className="!bg-red-500 !text-white hover:!bg-red-600"
+                        className="!bg-phi-error !text-phi-white hover:!bg-phi-error/80"
                     >
                         <StopIcon />
                     </Button>

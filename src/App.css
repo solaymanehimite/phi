@@ -3,6 +3,62 @@
 
 @theme {
   --font-sans: Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+
+  /* Backgrounds — layered depth */
+  --color-phi-bg-app: #0c0c0d;
+  --color-phi-bg-main: #0e0e0f;
+  --color-phi-bg-sidebar: #0a0a0b;
+  --color-phi-bg-surface: #151516;
+  --color-phi-bg-elevated: #1b1b1e;
+  --color-phi-bg-sunken: #0f0f10;
+  --color-phi-bg-inverse: #dedee1;
+  --color-phi-bg-disabled: #2a2a2d;
+
+  /* Text — consolidated */
+  --color-phi-text-primary: #dedee1;
+  --color-phi-text-secondary: #bdbdc1;
+  --color-phi-text-tertiary: #8b8b91;
+  --color-phi-text-muted: #5e5e63;
+  --color-phi-text-faint: #4f4f55;
+  --color-phi-text-inverse: #111113;
+  --color-phi-text-disabled: #66666c;
+  --color-phi-text-brand: #d6d6d9;
+  --color-phi-icon: #5f5f65;
+  --color-phi-icon-active: #b9b9be;
+
+  /* Accent / brand */
+  --color-phi-accent: #d6a85f;
+
+  /* Borders — white overlays consolidated */
+  --color-phi-border: rgb(255 255 255 / 0.06);
+  --color-phi-border-strong: rgb(255 255 255 / 0.095);
+  --color-phi-border-faint: rgb(255 255 255 / 0.04);
+  --color-phi-border-subtle: rgb(255 255 255 / 0.055);
+
+  /* Overlays / hover surfaces */
+  --color-phi-overlay: rgb(255 255 255 / 0.03);
+  --color-phi-overlay-hover: rgb(255 255 255 / 0.045);
+  --color-phi-overlay-active: rgb(255 255 255 / 0.075);
+  --color-phi-overlay-strong: rgb(255 255 255 / 0.08);
+  --color-phi-overlay-muted: rgb(255 255 255 / 0.02);
+  --color-phi-overlay-code: rgb(255 255 255 / 0.07);
+  --color-phi-overlay-focus: rgb(255 255 255 / 0.05);
+
+  /* Input */
+  --color-phi-input-border: rgb(255 255 255 / 0.07);
+  --color-phi-input-border-focus: rgb(255 255 255 / 0.14);
+  --color-phi-input-bg: rgb(255 255 255 / 0.03);
+  --color-phi-input-bg-focus: rgb(255 255 255 / 0.05);
+
+  /* Status */
+  --color-phi-error: #ff5c5c;
+  --color-phi-error-bg: rgb(239 68 68 / 0.1);
+  --color-phi-error-border: rgb(239 68 68 / 0.2);
+  --color-phi-error-text: #fca5a5;
+  --color-phi-streaming: #d6a85f;
+  --color-phi-separator: #3e3e44;
+  --color-phi-white: #ffffff;
+  --color-phi-white-muted: rgb(255 255 255 / 0.3);
 }
 
 @layer base {
@@ -10,6 +66,7 @@
   body,
   #root {
     height: 100%;
+    font-weight: 500;
   }
 
   body {

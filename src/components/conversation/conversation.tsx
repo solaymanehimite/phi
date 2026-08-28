@@ -101,7 +101,7 @@ export function Conversation({ messages }: Props) {
                     if (!text.trim()) return null;
                     return (
                         <div key={idx} className="flex justify-end">
-                            <div className="max-w-[80%] whitespace-pre-wrap rounded-2xl rounded-br-md border border-white/[0.06] bg-[#1b1b1e] px-4 py-2.5 text-[14px] leading-6 text-[#dedee1]">
+                            <div className="max-w-[80%] whitespace-pre-wrap rounded-2xl rounded-br-md border border-phi-border bg-phi-bg-elevated px-4 py-2.5 text-[14px] leading-6 text-phi-text-primary">
                                 {text}
                             </div>
                         </div>
@@ -183,9 +183,9 @@ export function Conversation({ messages }: Props) {
                 return (
                     <div
                         key={idx}
-                        className="rounded-lg border border-white/[0.04] bg-white/[0.02] px-3 py-2 text-[12px] leading-5 text-[#8b8b91]"
+                        className="rounded-lg border border-phi-border-faint bg-phi-overlay-muted px-3 py-2 text-[12px] leading-5 text-phi-text-tertiary"
                     >
-                        <span className="font-medium text-[#6b6b71]">{role}</span>:{" "}
+                        <span className="font-medium text-phi-text-faint">{role}</span>:{" "}
                         <span className="whitespace-pre-wrap">{fallback}</span>
                     </div>
                 );
