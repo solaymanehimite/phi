@@ -18,14 +18,12 @@ export const Streaming = memo(function Streaming({
   tools,
   error,
   isStreaming,
-  elapsedMs,
 }: {
   text: string;
   thinking: string;
   tools: StreamingTool[];
   error?: string;
   isStreaming?: boolean;
-  elapsedMs?: number | null;
 }) {
   const hasWork = Boolean((thinking && thinking.trim()) || tools.length > 0);
   // keep live working block visible even after text starts — distinct from final answer
@@ -34,7 +32,7 @@ export const Streaming = memo(function Streaming({
   if (!text && !hasWork && !error) {
     return (
       <div className="space-y-3">
-        <WorkingBlock thinking={thinking} tools={tools.map((t) => ({ id: t.toolCallId, name: t.toolName, args: t.args, partial: t.partial, result: t.result ? { text: t.result, isError: !!t.isError } : undefined }))} isStreaming={isStreaming} elapsedMs={elapsedMs} variant="streaming" />
+        <WorkingBlock thinking={thinking} tools={tools.map((t) => ({ id: t.toolCallId, name: t.toolName, args: t.args, partial: t.partial, result: t.result ? { text: t.result, isError: !!t.isError } : undefined }))} isStreaming={isStreaming} variant="streaming" />
       </div>
     );
   }
@@ -46,7 +44,6 @@ export const Streaming = memo(function Streaming({
           thinking={thinking}
           tools={tools.map((t) => ({ id: t.toolCallId, name: t.toolName, args: t.args, partial: t.partial, result: t.result ? { text: t.result, isError: !!t.isError } : undefined }))}
           isStreaming={isStreaming}
-          elapsedMs={elapsedMs}
           variant="streaming"
         />
       )}

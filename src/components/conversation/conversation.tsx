@@ -65,6 +65,33 @@ function renderUser(content: unknown): string {
     return "";
 }
 
+function getUserImages(content: unknown): Array<{ data: string; mimeType: string }> {
+    if (!Array.isArray(content)) return [];
+    const out: Array<{ data: string; mimeType: string }> = [];
+    for (const c of content) {
+        if (!c || typeof c !== "object") continue;
+        const r = c as Record<string, unknown>;
+        if (r.type === "image") {
+            const data = typeof r.data === "string" ? r.data : typeof (r as Record<string, unknown>).base64 === "string" ? String((r as Record<string, unknown>).base64) : "";
+            // support both {data,mimeType} and {source:{data,mediaType}}
+            let mimeType = typeof r.mimeType === "string" ? r.mimeType : "image/png";
+            if (!r.mimeType && r.source && typeof r.source === "object") {
+                const s = r.source as Record<string, unknown>;
+                if (typeof s.mediaType === "string") mimeType = s.mediaType;
+                else if (typeof s.mimeType === "string") mimeType = s.mimeType;
+            }
+            // alternate shape: source.data
+            let d = data;
+            if (!d && r.source && typeof r.source === "object") {
+                const s = r.source as Record<string, unknown>;
+                if (typeof s.data === "string") d = s.data;
+            }
+            if (d) out.push({ data: d, mimeType });
+        }
+    }
+    return out;
+}
+
 type Turn = {
     user: Record<string, unknown> | null;
     thinking: string;
@@ -82,7 +109,8 @@ const TurnRow = memo(function TurnRow({
     hideWork?: boolean;
 }) {
     const userText = turn.user ? renderUser(turn.user.content) : "";
-    const hasUser = Boolean(userText.trim());
+    const userImages = turn.user ? getUserImages(turn.user.content) : [];
+    const hasUser = Boolean(userText.trim() || userImages.length > 0);
     const thinking = turn.thinking.trim();
     const text = turn.text.trim();
     const toolCalls = turn.toolCalls;
@@ -110,8 +138,22 @@ const TurnRow = memo(function TurnRow({
         <div className="py-2">
             {hasUser && (
                 <div className="flex justify-end py-2">
-                    <div className="max-w-[80%] whitespace-pre-wrap rounded-2xl rounded-br-md border border-phi-border bg-phi-bg-elevated px-4 py-2.5 text-[14px] leading-6 text-phi-text-primary">
-                        {userText}
+                    <div className="max-w-[80%] space-y-2 rounded-2xl rounded-br-md border border-phi-border bg-phi-bg-elevated px-3 py-2.5 text-[14px] leading-6 text-phi-text-primary">
+                        {userImages.length > 0 && (
+                            <div className="flex flex-wrap gap-1.5">
+                                {userImages.map((img, i) => (
+                                    <img
+                                        key={i}
+                                        src={`data:${img.mimeType};base64,${img.data}`}
+                                        alt="attached image"
+                                        className="max-h-[180px] max-w-[220px] rounded-xl border border-phi-border object-cover"
+                                    />
+                                ))}
+                            </div>
+                        )}
+                        {userText.trim() && (
+                            <div className="whitespace-pre-wrap px-1">{userText}</div>
+                        )}
                     </div>
                 </div>
             )}

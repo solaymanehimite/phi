@@ -44,7 +44,6 @@ const ChatViewport = memo(function ChatViewport({
             done?: boolean;
         }[];
         error?: string;
-        elapsedMs?: number | null;
         startedAt?: number | null;
     };
 }) {
@@ -113,7 +112,7 @@ const ChatViewport = memo(function ChatViewport({
             </div>
         );
     }
-    const showLive = isStreaming || streaming.elapsedMs != null;
+    const showLive = isStreaming;
     const hideLastWork =
         showLive &&
         (streaming.thinking.trim().length > 0 || streaming.tools.length > 0);
@@ -122,7 +121,7 @@ const ChatViewport = memo(function ChatViewport({
             ref={scrollerRef}
             className="mx-auto flex w-full flex-1 flex-col items-center overflow-y-auto px-6 pt-6"
         >
-            <div className="max-w-2xl h-full flex flex-col">
+            <div className="w-2xl h-full flex flex-col">
                 <Conversation messages={messages} hideLastWork={hideLastWork} />
                 {showLive && (
                     <div className="pt-2">
@@ -132,7 +131,6 @@ const ChatViewport = memo(function ChatViewport({
                             tools={streaming.tools}
                             error={streaming.error}
                             isStreaming={isStreaming}
-                            elapsedMs={streaming.elapsedMs ?? null}
                         />
                     </div>
                 )}
@@ -382,7 +380,7 @@ export default function App() {
     );
 
     const handleSend = useCallback(
-        async (content: string) => {
+        async (content: string, images?: { type: "image"; data: string; mimeType: string }[]) => {
             if (!chat.activeFile && draftModelKey) {
                 try {
                     const res = await createSession();
@@ -424,6 +422,7 @@ export default function App() {
                 }
             }
             await chat.prompt(content, {
+                images,
                 onNewFile: (file, cwd, firstMessage) => {
                     const realCwd = cwd || chat.data?.cwd || "";
                     sessions.addOptimistic(

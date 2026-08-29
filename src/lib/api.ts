@@ -1,6 +1,42 @@
 import type { ModelInfo, SessionInfo, SessionMessagesResponse, ThinkingLevel } from "../types/session";
 
-const BASE = "/api";
+// --- Tauri sidecar support ---
+// Dev: Vite proxy -> /api on 127.0.0.1:3001 (no Tauri)
+// Prod: Tauri WebView fetches http://127.0.0.1:<random-port>/api where port is picked by Rust at launch
+let cachedBase: string | null = null;
+let portPromise: Promise<string> | null = null;
+
+export async function getApiBase(): Promise<string> {
+  return getBase();
+}
+
+async function getBase(): Promise<string> {
+  if (cachedBase) return cachedBase;
+  // Branch on Tauri: __TAURI__ injected by Tauri in WebView only (not browser dev)
+  const isTauri = typeof window !== "undefined" && "__TAURI__" in window;
+  if (!isTauri) return "/api";
+  if (!portPromise) {
+    portPromise = (async () => {
+      try {
+        const { invoke } = await import("@tauri-apps/api/core");
+        const port = await invoke<number>("get_sidecar_port");
+        if (port && Number.isFinite(port)) {
+          cachedBase = `http://127.0.0.1:${port}/api`;
+          return cachedBase;
+        }
+      } catch (e) {
+        console.warn("[phi] get_sidecar_port failed, falling back to /api", e);
+      }
+      return "/api";
+    })();
+  }
+  return portPromise;
+}
+
+async function apiFetch(path: string, init?: RequestInit): Promise<Response> {
+  const base = await getBase();
+  return fetch(`${base}${path}`, init);
+}
 
 async function jsonOrThrow(res: Response) {
   const data = await res.json().catch(() => ({}));
@@ -12,7 +48,7 @@ async function jsonOrThrow(res: Response) {
 }
 
 export async function health(): Promise<{ ok: boolean; port: number; agentDir: string }> {
-  const res = await fetch(`${BASE}/health`);
+  const res = await apiFetch(`/health`);
   return jsonOrThrow(res);
 }
 
@@ -21,19 +57,19 @@ export async function listSessions(opts: { cwd?: string; all?: boolean } = {}): 
   if (opts.cwd) params.set("cwd", opts.cwd);
   if (opts.all) params.set("all", "1");
   const qs = params.toString();
-  const url = qs ? `${BASE}/sessions?${qs}` : `${BASE}/sessions`;
-  const res = await fetch(url);
+  const path = qs ? `/sessions?${qs}` : `/sessions`;
+  const res = await apiFetch(path);
   return jsonOrThrow(res);
 }
 
 export async function getMessages(file: string): Promise<SessionMessagesResponse> {
-  const url = `${BASE}/sessions/messages?file=${encodeURIComponent(file)}`;
-  const res = await fetch(url);
+  const path = `/sessions/messages?file=${encodeURIComponent(file)}`;
+  const res = await apiFetch(path);
   return jsonOrThrow(res);
 }
 
 export async function createSession(cwd?: string): Promise<{ ok: boolean; file: string }> {
-  const res = await fetch(`${BASE}/sessions/new`, {
+  const res = await apiFetch(`/sessions/new`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ cwd }),
@@ -43,7 +79,7 @@ export async function createSession(cwd?: string): Promise<{ ok: boolean; file: 
 
 export type SwitchSessionResponse = { ok: boolean; file: string } & Partial<SessionMessagesResponse>;
 export async function switchSession(file: string, cwd?: string): Promise<SwitchSessionResponse> {
-  const res = await fetch(`${BASE}/sessions/switch`, {
+  const res = await apiFetch(`/sessions/switch`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ file, cwd }),
@@ -52,7 +88,7 @@ export async function switchSession(file: string, cwd?: string): Promise<SwitchS
 }
 
 export async function renameSession(file: string, name: string): Promise<{ ok: boolean; name: string }> {
-  const res = await fetch(`${BASE}/sessions/rename`, {
+  const res = await apiFetch(`/sessions/rename`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ file, name }),
@@ -61,7 +97,7 @@ export async function renameSession(file: string, name: string): Promise<{ ok: b
 }
 
 export async function deleteSession(file: string): Promise<{ ok: boolean }> {
-  const res = await fetch(`${BASE}/sessions?file=${encodeURIComponent(file)}`, {
+  const res = await apiFetch(`/sessions?file=${encodeURIComponent(file)}`, {
     method: "DELETE",
   });
   return jsonOrThrow(res);
@@ -74,7 +110,7 @@ export type ModelsResponse = {
 };
 
 export async function getModels(): Promise<ModelsResponse> {
-  const res = await fetch(`${BASE}/models`);
+  const res = await apiFetch(`/models`);
   return jsonOrThrow(res);
 }
 
@@ -83,7 +119,7 @@ export async function setModel(opts: {
   modelId: string;
   thinkingLevel?: ThinkingLevel;
 }): Promise<{ ok: boolean; model?: ModelInfo; thinkingLevel?: string }> {
-  const res = await fetch(`${BASE}/model`, {
+  const res = await apiFetch(`/model`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(opts),
@@ -92,7 +128,7 @@ export async function setModel(opts: {
 }
 
 export async function setThinkingLevel(thinkingLevel: ThinkingLevel): Promise<{ ok: boolean; thinkingLevel: string }> {
-  const res = await fetch(`${BASE}/model`, {
+  const res = await apiFetch(`/model`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ thinkingLevel }),
@@ -101,6 +137,6 @@ export async function setThinkingLevel(thinkingLevel: ThinkingLevel): Promise<{ 
 }
 
 export async function abortPrompt(): Promise<{ ok: boolean }> {
-  const res = await fetch(`${BASE}/abort`, { method: "POST" });
+  const res = await apiFetch(`/abort`, { method: "POST" });
   return jsonOrThrow(res);
 }

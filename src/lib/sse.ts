@@ -1,3 +1,5 @@
+import { getApiBase } from "./api";
+
 export type SseEvent = Record<string, unknown>;
 
 export async function streamPrompt(
@@ -5,7 +7,8 @@ export async function streamPrompt(
   onEvent: (ev: SseEvent) => void,
   signal?: AbortSignal,
 ): Promise<void> {
-  const res = await fetch("/api/prompt", {
+  const base = await getApiBase();
+  const res = await fetch(`${base}/prompt`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),

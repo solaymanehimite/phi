@@ -26,21 +26,10 @@ type Props = {
   thinking?: string;
   tools: WorkingTool[];
   isStreaming?: boolean;
-  elapsedMs?: number | null;
   variant: "streaming" | "history";
 };
 
-function formatElapsed(ms: number): string {
-  if (ms < 1000) return `${ms}ms`;
-  const s = Math.floor(ms / 1000);
-  if (s < 60) return `${s}s`;
-  const m = Math.floor(s / 60);
-  const rem = s % 60;
-  if (rem === 0) return `${m} minute${m === 1 ? "" : "s"}`;
-  return `${m}m ${rem}s`;
-}
-
-export function WorkingBlock({ thinking, tools, isStreaming, elapsedMs, variant }: Props) {
+export function WorkingBlock({ thinking, tools, isStreaming, variant }: Props) {
   const isStreamingVariant = variant === "streaming";
   const hasThinking = Boolean(thinking && thinking.trim().length > 0);
   const hasTools = tools.length > 0;
@@ -51,14 +40,11 @@ export function WorkingBlock({ thinking, tools, isStreaming, elapsedMs, variant 
   useEffect(() => {
     if (!isStreamingVariant) return;
     if (isStreaming) setOpen(true);
-    else if (elapsedMs != null) setOpen(false);
-  }, [isStreaming, elapsedMs, isStreamingVariant]);
+  }, [isStreaming, isStreamingVariant]);
 
   let title: string;
   if (isStreamingVariant) {
-    if (isStreaming) title = "Working on it";
-    else if (elapsedMs != null) title = `Spent ${formatElapsed(elapsedMs)}`;
-    else title = "Working";
+    title = isStreaming ? "Working on it" : "Working";
   } else {
     title = "Show work";
   }

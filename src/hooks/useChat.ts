@@ -19,7 +19,6 @@ type StreamingState = {
   tools: StreamingTool[];
   error?: string;
   startedAt?: number | null;
-  elapsedMs?: number | null;
 };
 
 export function useChat() {
@@ -28,8 +27,7 @@ export function useChat() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isStreaming, setIsStreaming] = useState(false);
-  const [streaming, setStreaming] = useState<StreamingState>({ text: "", thinking: "", tools: [], startedAt: null, elapsedMs: null });
-  const streamStartedAtRef = useRef<number | null>(null);
+  const [streaming, setStreaming] = useState<StreamingState>({ text: "", thinking: "", tools: [], startedAt: null });
 
   // LRU cache for instant session hopping — keeps last 20 sessions in memory (0ms on 2nd visit)
   const cacheRef = useRef<Map<string, SessionMessagesResponse>>(new Map());
@@ -160,8 +158,7 @@ export function useChat() {
     setError(null);
     setLoading(false);
     setIsStreaming(false);
-    streamStartedAtRef.current = null;
-    setStreaming({ text: "", thinking: "", tools: [], startedAt: null, elapsedMs: null });
+    setStreaming({ text: "", thinking: "", tools: [], startedAt: null });
   }, []);
 
   const refresh = useCallback(async () => {
@@ -204,15 +201,14 @@ export function useChat() {
     try {
       await abortPrompt();
     } catch {}
-    const elapsed = streamStartedAtRef.current != null ? Date.now() - streamStartedAtRef.current : null;
-    if (elapsed != null) setStreaming((s) => ({ ...s, elapsedMs: elapsed }));
     setIsStreaming(false);
   }, []);
 
   const prompt = useCallback(
-    async (text: string, opts: { cwd?: string; onNewFile?: (file: string, cwd: string, firstMessage: string) => void } = {}) => {
+    async (text: string, opts: { cwd?: string; onNewFile?: (file: string, cwd: string, firstMessage: string) => void; images?: { type: "image"; data: string; mimeType: string }[] } = {}) => {
       const trimmed = text.trim();
-      if (!trimmed) return;
+      const hasImages = (opts.images?.length ?? 0) > 0;
+      if (!trimmed && !hasImages) return;
 
       let file = activeFile;
       const cwdForNew = opts.cwd ?? "";
@@ -232,7 +228,12 @@ export function useChat() {
 
       // optimistic user bubble: add to local data
       setData((prev) => {
-        const userMsg = { role: "user", content: [{ type: "text", text: trimmed }], timestamp: Date.now() } as unknown as SessionMessagesResponse["context"]["messages"][number];
+        const content: unknown[] = [];
+        if (trimmed) content.push({ type: "text", text: trimmed });
+        if (opts.images) {
+          for (const img of opts.images) content.push({ type: "image", data: img.data, mimeType: img.mimeType });
+        }
+        const userMsg = { role: "user", content, timestamp: Date.now() } as unknown as SessionMessagesResponse["context"]["messages"][number];
         if (!prev) {
           // create minimal context with user message so it shows immediately
           return {
@@ -252,8 +253,7 @@ export function useChat() {
       });
 
       setIsStreaming(true);
-      streamStartedAtRef.current = Date.now();
-      setStreaming({ text: "", thinking: "", tools: [], startedAt: streamStartedAtRef.current, elapsedMs: null });
+      setStreaming({ text: "", thinking: "", tools: [], startedAt: Date.now() });
       setError(null);
       pendingText.current = "";
       pendingThinking.current = "";
@@ -263,7 +263,7 @@ export function useChat() {
 
       try {
         await streamPrompt(
-          { text: trimmed, sessionFile: file },
+          { text: trimmed || (hasImages ? " " : trimmed), sessionFile: file, images: opts.images }, 
           (ev: SseEvent) => {
             const type = String(ev.type ?? "");
 
@@ -346,12 +346,6 @@ export function useChat() {
           setStreaming((s) => ({ ...s, text: s.text + t, thinking: s.thinking + th }));
         }
 
-        // compute elapsed for "Spent xx" label
-        const elapsed = streamStartedAtRef.current != null ? Date.now() - streamStartedAtRef.current : null;
-        if (elapsed != null) {
-          setStreaming((s) => ({ ...s, elapsedMs: elapsed }));
-        }
-
         // keep isStreaming true while we fetch persisted history to avoid unmounting Streaming and jumping scroll
         // fetch without toggling loading to avoid spinner flicker
         try {
@@ -362,11 +356,7 @@ export function useChat() {
         } catch {}
         setIsStreaming(false);
         abortRef.current = null;
-        // hold Spent label briefly as single collapsible; hide history's duplicate during this window
-        setTimeout(() => {
-          streamStartedAtRef.current = null;
-          setStreaming({ text: "", thinking: "", tools: [], startedAt: null, elapsedMs: null });
-        }, 2200);
+        setStreaming({ text: "", thinking: "", tools: [], startedAt: null });
       }
     },
     [activeFile, flush, scheduleFlush],

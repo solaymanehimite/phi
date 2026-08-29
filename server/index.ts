@@ -19,7 +19,7 @@ const PORT = Number.parseInt(String(rawPort), 10) || 3001;
 const HOST = "127.0.0.1";
 
 const app = express();
-app.use(cors({ origin: [/localhost:\d+$/, /127\.0\.0\.1:\d+$/] }));
+app.use(cors({ origin: [/tauri\.localhost/, /localhost:\d+$/, /127\.0\.0\.1:\d+$/] }));
 app.use(express.json({ limit: "10mb" }));
 
 // ---- state singletons (lazy) ----
@@ -367,10 +367,12 @@ app.post("/api/prompt", async (req, res) => {
     images?: any[];
   };
 
-  if (!text || typeof text !== "string") {
+  const hasImages = Array.isArray(images) && images.length > 0;
+  if ((!text || typeof text !== "string" || !text.trim()) && !hasImages) {
     sendSSE(res, { type: "error", error: "missing text" });
     return res.end();
   }
+  const promptText = typeof text === "string" && text.trim() ? text : (hasImages ? " " : text);
 
   try {
     const mr = await getModelRuntime();
@@ -421,7 +423,7 @@ app.post("/api/prompt", async (req, res) => {
       try { off?.(); } catch {}
     });
 
-    await session.prompt(text, images ? { images } : undefined);
+    await session.prompt(promptText, images ? { images } : undefined);
 
     clearInterval(heartbeat);
     off();
