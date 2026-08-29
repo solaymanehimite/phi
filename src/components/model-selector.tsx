@@ -1,17 +1,17 @@
 import { memo, useCallback, useMemo, useState } from "react";
 import {
-    ArrowDown,
-    ArrowUp,
-    Atom,
-    Brain,
-    Compass,
-    Eye,
-    List,
-    Search as SearchIcon,
-    Sparkles,
-    Star,
-    Infinity as InfinityIcon,
-} from "lucide-react";
+    ArrowDownIcon,
+    ArrowUpIcon,
+    BeakerIcon,
+    BoltIcon,
+    MapIcon,
+    CpuChipIcon,
+    EyeIcon,
+    ListBulletIcon,
+    MagnifyingGlassIcon,
+    SparklesIcon,
+    StarIcon,
+} from "@heroicons/react/24/solid";
 import opencodeUrl from "../assets/opencode.svg";
 import { Popover, PopoverContent, PopoverTrigger } from "./ui/popover";
 import type { ModelInfo, ThinkingLevel } from "../types/session";
@@ -30,13 +30,13 @@ const THINKING_COLORS: Record<ThinkingLevel, string> = {
     max: "var(--color-phi-thinking-max)",
 };
 
-const PROVIDER_ICONS: Record<string, typeof Star> = {
-    openai: Atom,
-    anthropic: Brain,
-    google: Sparkles,
-    xai: InfinityIcon,
-    kimi: Compass,
-    "kimi-coding": Compass,
+const PROVIDER_ICONS: Record<string, typeof StarIcon> = {
+    openai: BeakerIcon,
+    anthropic: CpuChipIcon,
+    google: SparklesIcon,
+    xai: BoltIcon,
+    kimi: MapIcon,
+    "kimi-coding": MapIcon,
 };
 
 const PROVIDER_ICON_URLS: Record<string, string> = {
@@ -55,11 +55,11 @@ function prettyProvider(id: string): string {
 
 function ProviderImg({ provider, size = 16, className = "" }: { provider: string; size?: number; className?: string }) {
     const url = PROVIDER_ICON_URLS[provider];
-    const Icon = PROVIDER_ICONS[provider] ?? Star;
+    const Icon = PROVIDER_ICONS[provider] ?? StarIcon;
     if (url) {
         return <img src={url} alt="" width={size} height={size} className={`object-contain ${className}`} style={{ width: size, height: size }} draggable={false} />;
     }
-    return <Icon size={size} strokeWidth={1.9} className={className} />;
+    return <Icon className={className} style={{ width: size, height: size }} />;
 }
 
 function modelKey(m: Pick<ModelInfo, "provider" | "id">): string {
@@ -172,13 +172,13 @@ export const ModelSelector = memo(function ModelSelector({
     const providerIds = useMemo(() => [...new Set(list.map((m) => m.provider))].sort(), [list]);
 
     const categories = useMemo(() => {
-        const cats: Array<{ id: string; label: string; icon?: typeof Star; iconUrl?: string }> = [
-            { id: "all", label: "All", icon: List },
+        const cats: Array<{ id: string; label: string; icon?: typeof StarIcon; iconUrl?: string }> = [
+            { id: "all", label: "All", icon: ListBulletIcon },
         ];
         for (const pid of providerIds) {
             const url = PROVIDER_ICON_URLS[pid];
             if (url) cats.push({ id: pid, label: prettyProvider(pid), iconUrl: url });
-            else cats.push({ id: pid, label: prettyProvider(pid), icon: PROVIDER_ICONS[pid] ?? Star });
+            else cats.push({ id: pid, label: prettyProvider(pid), icon: PROVIDER_ICONS[pid] ?? StarIcon });
         }
         return cats;
     }, [providerIds]);
@@ -236,7 +236,7 @@ export const ModelSelector = memo(function ModelSelector({
                     <div className="flex h-full flex-col">
                         {/* search header — plain, part of popover */}
                         <div className="flex items-center gap-2 px-3 pt-3 pb-2">
-                            <SearchIcon size={14} className="shrink-0 text-phi-text-muted" />
+                            <MagnifyingGlassIcon className="size-3.5 shrink-0 text-phi-text-muted" />
                             <input
                                 autoFocus
                                 value={query}
@@ -293,7 +293,7 @@ export const ModelSelector = memo(function ModelSelector({
                                                     draggable={false}
                                                 />
                                             ) : cat.icon ? (
-                                                <cat.icon size={16} strokeWidth={isActive ? 2.25 : 1.9} />
+                                                <cat.icon className="size-4" />
                                             ) : null}
                                         </button>
                                     );
@@ -331,13 +331,13 @@ export const ModelSelector = memo(function ModelSelector({
                                                             </span>
                                                             <span className="mt-1 flex items-center gap-1 truncate text-[11.5px] leading-none text-phi-text-muted">
                                                                 <span className="inline-flex items-center gap-0.5">
-                                                                    {formatCost(model.cost.input)} <ArrowDown size={11} className="shrink-0" strokeWidth={2.25} />
+                                                                    {formatCost(model.cost.input)} <ArrowDownIcon className="size-[11px] shrink-0" />
                                                                 </span>
                                                                 <span className="opacity-60">-</span>
                                                                 <span className="inline-flex items-center gap-0.5">
-                                                                    {formatCost(model.cost.output)} <ArrowUp size={11} className="shrink-0" strokeWidth={2.25} />
+                                                                    {formatCost(model.cost.output)} <ArrowUpIcon className="size-[11px] shrink-0" />
                                                                 </span>
-                                                                {isMulti && <Eye size={11} className="shrink-0" strokeWidth={2} aria-label="Multimodal" />}
+                                                                {isMulti && <EyeIcon className="size-[11px] shrink-0" aria-label="Multimodal" />}
                                                             </span>
                                                         </span>
                                                     </button>

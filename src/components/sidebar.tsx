@@ -1,4 +1,10 @@
-import { Ellipsis, LoaderCircle, PencilLine, Plus, Trash } from "lucide-react";
+import {
+    ArrowPathIcon,
+    EllipsisHorizontalIcon,
+    PencilIcon,
+    PlusIcon,
+    TrashIcon,
+} from "@heroicons/react/24/solid";
 import { memo, useCallback, useMemo, useState } from "react";
 import { Button } from "./ui/button";
 import { PanelLeftIcon } from "./ui/icons";
@@ -109,7 +115,7 @@ export const Sidebar = memo(function Sidebar({
                             : undefined
                     }
                 >
-                    <Plus size={16} strokeWidth={2.25} />
+                    <PlusIcon className="size-4" />
                     New chat
                 </Button>
             </div>
@@ -337,11 +343,7 @@ const SessionRow = memo(function SessionRow({
             {renaming ? (
                 <div className="flex min-w-0 flex-1 items-center gap-2.5 truncate rounded-lg px-1.5 py-1">
                     {isStreaming && active ? (
-                        <LoaderCircle
-                            size={16}
-                            strokeWidth={2.25}
-                            className="size-4 shrink-0 animate-spin text-phi-text-secondary"
-                        />
+                        <ArrowPathIcon className="size-4 shrink-0 animate-spin text-phi-text-secondary" />
                     ) : null}
                     <Input
                         autoFocus
@@ -365,11 +367,7 @@ const SessionRow = memo(function SessionRow({
                     className={`flex min-w-0 flex-1 items-center gap-2.5 truncate rounded-lg px-1.5 py-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-phi-accent/40 ${isStreaming && !active ? "opacity-60" : ""}`}
                 >
                     {isStreaming && active ? (
-                        <LoaderCircle
-                            size={16}
-                            strokeWidth={2.25}
-                            className="size-4 shrink-0 animate-spin text-phi-text-secondary"
-                        />
+                        <ArrowPathIcon className="size-4 shrink-0 animate-spin text-phi-text-secondary" />
                     ) : null}
                     <span className="min-w-0 flex-1 truncate text-left">{title}</span>
                     <span className="shrink-0 text-[11px] text-phi-text-faint">{time}</span>
@@ -378,16 +376,16 @@ const SessionRow = memo(function SessionRow({
 
             <DropdownMenu>
                 <DropdownMenuTrigger aria-label="Session actions">
-                    <Ellipsis size={14} strokeWidth={2.25} />
+                    <EllipsisHorizontalIcon className="size-3.5" />
                 </DropdownMenuTrigger>
                 <DropdownMenuContent>
                     <DropdownMenuItem
-                        icon={<PencilLine size={15} strokeWidth={2.25} />}
+                        icon={<PencilIcon className="size-[15px]" />}
                         onClick={handleStartRename}
                     >
                         Rename
                     </DropdownMenuItem>
-                    <DropdownMenuItem icon={<Trash size={15} strokeWidth={2.25} />} onClick={handleDelete}>
+                    <DropdownMenuItem icon={<TrashIcon className="size-[15px]" />} onClick={handleDelete}>
                         Delete
                     </DropdownMenuItem>
                 </DropdownMenuContent>
