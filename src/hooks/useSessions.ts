@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useDeferredValue, useEffect, useMemo, useState, useTransition } from "react";
 import { listSessions, createSession, switchSession, renameSession, deleteSession } from "../lib/api";
 import type { SessionInfo } from "../types/session";
 
@@ -47,8 +47,14 @@ export function useSessions() {
   const [sessions, setSessions] = useState<SessionInfo[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [search, setSearch] = useState("");
+  const [rawSearch, setRawSearch] = useState("");
+  const deferredSearch = useDeferredValue(rawSearch);
+  // rawSearch drives input instantly; deferredSearch drives filtering (prevents per-keystroke full group recompute)
+  const search = rawSearch;
+  const setSearch = setRawSearch;
+  const isSearchPending = rawSearch !== deferredSearch;
   const [collapsed, setCollapsed] = useState<Set<string>>(() => new Set());
+  const [isPending, startTransition] = useTransition();
 
   const refresh = useCallback(async (opts?: { silent?: boolean }) => {
     const silent = !!opts?.silent;
@@ -70,24 +76,26 @@ export function useSessions() {
   }, [refresh]);
 
   const filtered = useMemo(() => {
-    if (!search.trim()) return sessions;
-    const q = search.toLowerCase();
+    if (!deferredSearch.trim()) return sessions;
+    const q = deferredSearch.toLowerCase();
     return sessions.filter((s) => {
       const name = (s.name ?? "").toLowerCase();
       const first = (s.firstMessage ?? "").toLowerCase();
       const cwd = (s.cwd ?? "").toLowerCase();
       return name.includes(q) || first.includes(q) || cwd.includes(q);
     });
-  }, [sessions, search]);
+  }, [sessions, deferredSearch]);
 
   const groups = useMemo(() => groupByCwd(filtered), [filtered]);
 
   const toggleGroup = useCallback((cwd: string) => {
-    setCollapsed((prev) => {
-      const next = new Set(prev);
-      if (next.has(cwd)) next.delete(cwd);
-      else next.add(cwd);
-      return next;
+    startTransition(() => {
+      setCollapsed((prev) => {
+        const next = new Set(prev);
+        if (next.has(cwd)) next.delete(cwd);
+        else next.add(cwd);
+        return next;
+      });
     });
   }, []);
 
@@ -101,21 +109,37 @@ export function useSessions() {
   );
 
   const switchTo = useCallback(async (file: string) => {
-    await switchSession(file);
+    const res = await switchSession(file);
+    return res as Awaited<ReturnType<typeof switchSession>>;
   }, []);
 
   const rename = useCallback(
     async (file: string, name: string) => {
-      await renameSession(file, name);
-      await refresh({ silent: true });
+      // optimistic — instant title update
+      setSessions((prev) => prev.map((s) => (s.path === file ? { ...s, name } : s)));
+      try {
+        await renameSession(file, name);
+        await refresh({ silent: true });
+      } catch (e) {
+        // revert on failure
+        await refresh({ silent: true });
+        throw e;
+      }
     },
     [refresh],
   );
 
   const remove = useCallback(
     async (file: string) => {
-      await deleteSession(file);
-      await refresh({ silent: true });
+      // optimistic — instant removal
+      setSessions((prev) => prev.filter((s) => s.path !== file));
+      try {
+        await deleteSession(file);
+        await refresh({ silent: true });
+      } catch (e) {
+        await refresh({ silent: true });
+        throw e;
+      }
     },
     [refresh],
   );
@@ -148,6 +172,8 @@ export function useSessions() {
     error,
     search,
     setSearch,
+    isSearchPending,
+    isPending,
     collapsed,
     toggleGroup,
     refresh,

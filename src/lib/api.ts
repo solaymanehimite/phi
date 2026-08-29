@@ -41,7 +41,8 @@ export async function createSession(cwd?: string): Promise<{ ok: boolean; file: 
   return jsonOrThrow(res);
 }
 
-export async function switchSession(file: string, cwd?: string): Promise<{ ok: boolean; file: string }> {
+export type SwitchSessionResponse = { ok: boolean; file: string } & Partial<SessionMessagesResponse>;
+export async function switchSession(file: string, cwd?: string): Promise<SwitchSessionResponse> {
   const res = await fetch(`${BASE}/sessions/switch`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },

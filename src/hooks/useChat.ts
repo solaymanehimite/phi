@@ -28,6 +28,20 @@ export function useChat() {
   const [isStreaming, setIsStreaming] = useState(false);
   const [streaming, setStreaming] = useState<StreamingState>({ text: "", thinking: "", tools: [] });
 
+  // LRU cache for instant session hopping — keeps last 20 sessions in memory (0ms on 2nd visit)
+  const cacheRef = useRef<Map<string, SessionMessagesResponse>>(new Map());
+  const pendingPrefetchRef = useRef<Set<string>>(new Set());
+  const MAX_CACHE = 20;
+  const putCache = useCallback((file: string, payload: SessionMessagesResponse) => {
+    const m = cacheRef.current;
+    if (m.has(file)) m.delete(file);
+    m.set(file, payload);
+    if (m.size > MAX_CACHE) {
+      const first = m.keys().next().value as string | undefined;
+      if (first) m.delete(first);
+    }
+  }, []);
+
   // rAF buffering for text/thinking deltas
   const pendingText = useRef("");
   const pendingThinking = useRef("");
@@ -60,12 +74,73 @@ export function useChat() {
     try {
       const res = await getMessages(file);
       setData(res);
+      putCache(file, res);
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
       setData(null);
     } finally {
       setLoading(false);
     }
+  }, [putCache]);
+
+  // Prepare switch — instant "Loading..." feedback without extra fetch
+  const prepareSwitch = useCallback((file: string) => {
+    setActiveFile(file);
+    setLoading(true);
+    setError(null);
+  }, []);
+
+  // Hydrate from switch response that already contains messages — avoids 2nd RTT
+  const hydrateFromSwitch = useCallback((payload: SessionMessagesResponse) => {
+    setActiveFile(payload.file);
+    setData(payload);
+    setLoading(false);
+    setError(null);
+    putCache(payload.file, payload);
+  }, [putCache]);
+
+  // Instant path: if cached, hydrate immediately with 0ms (no loading flash)
+  const hydrateFromCache = useCallback((file: string): boolean => {
+    const cached = cacheRef.current.get(file);
+    if (!cached) return false;
+    // move to MRU
+    cacheRef.current.delete(file);
+    cacheRef.current.set(file, cached);
+    setActiveFile(file);
+    setData(cached);
+    setLoading(false);
+    setError(null);
+    return true;
+  }, []);
+
+  const hasCache = useCallback((file: string) => cacheRef.current.has(file), []);
+
+  // Prefetch on hover/focus/idle — low priority, no loading state
+  const prefetch = useCallback(async (file: string) => {
+    if (!file || cacheRef.current.has(file) || pendingPrefetchRef.current.has(file)) return;
+    if (file === activeFile) return;
+    pendingPrefetchRef.current.add(file);
+    try {
+      const res = await getMessages(file);
+      putCache(file, res);
+    } catch {}
+    finally {
+      pendingPrefetchRef.current.delete(file);
+    }
+  }, [activeFile, putCache]);
+
+  // Silent revalidate cached entry in background (stale-while-revalidate)
+  const revalidate = useCallback(async (file: string) => {
+    try {
+      const res = await getMessages(file);
+      putCache(file, res);
+      // if still viewing this file, patch data without flash
+      setData((prev) => (prev?.file === file ? res : prev));
+    } catch {}
+  }, [putCache]);
+
+  const invalidateCache = useCallback((file: string) => {
+    cacheRef.current.delete(file);
   }, []);
 
   const clear = useCallback(() => {
@@ -90,11 +165,21 @@ export function useChat() {
     await openFile(activeFile);
   }, [activeFile, openFile]);
 
+  // Silent refresh — updates data without flashing "Loading messages…"
+  const refreshSilent = useCallback(async () => {
+    if (!activeFile) return;
+    try {
+      const res = await getMessages(activeFile);
+      setData(res);
+      putCache(activeFile, res);
+    } catch {}
+  }, [activeFile, putCache]);
+
   // Optimistic patch for model/thinking without full refetch — keeps UI snappy
   const patchModel = useCallback((model: any, thinkingLevel?: string) => {
     setData((prev) => {
       if (!prev) return prev;
-      return {
+      const next = {
         ...prev,
         context: {
           ...prev.context,
@@ -102,8 +187,11 @@ export function useChat() {
           thinkingLevel: thinkingLevel ?? (prev.context as any).thinkingLevel,
         },
       } as typeof prev;
+      // keep cache in sync so re-hopping stays instant with correct model
+      if (next.file) putCache(next.file, next);
+      return next;
     });
-  }, []);
+  }, [putCache]);
 
   const abort = useCallback(async () => {
     if (abortRef.current) {
@@ -257,6 +345,7 @@ export function useChat() {
           const res = await getMessages(file!);
           // batch: replace history and clear streaming in same tick, then end streaming
           setData(res);
+          putCache(file!, res);
         } catch {}
         // clear streaming and end streaming after history is in place (next frame avoids flash)
         requestAnimationFrame(() => {
@@ -269,5 +358,5 @@ export function useChat() {
     [activeFile, flush, scheduleFlush],
   );
 
-  return { activeFile, data, loading, error, isStreaming, streaming, openFile, clear, refresh, patchModel, setActiveFile, prompt, abort };
+  return { activeFile, data, loading, error, isStreaming, streaming, openFile, prepareSwitch, hydrateFromSwitch, hydrateFromCache, hasCache, prefetch, revalidate, putCache, invalidateCache, clear, refresh, refreshSilent, patchModel, setActiveFile, prompt, abort };
 }

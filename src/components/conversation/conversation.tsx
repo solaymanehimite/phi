@@ -1,3 +1,4 @@
+import { memo, useMemo } from "react";
 import { Markdown } from "./markdown";
 import { ThinkingBlock } from "./thinking";
 import { ToolLine } from "./tool-line";
@@ -64,32 +65,35 @@ function renderUser(content: unknown): string {
     return "";
 }
 
-export function Conversation({ messages }: Props) {
-    const msgs = asMessages(messages);
+export const Conversation = memo(function Conversation({ messages }: Props) {
+    const msgs = useMemo(() => asMessages(messages), [messages]);
 
-    // Build map from toolCallId -> result for quick lookup
-    const toolResults = new Map<string, { text: string; isError: boolean }>();
-    for (const m of msgs) {
-        if (m.role === "toolResult") {
-            const id = String(m.toolCallId ?? "");
-            const name = String(m.toolName ?? "");
-            void name;
-            const content = m.content;
-            let text = "";
-            if (Array.isArray(content)) {
-                text = content
-                    .map((c: unknown) =>
-                        c &&
-                            typeof c === "object" &&
-                            "text" in (c as Record<string, unknown>)
-                            ? String((c as Record<string, unknown>).text ?? "")
-                            : "",
-                    )
-                    .join("\n");
-            } else if (typeof content === "string") text = content;
-            toolResults.set(id, { text, isError: Boolean(m.isError) });
+    // Build map from toolCallId -> result for quick lookup (memoized per messages ref)
+    const toolResults = useMemo(() => {
+        const map = new Map<string, { text: string; isError: boolean }>();
+        for (const m of msgs) {
+            if (m.role === "toolResult") {
+                const id = String(m.toolCallId ?? "");
+                const name = String(m.toolName ?? "");
+                void name;
+                const content = m.content;
+                let text = "";
+                if (Array.isArray(content)) {
+                    text = content
+                        .map((c: unknown) =>
+                            c &&
+                                typeof c === "object" &&
+                                "text" in (c as Record<string, unknown>)
+                                ? String((c as Record<string, unknown>).text ?? "")
+                                : "",
+                        )
+                        .join("\n");
+                } else if (typeof content === "string") text = content;
+                map.set(id, { text, isError: Boolean(m.isError) });
+            }
         }
-    }
+        return map;
+    }, [msgs]);
 
     return (
         <div className="w-full max-w-2xl min-w-0 space-y-6 pb-8 pt-3">
@@ -168,13 +172,9 @@ export function Conversation({ messages }: Props) {
                 }
 
                 if (role === "toolResult") {
-                    // ToolResults are rendered alongside their ToolCall (above). Skip standalone to avoid duplication.
-                    // However, if there was a toolResult without a preceding toolCall (rare), render as tool line fallback.
-                    // Check if any assistant already covered it — if not, render standalone.
                     return null;
                 }
 
-                // Fallback for compactionSummary / branchSummary / custom etc.
                 const fallback =
                     typeof m.content === "string"
                         ? m.content
@@ -192,4 +192,4 @@ export function Conversation({ messages }: Props) {
             })}
         </div>
     );
-}
+})

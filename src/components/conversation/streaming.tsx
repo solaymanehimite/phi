@@ -1,3 +1,4 @@
+import { memo } from "react";
 import { Markdown } from "./markdown";
 import { ThinkingBlock } from "./thinking";
 import { ToolLine } from "./tool-line";
@@ -12,7 +13,7 @@ type StreamingTool = {
   done?: boolean;
 };
 
-export function Streaming({
+export const Streaming = memo(function Streaming({
   text,
   thinking,
   tools,
@@ -55,4 +56,4 @@ export function Streaming({
       )}
     </div>
   );
-}
+})

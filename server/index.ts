@@ -62,6 +62,7 @@ function sseHeaders(res: express.Response) {
   res.setHeader("Content-Type", "text/event-stream");
   res.setHeader("Cache-Control", "no-cache");
   res.setHeader("Connection", "keep-alive");
+  res.setHeader("X-Accel-Buffering", "no");
 }
 
 function sendSSE(res: express.Response, event: unknown) {
@@ -84,6 +85,7 @@ app.get("/api/models", async (_req, res) => {
   try {
     const now = Date.now();
     if (modelsCache && now - modelsCache.at < MODELS_TTL_MS) {
+      res.setHeader("Cache-Control", "public, max-age=30");
       return res.json(modelsCache.payload);
     }
     const mr = await getModelRuntime();
@@ -103,11 +105,27 @@ app.get("/api/models", async (_req, res) => {
     }));
     const payload = { available, error: (mr as any).getError?.() ?? null };
     modelsCache = { at: now, payload };
+    res.setHeader("Cache-Control", "public, max-age=30");
     res.json(payload);
   } catch (e: any) {
     res.status(500).json({ error: e?.message ?? String(e) });
   }
 });
+
+// Sessions cache — biggest win for sidebar
+// Disk-heavy listAll is cached 3s with ETag + deduped concurrent calls
+let sessionsCache: { at: number; payload: any; etag: string } | null = null;
+const SESSIONS_TTL_MS = 3000;
+let pendingListAll: Promise<any> | null = null;
+
+function etagFor(payload: any): string {
+  if (!Array.isArray(payload) || payload.length === 0) return `"0-0"`;
+  return `"${payload.length}-${(payload[0] as any)?.modified ?? ""}"`;
+}
+
+function invalidateSessionsCache() {
+  sessionsCache = null;
+}
 
 // List sessions
 // GET /api/sessions?cwd=/foo  (project)  or  /api/sessions (all) or /api/sessions?all=1
@@ -115,14 +133,33 @@ app.get("/api/sessions", async (req, res) => {
   try {
     const cwd = req.query.cwd as string | undefined;
     const all = req.query.all === "1" || req.query.all === "true";
-    let infos: any[];
-    if (cwd && !all) {
-      infos = await SessionManager.list(cwd);
-    } else {
-      // listAll has two overloads; try without arg first
+
+    // cached fast-path for all=1 (sidebar)
+    if (all && sessionsCache && Date.now() - sessionsCache.at < SESSIONS_TTL_MS) {
+      if (req.headers["if-none-match"] === sessionsCache.etag) return res.status(304).end();
+      res.setHeader("ETag", sessionsCache.etag);
+      return res.json(sessionsCache.payload);
+    }
+
+    const doList = async () => {
+      if (cwd && !all) return SessionManager.list(cwd);
+      let infos: any[];
       infos = await (SessionManager as any).listAll();
-      // fallback if it expects string
       if (!Array.isArray(infos)) infos = await SessionManager.listAll(undefined as any);
+      return infos;
+    };
+
+    // dedupe concurrent callers (session hop spam)
+    if (!pendingListAll) {
+      pendingListAll = doList().finally(() => setTimeout(() => (pendingListAll = null), 50));
+    }
+    const infos = await pendingListAll;
+
+    if (all) {
+      const etag = etagFor(infos);
+      if (req.headers["if-none-match"] === etag) return res.status(304).end();
+      res.setHeader("ETag", etag);
+      sessionsCache = { at: Date.now(), payload: infos, etag };
     }
     res.json(infos);
   } catch (e: any) {
@@ -162,20 +199,32 @@ app.post("/api/sessions/new", async (req, res) => {
     await rt.newSession();
     // runtime.session changed — return new file
     const file = (rt.session as any).sessionFile ?? (rt as any).session?.sessionFile;
+    invalidateSessionsCache();
     res.json({ ok: true, file });
   } catch (e: any) {
     res.status(500).json({ error: e?.message ?? String(e) });
   }
 });
 
-// Switch session
+// Switch session — returns messages inline so frontend can skip 2nd fetch (1 RTT saved)
 app.post("/api/sessions/switch", async (req, res) => {
   try {
     const { file, cwd } = req.body as { file: string; cwd?: string };
     if (!file) return res.status(400).json({ error: "missing file" });
     const rt = await getRuntime(cwd || path.dirname(file));
     await rt.switchSession(file);
-    res.json({ ok: true, file });
+    invalidateSessionsCache();
+    // inline payload — frontend was doing Promise.all([switch, getMessages])
+    const sm = SessionManager.open(file);
+    res.json({
+      ok: true,
+      file,
+      header: sm.getHeader(),
+      entries: sm.getEntries(),
+      context: sm.buildSessionContext(),
+      sessionName: sm.getSessionName(),
+      cwd: sm.getCwd(),
+    });
   } catch (e: any) {
     res.status(500).json({ error: e?.message ?? String(e) });
   }
@@ -188,6 +237,7 @@ app.post("/api/sessions/rename", async (req, res) => {
     if (!file) return res.status(400).json({ error: "missing file" });
     const sm = SessionManager.open(file);
     sm.appendSessionInfo(name);
+    invalidateSessionsCache();
     res.json({ ok: true, name: sm.getSessionName() });
   } catch (e: any) {
     res.status(500).json({ error: e?.message ?? String(e) });
@@ -199,9 +249,15 @@ app.delete("/api/sessions", async (req, res) => {
   try {
     const file = (req.query.file as string) || (req.body as any)?.file;
     if (!file) return res.status(400).json({ error: "missing file" });
-    // try trash via SDK helper if available, else unlink
-    // For now unlink — frontend confirms
-    await fs.unlink(file);
+    // try SDK helper if available, else unlink — frontend confirms
+    try {
+      const maybeTrash = (SessionManager as any).trash ?? (SessionManager as any).remove;
+      if (typeof maybeTrash === "function") await maybeTrash(file);
+      else await fs.unlink(file);
+    } catch {
+      await fs.unlink(file);
+    }
+    invalidateSessionsCache();
     res.json({ ok: true });
   } catch (e: any) {
     res.status(500).json({ error: e?.message ?? String(e) });
@@ -301,6 +357,8 @@ app.post("/api/model", async (req, res) => {
 // Streams SSE events: { type: "message_update" | ... }
 app.post("/api/prompt", async (req, res) => {
   sseHeaders(res);
+  // ensure headers flushed immediately (fixes nginx / vite proxy buffering)
+  if (typeof (res as any).flushHeaders === "function") (res as any).flushHeaders();
 
   const { text, sessionFile, cwd, images } = req.body as {
     text: string;
@@ -367,6 +425,7 @@ app.post("/api/prompt", async (req, res) => {
 
     clearInterval(heartbeat);
     off();
+    invalidateSessionsCache();
 
     // Signal completion for frontend convenience
     sendSSE(res, { type: "done" });

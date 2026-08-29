@@ -1,4 +1,4 @@
-import { useRef, useState, type FormEvent, type KeyboardEvent } from "react";
+import { memo, useCallback, useRef, useState, type FormEvent, type KeyboardEvent } from "react";
 import { Button } from "./ui/button";
 import { ArrowUpIcon, StopIcon } from "./ui/icons";
 import { ModelSelector } from "./model-selector";
@@ -18,7 +18,7 @@ type ComposerProps = {
     onThinkingChange?: (level: ThinkingLevel) => void | Promise<void>;
 };
 
-export function Composer({
+export const Composer = memo(function Composer({
     onSend,
     onAbort,
     isStreaming,
@@ -34,7 +34,7 @@ export function Composer({
     const [message, setMessage] = useState("");
     const textareaRef = useRef<HTMLTextAreaElement>(null);
 
-    function submit(event?: FormEvent) {
+    const submit = useCallback((event?: FormEvent) => {
         event?.preventDefault();
         if (isStreaming) {
             onAbort?.();
@@ -42,19 +42,25 @@ export function Composer({
         }
         const content = message.trim();
         if (!content || disabled) return;
-
         onSend(content);
         setMessage("");
         if (textareaRef.current) textareaRef.current.style.height = "auto";
-    }
+    }, [isStreaming, onAbort, message, disabled, onSend]);
 
-    function handleKeyDown(event: KeyboardEvent<HTMLTextAreaElement>) {
+    const handleKeyDown = useCallback((event: KeyboardEvent<HTMLTextAreaElement>) => {
         if (event.key === "Enter" && !event.shiftKey) {
             event.preventDefault();
             if (isStreaming) onAbort?.();
             else submit();
         }
-    }
+    }, [isStreaming, onAbort, submit]);
+
+    const handleChange = useCallback((event: React.ChangeEvent<HTMLTextAreaElement>) => setMessage(event.target.value), []);
+    const handleInput = useCallback((event: React.FormEvent<HTMLTextAreaElement>) => {
+        const el = event.currentTarget as HTMLTextAreaElement;
+        el.style.height = "auto";
+        el.style.height = `${Math.min(el.scrollHeight, 180)}px`;
+    }, []);
 
     return (
         <form
@@ -71,13 +77,10 @@ export function Composer({
                         ? "Streaming… press Stop or Enter to abort"
                         : "Message Pi…"
                 }
-                onChange={(event) => setMessage(event.target.value)}
+                onChange={handleChange}
                 onKeyDown={handleKeyDown}
                 disabled={!!disabled}
-                onInput={(event) => {
-                    event.currentTarget.style.height = "auto";
-                    event.currentTarget.style.height = `${Math.min(event.currentTarget.scrollHeight, 180)}px`;
-                }}
+                onInput={handleInput}
                 className="block max-h-[180px] min-h-16 w-full resize-none bg-transparent px-2.5 py-2 text-[14px] leading-6 text-phi-text-primary outline-none placeholder:text-phi-text-muted disabled:opacity-60"
             />
 
@@ -118,4 +121,4 @@ export function Composer({
             </div>
         </form>
     );
-}
+})

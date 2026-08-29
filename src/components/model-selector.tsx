@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { memo, useCallback, useMemo, useState } from "react";
 import {
     ArrowDown,
     ArrowUp,
@@ -104,7 +104,7 @@ type ModelSelectorProps = {
     isStreaming?: boolean;
 };
 
-export function ModelSelector({
+export const ModelSelector = memo(function ModelSelector({
     models,
     value,
     thinkingLevel,
@@ -203,17 +203,19 @@ export function ModelSelector({
     const clampedEffort = availableLevels[clampedIdx] ?? "medium";
     const pct = availableLevels.length <= 1 ? 100 : (clampedIdx / (availableLevels.length - 1)) * 100;
 
-    async function handleSelect(m: ModelInfo) {
+    const handleSelect = useCallback(async (m: ModelInfo) => {
         if (disabled || isStreaming) return;
         if (!onSelect) return;
         await onSelect(m.provider, m.id);
-    }
+    }, [disabled, isStreaming, onSelect]);
 
-    async function handleThinkingChange(level: ThinkingLevel) {
+    const handleThinkingChange = useCallback(async (level: ThinkingLevel) => {
         if (disabled || isStreaming) return;
         if (onThinkingChange) await onThinkingChange(level);
         else setLocalEffort(level);
-    }
+    }, [disabled, isStreaming, onThinkingChange]);
+    const handleQueryChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => setQuery(e.target.value), []);
+    const handleClearQuery = useCallback(() => setQuery(""), []);
 
     const isDisabled = !!disabled || !!isStreaming;
 
@@ -238,13 +240,13 @@ export function ModelSelector({
                             <input
                                 autoFocus
                                 value={query}
-                                onChange={(e) => setQuery(e.target.value)}
+                                onChange={handleQueryChange}
                                 placeholder="Search models..."
                                 className="w-full bg-transparent text-[13px] text-phi-text-primary placeholder:text-phi-text-muted focus:outline-none"
                             />
                             {query && (
                                 <button
-                                    onClick={() => setQuery("")}
+                                    onClick={handleClearQuery}
                                     className="text-[11px] text-phi-text-muted hover:text-phi-text-secondary"
                                 >
                                     Clear
@@ -396,7 +398,7 @@ export function ModelSelector({
             </>
         </Popover>
     );
-}
+})
 
 // kept for potential reuse — not used in composer after remarks
 export function ComposerPill({

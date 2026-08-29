@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Composer } from "./components/composer";
 import { Conversation } from "./components/conversation/conversation";
 import { Streaming } from "./components/conversation/streaming";
@@ -17,25 +17,104 @@ function formatCwd(cwd: string | undefined): string {
     return m ? cwd.replace(m[0], "~") : cwd;
 }
 
+// Isolated scroll-aware viewport so App doesn't need to re-render on every streaming token
+const ChatViewport = memo(function ChatViewport({
+    activeFile,
+    loading,
+    error,
+    messages,
+    isStreaming,
+    streaming,
+}: {
+    activeFile: string | null;
+    loading: boolean;
+    error: string | null;
+    messages: unknown[];
+    isStreaming: boolean;
+    streaming: { text: string; thinking: string; tools: { toolCallId: string; toolName: string; args: Record<string, unknown>; partial?: string; result?: string; isError?: boolean; done?: boolean }[]; error?: string };
+}) {
+    const scrollerRef = useRef<HTMLDivElement>(null);
+
+    // auto-scroll while streaming (pinned to bottom on each delta)
+    useEffect(() => {
+        const el = scrollerRef.current;
+        if (!el) return;
+        if (isStreaming) {
+            el.scrollTop = el.scrollHeight;
+        }
+    }, [isStreaming, streaming.text, streaming.thinking, streaming.tools.length]);
+
+    // after streaming finishes and history loads, pin to bottom
+    useEffect(() => {
+        if (isStreaming) return;
+        const el = scrollerRef.current;
+        if (!el) return;
+        if ((messages.length ?? 0) > 0) {
+            requestAnimationFrame(() => {
+                el.scrollTop = el.scrollHeight;
+            });
+        }
+    }, [isStreaming, messages.length]);
+
+    if (!activeFile) return null;
+    if (loading) {
+        return (
+            <div ref={scrollerRef} className="mx-auto flex w-full max-w-3xl flex-1 flex-col overflow-y-auto px-6 pt-6">
+                <p className="py-10 text-center text-[13px] text-phi-text-muted">Loading messages…</p>
+            </div>
+        );
+    }
+    if (error) {
+        return (
+            <div ref={scrollerRef} className="mx-auto flex w-full max-w-3xl flex-1 flex-col overflow-y-auto px-6 pt-6">
+                <div className="mx-auto mt-6 max-w-xl rounded-lg border border-phi-error-border bg-phi-error-bg px-4 py-3 text-[13px] text-phi-error-text">
+                    {error}
+                </div>
+            </div>
+        );
+    }
+    if (messages.length === 0) {
+        return (
+            <div ref={scrollerRef} className="mx-auto flex w-full max-w-3xl flex-1 flex-col overflow-y-auto px-6 pt-6">
+                <div className="flex flex-1 flex-col items-center justify-center pb-16 text-center">
+                    <p className="text-[13px] text-phi-text-muted">No messages in this session yet.</p>
+                    <p className="mt-1 text-[12px] text-phi-text-muted">Prompt streaming lands in Phase C.</p>
+                </div>
+            </div>
+        );
+    }
+    return (
+        <div ref={scrollerRef} className="mx-auto flex w-full max-w-3xl flex-1 flex-col overflow-y-auto px-6 pt-6">
+            <Conversation messages={messages} />
+            {isStreaming && (
+                <div className="pt-2">
+                    <Streaming text={streaming.text} thinking={streaming.thinking} tools={streaming.tools} error={streaming.error} />
+                </div>
+            )}
+            {error && !isStreaming && (
+                <div className="rounded-lg border border-phi-error-border bg-phi-error-bg px-3 py-2 text-[13px] text-phi-error-text">
+                    {error}
+                </div>
+            )}
+        </div>
+    );
+});
+
 export default function App() {
     const [sidebarOpen, setSidebarOpen] = useState(true);
     const sessions = useSessions();
     const chat = useChat();
     const models = useModels();
     const [modelError, setModelError] = useState<string | null>(null);
-    // Draft selection for "New chat" (no activeFile) — so the pill still reflects user choice
-    // before the first session exists. Applied on next prompt / create.
     const [draftModelKey, setDraftModelKey] = useState<string | undefined>(undefined);
     const [draftThinking, setDraftThinking] = useState<import("./types/session").ThinkingLevel | undefined>(undefined);
 
-    const activeTitle =
-        chat.data?.sessionName ||
-        chat.data?.header?.id ||
-        chat.activeFile?.split("/").pop() ||
-        "New chat";
+    const activeTitle = useMemo(
+        () => chat.data?.sessionName || chat.data?.header?.id || chat.activeFile?.split("/").pop() || "New chat",
+        [chat.data?.sessionName, chat.data?.header?.id, chat.activeFile],
+    );
     const activeCwd = chat.data?.cwd || chat.data?.header?.cwd;
 
-    // Derive "provider/id" key for the selector from session context; fall back to draft for New chat
     const ctxModel: any = (chat.data?.context as any)?.model;
     const ctxModelKey = ctxModel ? `${ctxModel.provider}/${ctxModel.modelId ?? ctxModel.id}` : undefined;
     const selectedModelKey = ctxModelKey ?? draftModelKey;
@@ -45,54 +124,103 @@ export default function App() {
     const handleSelectModel = useCallback(
         async (provider: string, id: string) => {
             const key = `${provider}/${id}`;
-            // New chat: no session yet — keep draft so pill updates immediately and next prompt uses it
             if (!chat.activeFile) {
                 setDraftModelKey(key);
                 setModelError(null);
                 return;
             }
             setModelError(null);
-            // Optimistic — update pill instantly, don't block UI on server round-trip
             const info = models.models.find((m) => m.provider === provider && m.id === id);
             const optimistic: any = info ?? { provider, id, modelId: id, name: id };
+            // Optimistic only — no refresh. Model switch must not reload messages or flash "Loading…"
             chat.patchModel(optimistic, undefined);
             try {
                 const res: any = await models.setModel(provider, id);
                 if (res?.model) chat.patchModel(res.model, res.thinkingLevel);
-                // silent background sync, not awaited
-                chat.refresh().catch(() => {});
             } catch (e) {
                 const msg = e instanceof Error ? e.message : String(e);
                 setModelError(msg);
-                chat.refresh().catch(() => {});
+                // Keep optimistic UI; do not reload history. Error banner is enough.
             }
         },
-        [chat.activeFile, chat.patchModel, chat.refresh, models.models, models.setModel],
+        [chat.activeFile, chat.patchModel, models.models, models.setModel],
     );
 
+    // Debounced commit for thinking slider — UI patches instantly, server is debounced
+    const thinkingCommitRef = useRef<number | null>(null);
+    const pendingThinkingRef = useRef<import("./types/session").ThinkingLevel | null>(null);
+
+    // flush pending thinking level to server (debounced)
+    const flushThinking = useCallback(async () => {
+        const level = pendingThinkingRef.current;
+        pendingThinkingRef.current = null;
+        thinkingCommitRef.current = null;
+        if (!level || !chat.activeFile) return;
+        try {
+            const res: any = await models.setThinkingLevel(level);
+            if (res?.thinkingLevel) chat.patchModel(null as any, res.thinkingLevel);
+        } catch (e) {
+            const msg = e instanceof Error ? e.message : String(e);
+            setModelError(msg);
+        }
+    }, [chat.activeFile, chat.patchModel, models.setThinkingLevel]);
+
     const handleThinkingChange = useCallback(
-        async (level: import("./types/session").ThinkingLevel) => {
+        (level: import("./types/session").ThinkingLevel) => {
             if (!chat.activeFile) {
                 setDraftThinking(level);
                 return;
             }
             setModelError(null);
-            // Optimistic — slider moves instantly
+            // Instant optimistic so slider feels snappy; never reload messages
             chat.patchModel(null as any, level);
-            try {
-                const res: any = await models.setThinkingLevel(level);
-                if (res?.thinkingLevel) chat.patchModel(null as any, res.thinkingLevel);
-                chat.refresh().catch(() => {});
-            } catch (e) {
-                const msg = e instanceof Error ? e.message : String(e);
-                setModelError(msg);
-                chat.refresh().catch(() => {});
-            }
+            // Debounce server sync — sliding through values only commits last one
+            pendingThinkingRef.current = level;
+            if (thinkingCommitRef.current != null) window.clearTimeout(thinkingCommitRef.current);
+            thinkingCommitRef.current = window.setTimeout(() => {
+                flushThinking();
+            }, 220);
         },
-        [chat.activeFile, chat.patchModel, chat.refresh, models.setThinkingLevel],
+        [chat.activeFile, chat.patchModel, flushThinking],
     );
 
-    // When a session is opened, its context becomes authoritative — clear draft
+    // Cancel debounced thinking commit when session changes — don't apply level to wrong session
+    useEffect(() => {
+        return () => {
+            if (thinkingCommitRef.current != null) window.clearTimeout(thinkingCommitRef.current);
+        };
+    }, []);
+    useEffect(() => {
+        // activeFile switched: drop pending commit for previous file
+        if (thinkingCommitRef.current != null) {
+            window.clearTimeout(thinkingCommitRef.current);
+            thinkingCommitRef.current = null;
+            pendingThinkingRef.current = null;
+        }
+    }, [chat.activeFile]);
+
+    // Idle prefetch: warm top 5 recent sessions so first hover/click is often already cached (0ms)
+    useEffect(() => {
+        if (sessions.loading || sessions.groups.length === 0) return;
+        const files: string[] = [];
+        for (const g of sessions.groups) {
+            for (const s of g.sessions) {
+                if (s.path !== chat.activeFile) files.push(s.path);
+                if (files.length >= 5) break;
+            }
+            if (files.length >= 5) break;
+        }
+        if (files.length === 0) return;
+        const idle = (cb: () => void) =>
+            (window as any).requestIdleCallback ? (window as any).requestIdleCallback(cb, { timeout: 2000 }) : setTimeout(cb, 400);
+        const cancelIdle = (id: any) =>
+            (window as any).cancelIdleCallback ? (window as any).cancelIdleCallback(id) : clearTimeout(id);
+        const id = idle(() => {
+            files.forEach((f) => chat.prefetch(f));
+        });
+        return () => cancelIdle(id);
+    }, [sessions.groups, sessions.loading, chat.activeFile, chat.prefetch]);
+
     useEffect(() => {
         if (chat.activeFile && chat.data?.context) {
             setDraftModelKey(undefined);
@@ -110,19 +238,31 @@ export default function App() {
                 if (!ok) return;
                 try {
                     await chat.abort();
-                } catch {
-                    // abort failure is non-blocking — still switch
-                }
+                } catch {}
             }
+            // Instant path: cached -> 0ms hydrate, then background revalidate + switch
+            if (chat.hasCache(file)) {
+                chat.hydrateFromCache(file);
+                // background: keep server runtime in sync and refresh stale data without flash
+                sessions.switchTo(file).catch((e) => console.warn("switchSession failed", e));
+                chat.revalidate(file);
+                return;
+            }
+            // Cold path: instant loading feedback, then 1 RTT hydrate
+            chat.prepareSwitch(file);
             try {
-                await sessions.switchTo(file);
+                const res = await sessions.switchTo(file);
+                if ((res as any)?.context) {
+                    chat.hydrateFromSwitch(res as any);
+                } else {
+                    await chat.openFile(file);
+                }
             } catch (e) {
-                // switch failure is non-blocking — still try to load
                 console.warn("switchSession failed", e);
+                await chat.openFile(file).catch(() => {});
             }
-            await chat.openFile(file);
         },
-        [sessions.switchTo, chat.openFile, chat.isStreaming, chat.abort, chat.activeFile],
+        [sessions.switchTo, chat.openFile, chat.hydrateFromSwitch, chat.hydrateFromCache, chat.hasCache, chat.revalidate, chat.isStreaming, chat.abort, chat.activeFile, chat.prepareSwitch],
     );
 
     const handleNewChat = useCallback(async () => {
@@ -141,30 +281,27 @@ export default function App() {
     const handleRename = useCallback(
         async (file: string, name: string) => {
             await sessions.rename(file, name);
-            if (chat.activeFile === file) await chat.refresh();
+            chat.invalidateCache(file);
+            if (chat.activeFile === file) await chat.refreshSilent();
         },
-        [sessions.rename, chat.activeFile, chat.refresh],
+        [sessions.rename, chat.activeFile, chat.refreshSilent, chat.invalidateCache],
     );
 
     const handleDelete = useCallback(
         async (file: string) => {
             await sessions.remove(file);
+            chat.invalidateCache(file);
             if (chat.activeFile === file) chat.clear();
         },
-        [sessions.remove, chat.activeFile, chat.clear],
+        [sessions.remove, chat.activeFile, chat.clear, chat.invalidateCache],
     );
-
-    const scrollerRef = useRef<HTMLDivElement>(null);
 
     const handleSend = useCallback(
         async (content: string) => {
-            // If starting a new session with a draft model/thinking, materialize the session first
-            // so setModel targets the correct file before the first prompt.
             if (!chat.activeFile && draftModelKey) {
                 try {
                     const res = await createSession();
                     const file = res.file;
-                    // Make runtime point at the new file
                     try {
                         await sessions.switchTo(file);
                     } catch {}
@@ -187,15 +324,13 @@ export default function App() {
                     }
                     setDraftModelKey(undefined);
                     setDraftThinking(undefined);
-                    await chat.refresh();
+                    await chat.refreshSilent();
                 } catch (e) {
-                    // fallback to normal prompt path if pre-materialization fails
                     console.warn("draft model pre-create failed", e);
                 }
             }
             await chat.prompt(content, {
                 onNewFile: (file, cwd, firstMessage) => {
-                    // optimistic insert so session appears immediately (before server indexes it)
                     const realCwd = cwd || chat.data?.cwd || "";
                     sessions.addOptimistic(
                         file,
@@ -204,42 +339,16 @@ export default function App() {
                     );
                 },
             });
-            // silent recency refresh after prompt completes (no flash)
             sessions.refresh({ silent: true });
         },
-        [chat.prompt, chat.data?.cwd, sessions.addOptimistic, sessions.refresh, chat.activeFile, draftModelKey, draftThinking, models.setModel, models.setThinkingLevel, chat.openFile, chat.refresh, sessions.switchTo],
+        [chat.prompt, chat.data?.cwd, sessions.addOptimistic, sessions.refresh, chat.activeFile, draftModelKey, draftThinking, models.setModel, models.setThinkingLevel, chat.openFile, chat.refreshSilent, sessions.switchTo],
     );
 
-    // auto-scroll while streaming and after history replaces streaming
-    useEffect(() => {
-        const el = scrollerRef.current;
-        if (!el) return;
-        // during streaming, keep pinned to bottom as deltas arrive
-        if (chat.isStreaming) {
-            el.scrollTop = el.scrollHeight;
-            return;
-        }
-    }, [
-        chat.isStreaming,
-        chat.streaming.text,
-        chat.streaming.thinking,
-        chat.streaming.tools.length,
-    ]);
+    const messages = useMemo(() => chat.data?.context.messages ?? [], [chat.data?.context.messages]);
 
-    // after streaming finishes and history loads, pin to bottom
-    useEffect(() => {
-        if (chat.isStreaming) return;
-        const el = scrollerRef.current;
-        if (!el) return;
-        // only scroll if we have messages (i.e. after a prompt or file open)
-        if ((chat.data?.context.messages.length ?? 0) > 0) {
-            requestAnimationFrame(() => {
-                el.scrollTop = el.scrollHeight;
-            });
-        }
-    }, [chat.isStreaming, chat.data?.context.messages.length]);
-
-    const messages = chat.data?.context.messages ?? [];
+    // stable header values memoized
+    const headerTitle = useMemo(() => (chat.activeFile ? activeTitle : "New chat"), [chat.activeFile, activeTitle]);
+    const headerCwd = useMemo(() => formatCwd(activeCwd), [activeCwd]);
 
     return (
         <div className="flex h-screen min-h-[480px] overflow-hidden bg-phi-bg-app text-phi-text-primary antialiased selection:bg-phi-accent/25">
@@ -259,6 +368,7 @@ export default function App() {
                     loading={sessions.loading}
                     error={sessions.error}
                     isStreaming={chat.isStreaming}
+                    onPrefetch={chat.prefetch}
                 />
             )}
 
@@ -280,75 +390,39 @@ export default function App() {
                     <div className="pointer-events-none mx-auto flex max-w-[60%] items-center gap-2 truncate px-10 text-[13px]">
                         {activeCwd ? (
                             <>
-                                <span className="truncate font-medium text-phi-text-tertiary">
-                                    {formatCwd(activeCwd)}
-                                </span>
+                                <span className="truncate font-medium text-phi-text-tertiary">{headerCwd}</span>
                                 <span className="text-phi-separator">/</span>
                             </>
                         ) : null}
-                        <span className="truncate font-medium text-phi-text-tertiary">
-                            {chat.activeFile ? activeTitle : "New chat"}
-                        </span>
+                        <span className="truncate font-medium text-phi-text-tertiary">{headerTitle}</span>
                     </div>
                     <div className="w-8" />
                 </header>
 
                 <section className="flex min-h-0 flex-1 flex-col">
-                    <div
-                        ref={scrollerRef}
-                        className="mx-auto flex w-full max-w-3xl flex-1 flex-col overflow-y-auto px-6 pt-6"
-                    >
-                        {!chat.activeFile ? (
+                    {!chat.activeFile ? (
+                        <div className="mx-auto flex w-full max-w-3xl flex-1 flex-col overflow-y-auto px-6 pt-6">
                             <div className="flex flex-1 flex-col items-center justify-center pb-16 text-center">
                                 <h1 className="text-[32px] font-semibold tracking-[-0.03em] text-phi-text-primary">
                                     Build, Fix and Ship
                                 </h1>
-                                {!sessions.loading &&
-                                    sessions.groups.length === 0 &&
-                                    !sessions.error && (
-                                        <p className="mt-6 text-[12px] text-phi-text-muted">
-                                            No sessions found — run `pi` in a project to create one.
-                                        </p>
-                                    )}
-                            </div>
-                        ) : chat.loading ? (
-                            <p className="py-10 text-center text-[13px] text-phi-text-muted">
-                                Loading messages…
-                            </p>
-                        ) : chat.error ? (
-                            <div className="mx-auto mt-6 max-w-xl rounded-lg border border-phi-error-border bg-phi-error-bg px-4 py-3 text-[13px] text-phi-error-text">
-                                {chat.error}
-                            </div>
-                        ) : messages.length === 0 ? (
-                            <div className="flex flex-1 flex-col items-center justify-center pb-16 text-center">
-                                <p className="text-[13px] text-phi-text-muted">
-                                    No messages in this session yet.
-                                </p>
-                                <p className="mt-1 text-[12px] text-phi-text-muted">
-                                    Prompt streaming lands in Phase C.
-                                </p>
-                            </div>
-                        ) : (
-                            <>
-                                <Conversation messages={messages} />
-                                {chat.isStreaming && (
-                                    <div className="pt-2">
-                                        <Streaming
-                                            text={chat.streaming.text}
-                                            thinking={chat.streaming.thinking}
-                                            tools={chat.streaming.tools}
-                                            error={chat.streaming.error}
-                                        />
-                                    </div>
+                                {!sessions.loading && sessions.groups.length === 0 && !sessions.error && (
+                                    <p className="mt-6 text-[12px] text-phi-text-muted">
+                                        No sessions found — run `pi` in a project to create one.
+                                    </p>
                                 )}
-                                {chat.error && !chat.isStreaming && (
-                                    <div className="rounded-lg border border-phi-error-border bg-phi-error-bg px-3 py-2 text-[13px] text-phi-error-text">
-                                        {chat.error}
-                                    </div>
-                                )}
-                            </>
-                        )}
-                    </div>
+                            </div>
+                        </div>
+                    ) : (
+                        <ChatViewport
+                            activeFile={chat.activeFile}
+                            loading={chat.loading}
+                            error={chat.error}
+                            messages={messages}
+                            isStreaming={chat.isStreaming}
+                            streaming={chat.streaming}
+                        />
+                    )}
 
                     <div className="shrink-0 px-4 sm:px-7">
                         {(modelError || (!models.loading && models.models.length === 0 && !models.error)) && (

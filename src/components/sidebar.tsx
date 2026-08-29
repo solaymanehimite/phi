@@ -1,5 +1,5 @@
 import { Ellipsis, LoaderCircle, PencilLine, Plus, Trash } from "lucide-react";
-import { memo, useState } from "react";
+import { memo, useCallback, useMemo, useState } from "react";
 import { Button } from "./ui/button";
 import { PanelLeftIcon } from "./ui/icons";
 import { Input } from "./ui/input";
@@ -11,6 +11,7 @@ import {
     DropdownMenuTrigger,
 } from "./ui/dropdown-menu";
 import type { SessionGroup } from "../hooks/useSessions";
+import type { SessionInfo } from "../types/session";
 
 type SidebarProps = {
     groups: SessionGroup[];
@@ -27,6 +28,7 @@ type SidebarProps = {
     loading: boolean;
     error: string | null;
     isStreaming?: boolean;
+    onPrefetch?: (file: string) => void;
 };
 
 function relativeTime(iso: string): string {
@@ -64,7 +66,13 @@ export const Sidebar = memo(function Sidebar({
     loading,
     error,
     isStreaming,
+    onPrefetch,
 }: SidebarProps) {
+    const handleSearchChange = useCallback(
+        (e: React.ChangeEvent<HTMLInputElement>) => onSearchChange(e.target.value),
+        [onSearchChange],
+    );
+
     return (
         <aside className="flex w-[268px] shrink-0 flex-col border-r border-phi-border-subtle bg-phi-bg-sidebar max-sm:absolute max-sm:inset-y-0 max-sm:z-20 max-sm:shadow-[18px_0_50px_rgba(0,0,0,0.45)]">
             <div
@@ -109,7 +117,7 @@ export const Sidebar = memo(function Sidebar({
             <div className="px-4 pt-3">
                 <Input
                     value={search}
-                    onChange={(e) => onSearchChange(e.target.value)}
+                    onChange={handleSearchChange}
                     placeholder="Search sessions…"
                     aria-label="Search sessions"
                     variant="search"
@@ -131,42 +139,20 @@ export const Sidebar = memo(function Sidebar({
                     </p>
                 ) : (
                     <div className="space-y-4">
-                        {groups.map((group) => {
-                            const isCollapsed = collapsed.has(group.cwd);
-                            return (
-                                <div key={group.cwd}>
-                                    <GroupCollapsibleTrigger
-                                        collapsed={isCollapsed}
-                                        onClick={() => onToggleGroup(group.cwd)}
-                                    >
-                                        <span className="min-w-0 flex-1 truncate">
-                                            {group.displayCwd}
-                                        </span>
-                                    </GroupCollapsibleTrigger>
-
-                                    {!isCollapsed && (
-                                        <nav
-                                            aria-label={group.displayCwd}
-                                            className="mt-1 space-y-0.5"
-                                        >
-                                            {group.sessions.map((s) => (
-                                                <SessionRow
-                                                    key={s.path}
-                                                    active={s.path === activeFile}
-                                                    title={titleFor(s)}
-                                                    time={relativeTime(s.modified)}
-                                                    count={s.messageCount}
-                                                    onClick={() => onSelect(s.path)}
-                                                    onRename={(name) => onRename(s.path, name)}
-                                                    onDelete={() => onDelete(s.path)}
-                                                    isStreaming={isStreaming}
-                                                />
-                                            ))}
-                                        </nav>
-                                    )}
-                                </div>
-                            );
-                        })}
+                        {groups.map((group) => (
+                            <GroupSection
+                                key={group.cwd}
+                                group={group}
+                                collapsed={collapsed.has(group.cwd)}
+                                activeFile={activeFile}
+                                isStreaming={isStreaming}
+                                onToggleGroup={onToggleGroup}
+                                onSelect={onSelect}
+                                onRename={onRename}
+                                onDelete={onDelete}
+                                onPrefetch={onPrefetch}
+                            />
+                        ))}
                     </div>
                 )}
             </div>
@@ -174,7 +160,98 @@ export const Sidebar = memo(function Sidebar({
     );
 });
 
-function SessionRow({
+const GroupSection = memo(function GroupSection({
+    group,
+    collapsed,
+    activeFile,
+    isStreaming,
+    onToggleGroup,
+    onSelect,
+    onRename,
+    onDelete,
+    onPrefetch,
+}: {
+    group: SessionGroup;
+    collapsed: boolean;
+    activeFile: string | null;
+    isStreaming?: boolean;
+    onToggleGroup: (cwd: string) => void;
+    onSelect: (file: string) => void;
+    onRename: (file: string, name: string) => Promise<void>;
+    onDelete: (file: string) => Promise<void>;
+    onPrefetch?: (file: string) => void;
+}) {
+    const handleToggle = useCallback(() => onToggleGroup(group.cwd), [onToggleGroup, group.cwd]);
+
+    return (
+        <div>
+            <GroupCollapsibleTrigger collapsed={collapsed} onClick={handleToggle}>
+                <span className="min-w-0 flex-1 truncate">{group.displayCwd}</span>
+            </GroupCollapsibleTrigger>
+
+            {!collapsed && (
+                <nav aria-label={group.displayCwd} className="mt-1 space-y-0.5">
+                    {group.sessions.map((s) => (
+                        <SessionRowMemo
+                            key={s.path}
+                            session={s}
+                            active={s.path === activeFile}
+                            isStreaming={isStreaming}
+                            onSelect={onSelect}
+                            onRename={onRename}
+                            onDelete={onDelete}
+                            onPrefetch={onPrefetch}
+                        />
+                    ))}
+                </nav>
+            )}
+        </div>
+    );
+});
+
+// Wrapper that derives stable props from session so title/time don't recreate callbacks
+const SessionRowMemo = memo(function SessionRowMemo({
+    session,
+    active,
+    isStreaming,
+    onSelect,
+    onRename,
+    onDelete,
+    onPrefetch,
+}: {
+    session: SessionInfo;
+    active: boolean;
+    isStreaming?: boolean;
+    onSelect: (file: string) => void;
+    onRename: (file: string, name: string) => Promise<void>;
+    onDelete: (file: string) => Promise<void>;
+    onPrefetch?: (file: string) => void;
+}) {
+    const title = useMemo(() => titleFor(session), [session.name, session.firstMessage]);
+    // time is relative; compute once per modified change. Recomputed via parent render is enough
+    // avoid Date.now() per frame storm — only changes when modified changes or active toggles
+    const time = useMemo(() => relativeTime(session.modified), [session.modified]);
+    const handleSelect = useCallback(() => onSelect(session.path), [onSelect, session.path]);
+    const handleRename = useCallback((name: string) => onRename(session.path, name), [onRename, session.path]);
+    const handleDelete = useCallback(() => onDelete(session.path), [onDelete, session.path]);
+    const handlePrefetch = useCallback(() => onPrefetch?.(session.path), [onPrefetch, session.path]);
+
+    return (
+        <SessionRow
+            active={active}
+            title={title}
+            time={time}
+            count={session.messageCount}
+            onClick={handleSelect}
+            onRename={handleRename}
+            onDelete={handleDelete}
+            isStreaming={isStreaming}
+            onPrefetch={handlePrefetch}
+        />
+    );
+});
+
+const SessionRow = memo(function SessionRow({
     active,
     title,
     time,
@@ -183,6 +260,7 @@ function SessionRow({
     onRename,
     onDelete,
     isStreaming,
+    onPrefetch,
 }: {
     active: boolean;
     title: string;
@@ -192,19 +270,43 @@ function SessionRow({
     onRename: (name: string) => Promise<void>;
     onDelete: () => Promise<void>;
     isStreaming?: boolean;
+    onPrefetch?: () => void;
 }) {
     const [renaming, setRenaming] = useState(false);
     const [draft, setDraft] = useState(title);
 
-    async function handleRename() {
+    const handleRename = useCallback(async () => {
         const name = draft.trim();
         if (!name) return;
         await onRename(name);
         setRenaming(false);
-    }
+    }, [draft, onRename]);
+
+    const handleDraftChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => setDraft(e.target.value), []);
+    const handleKeyDown = useCallback(
+        (e: React.KeyboardEvent<HTMLInputElement>) => {
+            if (e.key === "Enter") {
+                e.preventDefault();
+                handleRename();
+            }
+            if (e.key === "Escape") setRenaming(false);
+        },
+        [handleRename],
+    );
+    const handleBlur = useCallback(() => setRenaming(false), []);
+    const handleStartRename = useCallback(() => {
+        setDraft(title);
+        setRenaming(true);
+    }, [title]);
+    const handleDelete = useCallback(async () => {
+        if (!confirm("Delete this session?")) return;
+        await onDelete();
+    }, [onDelete]);
 
     return (
         <div
+            onMouseEnter={onPrefetch}
+            onFocusCapture={onPrefetch}
             className={`group flex h-8 w-full items-center gap-1 rounded-lg px-1 text-left text-[13px] ${active ? "bg-phi-overlay-active text-phi-text-primary" : "text-phi-text-tertiary hover:bg-phi-overlay-hover hover:text-phi-text-secondary"}`}
         >
             {renaming ? (
@@ -219,20 +321,12 @@ function SessionRow({
                     <Input
                         autoFocus
                         value={draft}
-                        onChange={(e) => setDraft(e.target.value)}
-                        onKeyDown={(e) => {
-                            if (e.key === "Enter") {
-                                e.preventDefault();
-                                handleRename();
-                            }
-                            if (e.key === "Escape") setRenaming(false);
-                        }}
-                        onBlur={() => setRenaming(false)}
+                        onChange={handleDraftChange}
+                        onKeyDown={handleKeyDown}
+                        onBlur={handleBlur}
                         variant="inline"
                     />
-                    <span className="shrink-0 text-[11px] text-phi-text-faint">
-                        {time}
-                    </span>
+                    <span className="shrink-0 text-[11px] text-phi-text-faint">{time}</span>
                 </div>
             ) : (
                 <button
@@ -253,12 +347,8 @@ function SessionRow({
                         />
                     ) : null}
                     <span className="min-w-0 flex-1 truncate">{title}</span>
-                    <span className="shrink-0 text-[11px] text-phi-text-faint">
-                        {count > 0 ? `${count}` : ""}
-                    </span>
-                    <span className="shrink-0 text-[11px] text-phi-text-faint">
-                        {time}
-                    </span>
+                    <span className="shrink-0 text-[11px] text-phi-text-faint">{count > 0 ? `${count}` : ""}</span>
+                    <span className="shrink-0 text-[11px] text-phi-text-faint">{time}</span>
                 </button>
             )}
 
@@ -269,24 +359,15 @@ function SessionRow({
                 <DropdownMenuContent>
                     <DropdownMenuItem
                         icon={<PencilLine size={15} strokeWidth={2.25} />}
-                        onClick={() => {
-                            setDraft(title);
-                            setRenaming(true);
-                        }}
+                        onClick={handleStartRename}
                     >
                         Rename
                     </DropdownMenuItem>
-                    <DropdownMenuItem
-                        icon={<Trash size={15} strokeWidth={2.25} />}
-                        onClick={async () => {
-                            if (!confirm("Delete this session?")) return;
-                            await onDelete();
-                        }}
-                    >
+                    <DropdownMenuItem icon={<Trash size={15} strokeWidth={2.25} />} onClick={handleDelete}>
                         Delete
                     </DropdownMenuItem>
                 </DropdownMenuContent>
             </DropdownMenu>
         </div>
     );
-}
+});
