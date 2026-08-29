@@ -1,7 +1,6 @@
 import { memo } from "react";
 import { Markdown } from "./markdown";
-import { ThinkingBlock } from "./thinking";
-import { ToolLine } from "./tool-line";
+import { WorkingBlock } from "./working-block";
 
 type StreamingTool = {
   toolCallId: string;
@@ -18,37 +17,40 @@ export const Streaming = memo(function Streaming({
   thinking,
   tools,
   error,
+  isStreaming,
+  elapsedMs,
 }: {
   text: string;
   thinking: string;
   tools: StreamingTool[];
   error?: string;
+  isStreaming?: boolean;
+  elapsedMs?: number | null;
 }) {
-  if (!text && !thinking && tools.length === 0 && !error) {
+  const hasWork = Boolean((thinking && thinking.trim()) || tools.length > 0);
+  // keep live working block visible even after text starts — distinct from final answer
+  const showWorking = hasWork || !!isStreaming;
+
+  if (!text && !hasWork && !error) {
     return (
-      <div className="flex items-center gap-2 py-2 text-[13px] text-phi-text-muted">
-        <span className="size-2 animate-pulse rounded-full bg-phi-streaming" />
-        Thinking…
+      <div className="space-y-3">
+        <WorkingBlock thinking={thinking} tools={tools.map((t) => ({ id: t.toolCallId, name: t.toolName, args: t.args, partial: t.partial, result: t.result ? { text: t.result, isError: !!t.isError } : undefined }))} isStreaming={isStreaming} elapsedMs={elapsedMs} variant="streaming" />
       </div>
     );
   }
 
   return (
     <div className="space-y-3">
-      {thinking && <ThinkingBlock text={thinking} />}
-      {tools.length > 0 && (
-        <div className="space-y-1.5">
-          {tools.map((t) => (
-            <ToolLine
-              key={t.toolCallId}
-              name={t.toolName}
-              args={t.args}
-              result={t.result ? { text: t.result, isError: !!t.isError } : t.partial ? { text: t.partial, isError: false } : undefined}
-            />
-          ))}
-        </div>
+      {showWorking && (
+        <WorkingBlock
+          thinking={thinking}
+          tools={tools.map((t) => ({ id: t.toolCallId, name: t.toolName, args: t.args, partial: t.partial, result: t.result ? { text: t.result, isError: !!t.isError } : undefined }))}
+          isStreaming={isStreaming}
+          elapsedMs={elapsedMs}
+          variant="streaming"
+        />
       )}
-      {text && <Markdown text={text} />}
+      {text && isStreaming && <Markdown text={text} />}
       {error && (
         <div className="rounded-lg border border-phi-error-border bg-phi-error-bg px-3 py-2 text-[13px] text-phi-error-text">
           {error}

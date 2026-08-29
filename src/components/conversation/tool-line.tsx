@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { ChevronDownIcon } from "../ui/icons";
 
 type ToolLineProps = {
     name: string;
@@ -42,11 +43,9 @@ export function ToolLine({ name, args, result }: ToolLineProps) {
                 >
                     {summary}
                 </span>
-                <span
-                    className={`shrink-0 text-[11px] text-phi-text-muted transition-transform ${open ? "rotate-180" : ""}`}
-                >
-                    ▾
-                </span>
+                <ChevronDownIcon
+                    className={`size-3 shrink-0 text-phi-text-muted transition-transform ${open ? "rotate-180" : ""}`}
+                />
             </button>
             {open && result?.text && (
                 <div className="rounded-md border border-phi-border-faint bg-phi-bg-sunken">

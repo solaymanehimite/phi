@@ -31,7 +31,7 @@ const ChatViewport = memo(function ChatViewport({
     error: string | null;
     messages: unknown[];
     isStreaming: boolean;
-    streaming: { text: string; thinking: string; tools: { toolCallId: string; toolName: string; args: Record<string, unknown>; partial?: string; result?: string; isError?: boolean; done?: boolean }[]; error?: string };
+    streaming: { text: string; thinking: string; tools: { toolCallId: string; toolName: string; args: Record<string, unknown>; partial?: string; result?: string; isError?: boolean; done?: boolean }[]; error?: string; elapsedMs?: number | null; startedAt?: number | null };
 }) {
     const scrollerRef = useRef<HTMLDivElement>(null);
 
@@ -83,12 +83,14 @@ const ChatViewport = memo(function ChatViewport({
             </div>
         );
     }
+    const showLive = isStreaming || streaming.elapsedMs != null;
+    const hideLastWork = showLive && (streaming.thinking.trim().length > 0 || streaming.tools.length > 0);
     return (
         <div ref={scrollerRef} className="mx-auto flex w-full max-w-3xl flex-1 flex-col overflow-y-auto px-6 pt-6">
-            <Conversation messages={messages} />
-            {isStreaming && (
+            <Conversation messages={messages} hideLastWork={hideLastWork} />
+            {showLive && (
                 <div className="pt-2">
-                    <Streaming text={streaming.text} thinking={streaming.thinking} tools={streaming.tools} error={streaming.error} />
+                    <Streaming text={streaming.text} thinking={streaming.thinking} tools={streaming.tools} error={streaming.error} isStreaming={isStreaming} elapsedMs={streaming.elapsedMs ?? null} />
                 </div>
             )}
             {error && !isStreaming && (

@@ -18,6 +18,8 @@ type StreamingState = {
   thinking: string;
   tools: StreamingTool[];
   error?: string;
+  startedAt?: number | null;
+  elapsedMs?: number | null;
 };
 
 export function useChat() {
@@ -26,7 +28,8 @@ export function useChat() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isStreaming, setIsStreaming] = useState(false);
-  const [streaming, setStreaming] = useState<StreamingState>({ text: "", thinking: "", tools: [] });
+  const [streaming, setStreaming] = useState<StreamingState>({ text: "", thinking: "", tools: [], startedAt: null, elapsedMs: null });
+  const streamStartedAtRef = useRef<number | null>(null);
 
   // LRU cache for instant session hopping — keeps last 20 sessions in memory (0ms on 2nd visit)
   const cacheRef = useRef<Map<string, SessionMessagesResponse>>(new Map());
@@ -157,7 +160,8 @@ export function useChat() {
     setError(null);
     setLoading(false);
     setIsStreaming(false);
-    setStreaming({ text: "", thinking: "", tools: [] });
+    streamStartedAtRef.current = null;
+    setStreaming({ text: "", thinking: "", tools: [], startedAt: null, elapsedMs: null });
   }, []);
 
   const refresh = useCallback(async () => {
@@ -200,6 +204,8 @@ export function useChat() {
     try {
       await abortPrompt();
     } catch {}
+    const elapsed = streamStartedAtRef.current != null ? Date.now() - streamStartedAtRef.current : null;
+    if (elapsed != null) setStreaming((s) => ({ ...s, elapsedMs: elapsed }));
     setIsStreaming(false);
   }, []);
 
@@ -246,7 +252,8 @@ export function useChat() {
       });
 
       setIsStreaming(true);
-      setStreaming({ text: "", thinking: "", tools: [] });
+      streamStartedAtRef.current = Date.now();
+      setStreaming({ text: "", thinking: "", tools: [], startedAt: streamStartedAtRef.current, elapsedMs: null });
       setError(null);
       pendingText.current = "";
       pendingThinking.current = "";
@@ -339,6 +346,12 @@ export function useChat() {
           setStreaming((s) => ({ ...s, text: s.text + t, thinking: s.thinking + th }));
         }
 
+        // compute elapsed for "Spent xx" label
+        const elapsed = streamStartedAtRef.current != null ? Date.now() - streamStartedAtRef.current : null;
+        if (elapsed != null) {
+          setStreaming((s) => ({ ...s, elapsedMs: elapsed }));
+        }
+
         // keep isStreaming true while we fetch persisted history to avoid unmounting Streaming and jumping scroll
         // fetch without toggling loading to avoid spinner flicker
         try {
@@ -347,12 +360,13 @@ export function useChat() {
           setData(res);
           putCache(file!, res);
         } catch {}
-        // clear streaming and end streaming after history is in place (next frame avoids flash)
-        requestAnimationFrame(() => {
-          setStreaming({ text: "", thinking: "", tools: [] });
-          setIsStreaming(false);
-          abortRef.current = null;
-        });
+        setIsStreaming(false);
+        abortRef.current = null;
+        // hold Spent label briefly as single collapsible; hide history's duplicate during this window
+        setTimeout(() => {
+          streamStartedAtRef.current = null;
+          setStreaming({ text: "", thinking: "", tools: [], startedAt: null, elapsedMs: null });
+        }, 2200);
       }
     },
     [activeFile, flush, scheduleFlush],

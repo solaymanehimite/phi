@@ -1,0 +1,126 @@
+import { useEffect, useState } from "react";
+import { ChevronDownIcon } from "../ui/icons";
+
+function toolSummary(name: string, args: Record<string, unknown>): string {
+  const a = args as Record<string, string>;
+  if (name === "read" && a.path) return `read ${a.path}`;
+  if (name === "write" && a.path) return `write ${a.path}`;
+  if (name === "edit" && a.path) return `edit ${a.path}`;
+  if (name === "bash" && a.command) return `bash ${String(a.command).slice(0, 80)}`;
+  if (name === "grep" && a.pattern) return `grep ${a.pattern}${a.path ? ` ${a.path}` : ""}`;
+  if (name === "find" && a.pattern) return `find ${a.pattern}`;
+  if (name === "ls" && a.path) return `ls ${a.path}`;
+  const first = Object.values(args).find((v) => typeof v === "string" && v.length > 0) as string | undefined;
+  return first ? `${name} ${first.slice(0, 80)}` : name;
+}
+
+type WorkingTool = {
+  id: string;
+  name: string;
+  args: Record<string, unknown>;
+  result?: { text: string; isError: boolean };
+  partial?: string;
+};
+
+type Props = {
+  thinking?: string;
+  tools: WorkingTool[];
+  isStreaming?: boolean;
+  elapsedMs?: number | null;
+  variant: "streaming" | "history";
+};
+
+function formatElapsed(ms: number): string {
+  if (ms < 1000) return `${ms}ms`;
+  const s = Math.floor(ms / 1000);
+  if (s < 60) return `${s}s`;
+  const m = Math.floor(s / 60);
+  const rem = s % 60;
+  if (rem === 0) return `${m} minute${m === 1 ? "" : "s"}`;
+  return `${m}m ${rem}s`;
+}
+
+export function WorkingBlock({ thinking, tools, isStreaming, elapsedMs, variant }: Props) {
+  const isStreamingVariant = variant === "streaming";
+  const hasThinking = Boolean(thinking && thinking.trim().length > 0);
+  const hasTools = tools.length > 0;
+  if (!hasThinking && !hasTools && !(isStreamingVariant && isStreaming)) return null;
+
+  const [open, setOpen] = useState(() => (isStreamingVariant ? Boolean(isStreaming) : false));
+
+  useEffect(() => {
+    if (!isStreamingVariant) return;
+    if (isStreaming) setOpen(true);
+    else if (elapsedMs != null) setOpen(false);
+  }, [isStreaming, elapsedMs, isStreamingVariant]);
+
+  let title: string;
+  if (isStreamingVariant) {
+    if (isStreaming) title = "Working on it";
+    else if (elapsedMs != null) title = `Spent ${formatElapsed(elapsedMs)}`;
+    else title = "Working";
+  } else {
+    title = "Show work";
+  }
+
+  return (
+    <div className="w-full">
+      {/* muted label — no border/background container */}
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        className="flex items-center gap-1.5 py-1 text-left text-[12px] leading-none text-phi-text-muted hover:text-phi-text-tertiary transition-colors"
+        aria-expanded={open}
+      >
+        <ChevronDownIcon
+          className={`size-3 shrink-0 text-phi-text-muted transition-transform duration-200 ${open ? "rotate-0" : "-rotate-90"}`}
+          aria-hidden
+        />
+        <span className="font-medium tracking-wide">{title}</span>
+        {isStreamingVariant && isStreaming && (
+          <span className="ml-1 size-1.5 shrink-0 animate-pulse rounded-full bg-phi-streaming" aria-hidden />
+        )}
+      </button>
+
+      {/* animated reveal — no border/background */}
+      <div
+        className={`grid transition-all duration-300 ease-[cubic-bezier(0.4,0,0.2,1)] ${
+          open ? "grid-rows-[1fr] opacity-100" : "grid-rows-[0fr] opacity-0"
+        }`}
+      >
+        <div className="overflow-hidden">
+          <div className="space-y-3 pb-2 pt-2">
+            {hasThinking && (
+              <div className="whitespace-pre-wrap break-words text-[13px] leading-6 text-phi-text-tertiary">
+                {thinking}
+              </div>
+            )}
+            {hasTools && (
+              <div className="space-y-3">
+                {tools.map((t) => {
+                  const summary = toolSummary(t.name, t.args);
+                  const resultText = t.result?.text ?? t.partial ?? "";
+                  const isError = !!t.result?.isError;
+                  return (
+                    <div key={t.id} className="space-y-1">
+                      <div className={`font-mono text-xs leading-4 ${isError ? "text-phi-error" : "text-phi-text-secondary"}`}>
+                        {summary}
+                      </div>
+                      {resultText ? (
+                        <pre className="max-h-80 overflow-auto whitespace-pre-wrap break-words rounded-md bg-phi-bg-sunken px-3 py-2.5 font-mono text-[12.5px] leading-5 text-phi-text-tertiary">
+                          {resultText}
+                        </pre>
+                      ) : (
+                        <div className="px-3 py-1 text-[12px] text-phi-text-muted">No output</div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
