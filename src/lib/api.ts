@@ -47,7 +47,7 @@ async function jsonOrThrow(res: Response) {
   return data;
 }
 
-export async function health(): Promise<{ ok: boolean; port: number; agentDir: string }> {
+export async function health(): Promise<{ ok: boolean; port: number; agentDir: string; cwd: string; home: string }> {
   const res = await apiFetch(`/health`);
   return jsonOrThrow(res);
 }

@@ -124,8 +124,8 @@ export function useSessions() {
     [refresh],
   );
 
-  const switchTo = useCallback(async (file: string) => {
-    const res = await switchSession(file);
+  const switchTo = useCallback(async (file: string, cwd?: string) => {
+    const res = await switchSession(file, cwd);
     return res as Awaited<ReturnType<typeof switchSession>>;
   }, []);
 

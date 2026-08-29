@@ -21,6 +21,7 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_opener::init())
+        .plugin(tauri_plugin_dialog::init())
         .setup(|app| {
             // Sidecar: prod = binary in src-tauri/binaries/server-<triple>, dev = not bundled -> fallback to 3001
             let port: u16 = match app.shell().sidecar("server") {

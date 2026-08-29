@@ -1,5 +1,6 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Composer } from "./components/composer";
+import { DirectoryPicker } from "./components/directory-picker";
 import { Conversation } from "./components/conversation/conversation";
 import { Streaming } from "./components/conversation/streaming";
 import { Sidebar } from "./components/sidebar";
@@ -9,13 +10,8 @@ import { ThemeEditor } from "./components/dev/ThemeEditor";
 import { useSessions } from "./hooks/useSessions";
 import { useChat } from "./hooks/useChat";
 import { useModels } from "./hooks/useModels";
-import { createSession } from "./lib/api";
-
-function formatCwd(cwd: string | undefined): string {
-    if (!cwd) return "";
-    const m = cwd.match(/^\/home\/[^/]+/);
-    return m ? cwd.replace(m[0], "~") : cwd;
-}
+import { createSession, health } from "./lib/api";
+import { formatCwd } from "./lib/paths";
 
 // Isolated scroll-aware viewport so App doesn't need to re-render on every streaming token
 const ChatViewport = memo(function ChatViewport({
@@ -121,6 +117,25 @@ export default function App() {
     const [draftThinking, setDraftThinking] = useState<
         import("./types/session").ThinkingLevel | undefined
     >(undefined);
+    const [homeCwd, setHomeCwd] = useState("");
+    const [newChatCwd, setNewChatCwd] = useState<string | null>(null);
+
+    useEffect(() => {
+        let cancelled = false;
+        health()
+            .then((res) => {
+                if (!cancelled && res.home) {
+                    setHomeCwd(res.home);
+                    setNewChatCwd((current) => current ?? res.home);
+                }
+            })
+            .catch(() => {
+                // The picker still accepts a path if the health request is unavailable.
+            });
+        return () => {
+            cancelled = true;
+        };
+    }, []);
 
     const activeTitle = useMemo(
         () =>
@@ -363,18 +378,21 @@ export default function App() {
     const handleSend = useCallback(
         async (content: string, images?: { type: "image"; data: string; mimeType: string }[]) => {
             let preparedSessionFile: string | undefined;
+            const selectedCwd = !chat.activeFile
+                ? (newChatCwd ?? homeCwd) || undefined
+                : undefined;
             if (!chat.activeFile && (draftModelKey || draftThinking)) {
                 try {
-                    const res = await createSession();
+                    const res = await createSession(selectedCwd);
                     const file = res.file;
                     preparedSessionFile = file;
                     try {
-                        await sessions.switchTo(file);
+                        await sessions.switchTo(file, selectedCwd);
                     } catch { }
                     await chat.openFile(file);
                     sessions.addOptimistic(
                         file,
-                        "/home/solaymanehimite/Dev/ship/Phi",
+                        selectedCwd || "/home/solaymanehimite/Dev/ship/Phi",
                         content,
                     );
                     const parsed = draftModelKey?.includes("/")
@@ -406,10 +424,11 @@ export default function App() {
                 }
             }
             await chat.prompt(content, {
+                cwd: selectedCwd,
                 images,
                 sessionFile: preparedSessionFile,
                 onNewFile: (file, cwd, firstMessage) => {
-                    const realCwd = cwd || chat.data?.cwd || "";
+                    const realCwd = cwd || chat.data?.cwd || selectedCwd || "";
                     sessions.addOptimistic(
                         file,
                         realCwd || "/home/solaymanehimite/Dev/ship/Phi",
@@ -423,6 +442,8 @@ export default function App() {
         [
             chat.prompt,
             chat.data?.cwd,
+            newChatCwd,
+            homeCwd,
             sessions.addOptimistic,
             sessions.refresh,
             chat.activeFile,
@@ -558,6 +579,17 @@ export default function App() {
                                     )}
                                 </div>
                             )}
+                        {!chat.activeFile && (
+                            <div className="mx-auto mb-1 w-full max-w-3xl">
+                                <DirectoryPicker
+                                    cwd={(newChatCwd ?? homeCwd) || null}
+                                    homeCwd={homeCwd}
+                                    projects={sessions.groups.map(({ cwd, displayCwd }) => ({ cwd, displayCwd }))}
+                                    onChange={setNewChatCwd}
+                                    disabled={chat.isStreaming}
+                                />
+                            </div>
+                        )}
                         <Composer
                             onSend={handleSend}
                             onAbort={handleAbort}
@@ -569,7 +601,7 @@ export default function App() {
                             thinkingLevel={thinkingLevel}
                             onSelectModel={handleSelectModel}
                             onThinkingChange={handleThinkingChange}
-                            cwd={activeCwd}
+                            cwd={chat.activeFile ? activeCwd : newChatCwd ?? homeCwd}
                         />
                     </div>
                 </section>
