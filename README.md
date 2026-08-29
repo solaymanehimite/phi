@@ -1,7 +1,36 @@
-# Tauri + React + Typescript
+# Phi
 
-This template should help get you started developing with Tauri, React and Typescript in Vite.
+Fast desktop GUI for [Pi](https://github.com/earendil-works/pi) — built with Tauri, React, and the Pi SDK.
 
-## Recommended IDE Setup
+## Dev
 
-- [VS Code](https://code.visualstudio.com/) + [Tauri](https://marketplace.visualstudio.com/items?itemName=tauri-apps.tauri-vscode) + [rust-analyzer](https://marketplace.visualstudio.com/items?itemName=rust-lang.rust-analyzer)
+Requires [Bun](https://bun.sh) and Rust (for Tauri).
+
+```bash
+bun install
+
+# web client + node server (127.0.0.1:3001)
+bun run dev:all
+
+# OR
+# tauri app
+bun run tauri:dev
+```
+
+## Bundle
+
+For `tauri build` 
+
+```bash
+bun run build:sidecar   # -> src-tauri/binaries/server-<target-triple>
+
+# then
+bunx tauri build        
+```
+
+See `docs/howtobundle.md`
+
+## Docs
+
+- `docs/prd.md` — product spec
+- `docs/sdk_usage.md` — Pi SDK reference for Phi
