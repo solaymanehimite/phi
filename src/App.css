@@ -61,12 +61,32 @@
   --color-phi-white-muted: rgb(255 255 255 / 0.3);
 
   /* Thinking effort — distinct ramp for slider */
-  --color-phi-thinking-low: #6b7280;
-  --color-phi-thinking-minimal: #8b8d9a;
-  --color-phi-thinking-medium: #d6a85f;
+  --color-phi-thinking-low: #7acd85;
+  --color-phi-thinking-minimal: #7a8eb5;
+  --color-phi-thinking-medium: #d6bd5e;
   --color-phi-thinking-high: #e69a3a;
-  --color-phi-thinking-xhigh: #ea6e2c;
-  --color-phi-thinking-max: #ef4444;
+  --color-phi-thinking-xhigh: #ef4444;
+  --color-phi-thinking-max: #c22faa;
+}
+
+@keyframes phi-dot-matrix {
+  0%,
+  100% {
+    opacity: 0.22;
+    transform: scale(0.7);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  [style*="phi-dot-matrix"] {
+    animation: none !important;
+    opacity: 0.85 !important;
+    transform: none !important;
+  }
 }
 
 @layer base {

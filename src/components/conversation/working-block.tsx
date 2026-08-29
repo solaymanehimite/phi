@@ -55,16 +55,45 @@ export function WorkingBlock({ thinking, tools, isStreaming, variant }: Props) {
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
-        className="flex items-center gap-1.5 py-1 text-left text-[12px] leading-none text-phi-text-muted hover:text-phi-text-tertiary transition-colors"
+        className="group flex items-center gap-1.5 py-1 text-left text-[12px] leading-none text-phi-text-muted hover:text-phi-text-tertiary transition-colors"
         aria-expanded={open}
       >
-        <ChevronDownIcon
-          className={`size-3 shrink-0 text-phi-text-muted transition-transform duration-200 ${open ? "rotate-0" : "-rotate-90"}`}
-          aria-hidden
-        />
-        <span className="font-medium tracking-wide">{title}</span>
-        {isStreamingVariant && isStreaming && (
-          <span className="ml-1 size-1.5 shrink-0 animate-pulse rounded-full bg-phi-streaming" aria-hidden />
+        {!isStreamingVariant ? (
+          // history variant — keep chevron on left
+          <>
+            <ChevronDownIcon
+              className={`size-3 shrink-0 text-phi-text-muted transition-transform duration-200 ${open ? "rotate-0" : "-rotate-90"}`}
+              aria-hidden
+            />
+            <span className="font-medium tracking-wide">{title}</span>
+          </>
+        ) : (
+          // streaming variant — dot matrix on left, chevron right next to title on hover
+          <>
+            {isStreaming && (
+              <span className="inline-grid grid-cols-3 gap-[2px] shrink-0" aria-hidden>
+                {Array.from({ length: 9 }).map((_, i) => {
+                  const row = Math.floor(i / 3);
+                  const col = i % 3;
+                  const delay = (row + col) * 0.12;
+                  return (
+                    <span
+                      key={i}
+                      className="size-[3px] rounded-full bg-phi-streaming"
+                      style={{
+                        animation: `phi-dot-matrix 1.2s ease-in-out ${delay}s infinite both`,
+                      }}
+                    />
+                  );
+                })}
+              </span>
+            )}
+            <span className="font-medium tracking-wide">{title}</span>
+            <ChevronDownIcon
+              className={`size-3 shrink-0 text-phi-text-muted transition-all duration-200 ${open ? "rotate-0" : "-rotate-90"} opacity-0 group-hover:opacity-100 group-focus-visible:opacity-100`}
+              aria-hidden
+            />
+          </>
         )}
       </button>
 

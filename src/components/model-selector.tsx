@@ -5,7 +5,7 @@ import {
     Atom,
     Brain,
     Compass,
-    Image as ImageIcon,
+    Eye,
     List,
     Search as SearchIcon,
     Sparkles,
@@ -337,14 +337,9 @@ export const ModelSelector = memo(function ModelSelector({
                                                                 <span className="inline-flex items-center gap-0.5">
                                                                     {formatCost(model.cost.output)} <ArrowUp size={11} className="shrink-0" strokeWidth={2.25} />
                                                                 </span>
+                                                                {isMulti && <Eye size={11} className="shrink-0" strokeWidth={2} aria-label="Multimodal" />}
                                                             </span>
                                                         </span>
-
-                                                        {isMulti && (
-                                                            <span className="shrink-0 text-phi-white">
-                                                                <ImageIcon size={14} className="text-phi-white" />
-                                                            </span>
-                                                        )}
                                                     </button>
                                                 );
                                             })}
