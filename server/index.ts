@@ -1,7 +1,6 @@
 import cors from "cors";
 import express from "express";
 import { promises as fs } from "node:fs";
-import path from "node:path";
 import os from "node:os";
 import {
   SessionManager,
@@ -25,6 +24,7 @@ app.use(express.json({ limit: "10mb" }));
 // ---- state singletons (lazy) ----
 let modelRuntime: Awaited<ReturnType<typeof ModelRuntime.create>> | undefined;
 let runtime: Awaited<ReturnType<typeof createAgentSessionRuntime>> | undefined;
+let runtimeCwd: string | undefined;
 // fallback single session when runtime not needed
 let singleSession: Awaited<ReturnType<typeof createAgentSession>>["session"] | undefined;
 
@@ -36,7 +36,7 @@ async function getModelRuntime() {
 }
 
 async function getRuntime(cwd = process.cwd()) {
-  if (runtime) return runtime;
+  if (runtime && runtimeCwd === cwd) return runtime;
   const mr = await getModelRuntime();
   const factory = async ({ cwd: c, sessionManager, sessionStartEvent }: any) => {
     const services = await createAgentSessionServices({ cwd: c });
@@ -54,6 +54,7 @@ async function getRuntime(cwd = process.cwd()) {
     sessionManager: SessionManager.create(cwd),
     modelRuntime: mr,
   } as any);
+  runtimeCwd = cwd;
   return runtime;
 }
 
@@ -73,7 +74,7 @@ function sendSSE(res: express.Response, event: unknown) {
 
 // Health
 app.get("/api/health", (_req, res) => {
-  res.json({ ok: true, port: PORT, agentDir: getAgentDir() });
+  res.json({ ok: true, port: PORT, agentDir: getAgentDir(), cwd: process.cwd(), home: os.homedir() });
 });
 
 // Models — returns auth-filtered catalogue for the selector
@@ -211,11 +212,13 @@ app.post("/api/sessions/switch", async (req, res) => {
   try {
     const { file, cwd } = req.body as { file: string; cwd?: string };
     if (!file) return res.status(400).json({ error: "missing file" });
-    const rt = await getRuntime(cwd || path.dirname(file));
+    // The session file lives under ~/.pi, so derive the project from its header
+    // instead of using the session file's parent directory.
+    const sm = SessionManager.open(file);
+    const rt = await getRuntime(cwd || sm.getCwd());
     await rt.switchSession(file);
     invalidateSessionsCache();
     // inline payload — frontend was doing Promise.all([switch, getMessages])
-    const sm = SessionManager.open(file);
     res.json({
       ok: true,
       file,
@@ -376,10 +379,11 @@ app.post("/api/prompt", async (req, res) => {
 
   try {
     const mr = await getModelRuntime();
+    const sessionCwd = cwd || (sessionFile ? SessionManager.open(sessionFile).getCwd() : process.cwd());
 
     // Resolve/create session
     let session: any;
-    if (runtime) {
+    if (runtime && runtimeCwd === sessionCwd) {
       // if sessionFile specified and differs, switch first
       if (sessionFile) {
         const currentFile = (runtime.session as any)?.sessionFile;
@@ -392,10 +396,10 @@ app.post("/api/prompt", async (req, res) => {
       // first prompt: create a session via createAgentSession
       const sm = sessionFile
         ? SessionManager.open(sessionFile)
-        : SessionManager.create(cwd || process.cwd());
+        : SessionManager.create(sessionCwd);
       // try to use runtime, else single session
       try {
-        const rt = await getRuntime(cwd || process.cwd());
+        const rt = await getRuntime(sessionCwd);
         if (sessionFile) await rt.switchSession(sessionFile);
         session = rt.session;
       } catch {
