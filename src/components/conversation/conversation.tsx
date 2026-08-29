@@ -21,7 +21,8 @@ function getTextContent(block: unknown): string {
 function getThinking(block: unknown): string {
     if (!block || typeof block !== "object") return "";
     const b = block as Record<string, unknown>;
-    if (b.type === "thinking" && typeof b.thinking === "string") return b.thinking;
+    if (b.type === "thinking" && typeof b.thinking === "string")
+        return b.thinking;
     return "";
 }
 
@@ -30,7 +31,11 @@ function getToolCall(
 ): { id: string; name: string; args: Record<string, unknown> } | null {
     if (!block || typeof block !== "object") return null;
     const b = block as Record<string, unknown>;
-    if (b.type === "toolCall" && typeof b.id === "string" && typeof b.name === "string") {
+    if (
+        b.type === "toolCall" &&
+        typeof b.id === "string" &&
+        typeof b.name === "string"
+    ) {
         return {
             id: b.id,
             name: b.name,
@@ -45,7 +50,11 @@ function renderUser(content: unknown): string {
     if (Array.isArray(content)) {
         return content
             .map((c) => {
-                if (c && typeof c === "object" && "text" in (c as Record<string, unknown>)) {
+                if (
+                    c &&
+                    typeof c === "object" &&
+                    "text" in (c as Record<string, unknown>)
+                ) {
                     return String((c as Record<string, unknown>).text ?? "");
                 }
                 if (typeof c === "string") return c;
@@ -108,7 +117,13 @@ const TurnRow = memo(function TurnRow({
             )}
             {(showWork || text) && (
                 <div className="space-y-3 py-1">
-                    {showWork && <WorkingBlock thinking={thinking} tools={workTools} variant="history" />}
+                    {showWork && (
+                        <WorkingBlock
+                            thinking={thinking}
+                            tools={workTools}
+                            variant="history"
+                        />
+                    )}
                     {text && <Markdown text={text} />}
                 </div>
             )}
@@ -116,7 +131,10 @@ const TurnRow = memo(function TurnRow({
     );
 });
 
-export const Conversation = memo(function Conversation({ messages, hideLastWork }: Props) {
+export const Conversation = memo(function Conversation({
+    messages,
+    hideLastWork,
+}: Props) {
     const msgs = useMemo(() => asMessages(messages), [messages]);
 
     const toolResults = useMemo(() => {
@@ -129,7 +147,9 @@ export const Conversation = memo(function Conversation({ messages, hideLastWork 
                 if (Array.isArray(content)) {
                     text = content
                         .map((c: unknown) =>
-                            c && typeof c === "object" && "text" in (c as Record<string, unknown>)
+                            c &&
+                                typeof c === "object" &&
+                                "text" in (c as Record<string, unknown>)
                                 ? String((c as Record<string, unknown>).text ?? "")
                                 : "",
                         )
@@ -146,7 +166,10 @@ export const Conversation = memo(function Conversation({ messages, hideLastWork 
         let cur: Turn | null = null;
 
         const flush = () => {
-            if (cur && (cur.user || cur.thinking || cur.text || cur.toolCalls.length > 0)) {
+            if (
+                cur &&
+                (cur.user || cur.thinking || cur.text || cur.toolCalls.length > 0)
+            ) {
                 out.push(cur);
             }
             cur = null;
@@ -194,13 +217,17 @@ export const Conversation = memo(function Conversation({ messages, hideLastWork 
     }, [turns]);
 
     return (
-        <div className="w-full max-w-2xl min-w-0 space-y-0 pb-8 pt-3">
+        <div className="w-full min-w-0 space-y-0 pb-8 pt-3">
             {turns.map((turn, idx) => (
                 <TurnRow
                     key={idx}
                     turn={turn}
                     toolResults={toolResults}
-                    hideWork={hideLastWork && idx === lastTurnWithWork && lastTurnWithWork === turns.length - 1}
+                    hideWork={
+                        hideLastWork &&
+                        idx === lastTurnWithWork &&
+                        lastTurnWithWork === turns.length - 1
+                    }
                 />
             ))}
         </div>

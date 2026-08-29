@@ -31,7 +31,22 @@ const ChatViewport = memo(function ChatViewport({
     error: string | null;
     messages: unknown[];
     isStreaming: boolean;
-    streaming: { text: string; thinking: string; tools: { toolCallId: string; toolName: string; args: Record<string, unknown>; partial?: string; result?: string; isError?: boolean; done?: boolean }[]; error?: string; elapsedMs?: number | null; startedAt?: number | null };
+    streaming: {
+        text: string;
+        thinking: string;
+        tools: {
+            toolCallId: string;
+            toolName: string;
+            args: Record<string, unknown>;
+            partial?: string;
+            result?: string;
+            isError?: boolean;
+            done?: boolean;
+        }[];
+        error?: string;
+        elapsedMs?: number | null;
+        startedAt?: number | null;
+    };
 }) {
     const scrollerRef = useRef<HTMLDivElement>(null);
 
@@ -59,14 +74,22 @@ const ChatViewport = memo(function ChatViewport({
     if (!activeFile) return null;
     if (loading) {
         return (
-            <div ref={scrollerRef} className="mx-auto flex w-full max-w-3xl flex-1 flex-col overflow-y-auto px-6 pt-6">
-                <p className="py-10 text-center text-[13px] text-phi-text-muted">Loading messages…</p>
+            <div
+                ref={scrollerRef}
+                className="mx-auto flex w-full max-w-3xl flex-1 flex-col overflow-y-auto px-6 pt-6"
+            >
+                <p className="py-10 text-center text-[13px] text-phi-text-muted">
+                    Loading messages…
+                </p>
             </div>
         );
     }
     if (error) {
         return (
-            <div ref={scrollerRef} className="mx-auto flex w-full max-w-3xl flex-1 flex-col overflow-y-auto px-6 pt-6">
+            <div
+                ref={scrollerRef}
+                className="mx-auto flex w-full max-w-3xl flex-1 flex-col overflow-y-auto px-6 pt-6"
+            >
                 <div className="mx-auto mt-6 max-w-xl rounded-lg border border-phi-error-border bg-phi-error-bg px-4 py-3 text-[13px] text-phi-error-text">
                     {error}
                 </div>
@@ -75,29 +98,50 @@ const ChatViewport = memo(function ChatViewport({
     }
     if (messages.length === 0) {
         return (
-            <div ref={scrollerRef} className="mx-auto flex w-full max-w-3xl flex-1 flex-col overflow-y-auto px-6 pt-6">
+            <div
+                ref={scrollerRef}
+                className="mx-auto flex w-full max-w-3xl flex-1 flex-col overflow-y-auto px-6 pt-6"
+            >
                 <div className="flex flex-1 flex-col items-center justify-center pb-16 text-center">
-                    <p className="text-[13px] text-phi-text-muted">No messages in this session yet.</p>
-                    <p className="mt-1 text-[12px] text-phi-text-muted">Prompt streaming lands in Phase C.</p>
+                    <p className="text-[13px] text-phi-text-muted">
+                        No messages in this session yet.
+                    </p>
+                    <p className="mt-1 text-[12px] text-phi-text-muted">
+                        Prompt streaming lands in Phase C.
+                    </p>
                 </div>
             </div>
         );
     }
     const showLive = isStreaming || streaming.elapsedMs != null;
-    const hideLastWork = showLive && (streaming.thinking.trim().length > 0 || streaming.tools.length > 0);
+    const hideLastWork =
+        showLive &&
+        (streaming.thinking.trim().length > 0 || streaming.tools.length > 0);
     return (
-        <div ref={scrollerRef} className="mx-auto flex w-full max-w-3xl flex-1 flex-col overflow-y-auto px-6 pt-6">
-            <Conversation messages={messages} hideLastWork={hideLastWork} />
-            {showLive && (
-                <div className="pt-2">
-                    <Streaming text={streaming.text} thinking={streaming.thinking} tools={streaming.tools} error={streaming.error} isStreaming={isStreaming} elapsedMs={streaming.elapsedMs ?? null} />
-                </div>
-            )}
-            {error && !isStreaming && (
-                <div className="rounded-lg border border-phi-error-border bg-phi-error-bg px-3 py-2 text-[13px] text-phi-error-text">
-                    {error}
-                </div>
-            )}
+        <div
+            ref={scrollerRef}
+            className="mx-auto flex w-full flex-1 flex-col items-center overflow-y-auto px-6 pt-6"
+        >
+            <div className="max-w-2xl h-full flex flex-col">
+                <Conversation messages={messages} hideLastWork={hideLastWork} />
+                {showLive && (
+                    <div className="pt-2">
+                        <Streaming
+                            text={streaming.text}
+                            thinking={streaming.thinking}
+                            tools={streaming.tools}
+                            error={streaming.error}
+                            isStreaming={isStreaming}
+                            elapsedMs={streaming.elapsedMs ?? null}
+                        />
+                    </div>
+                )}
+                {error && !isStreaming && (
+                    <div className="rounded-lg border border-phi-error-border bg-phi-error-bg px-3 py-2 text-[13px] text-phi-error-text">
+                        {error}
+                    </div>
+                )}
+            </div>
         </div>
     );
 });
@@ -108,19 +152,30 @@ export default function App() {
     const chat = useChat();
     const models = useModels();
     const [modelError, setModelError] = useState<string | null>(null);
-    const [draftModelKey, setDraftModelKey] = useState<string | undefined>(undefined);
-    const [draftThinking, setDraftThinking] = useState<import("./types/session").ThinkingLevel | undefined>(undefined);
+    const [draftModelKey, setDraftModelKey] = useState<string | undefined>(
+        undefined,
+    );
+    const [draftThinking, setDraftThinking] = useState<
+        import("./types/session").ThinkingLevel | undefined
+    >(undefined);
 
     const activeTitle = useMemo(
-        () => chat.data?.sessionName || chat.data?.header?.id || chat.activeFile?.split("/").pop() || "New chat",
+        () =>
+            chat.data?.sessionName ||
+            chat.data?.header?.id ||
+            chat.activeFile?.split("/").pop() ||
+            "New chat",
         [chat.data?.sessionName, chat.data?.header?.id, chat.activeFile],
     );
     const activeCwd = chat.data?.cwd || chat.data?.header?.cwd;
 
     const ctxModel: any = (chat.data?.context as any)?.model;
-    const ctxModelKey = ctxModel ? `${ctxModel.provider}/${ctxModel.modelId ?? ctxModel.id}` : undefined;
+    const ctxModelKey = ctxModel
+        ? `${ctxModel.provider}/${ctxModel.modelId ?? ctxModel.id}`
+        : undefined;
     const selectedModelKey = ctxModelKey ?? draftModelKey;
-    const ctxThinking = (chat.data?.context as any)?.thinkingLevel as string | undefined;
+    const ctxThinking = (chat.data?.context as any)?.thinkingLevel as
+        string | undefined;
     const thinkingLevel = ctxThinking ?? draftThinking;
 
     const handleSelectModel = useCallback(
@@ -132,7 +187,9 @@ export default function App() {
                 return;
             }
             setModelError(null);
-            const info = models.models.find((m) => m.provider === provider && m.id === id);
+            const info = models.models.find(
+                (m) => m.provider === provider && m.id === id,
+            );
             const optimistic: any = info ?? { provider, id, modelId: id, name: id };
             // Optimistic only — no refresh. Model switch must not reload messages or flash "Loading…"
             chat.patchModel(optimistic, undefined);
@@ -150,7 +207,9 @@ export default function App() {
 
     // Debounced commit for thinking slider — UI patches instantly, server is debounced
     const thinkingCommitRef = useRef<number | null>(null);
-    const pendingThinkingRef = useRef<import("./types/session").ThinkingLevel | null>(null);
+    const pendingThinkingRef = useRef<
+        import("./types/session").ThinkingLevel | null
+    >(null);
 
     // flush pending thinking level to server (debounced)
     const flushThinking = useCallback(async () => {
@@ -178,7 +237,8 @@ export default function App() {
             chat.patchModel(null as any, level);
             // Debounce server sync — sliding through values only commits last one
             pendingThinkingRef.current = level;
-            if (thinkingCommitRef.current != null) window.clearTimeout(thinkingCommitRef.current);
+            if (thinkingCommitRef.current != null)
+                window.clearTimeout(thinkingCommitRef.current);
             thinkingCommitRef.current = window.setTimeout(() => {
                 flushThinking();
             }, 220);
@@ -189,7 +249,8 @@ export default function App() {
     // Cancel debounced thinking commit when session changes — don't apply level to wrong session
     useEffect(() => {
         return () => {
-            if (thinkingCommitRef.current != null) window.clearTimeout(thinkingCommitRef.current);
+            if (thinkingCommitRef.current != null)
+                window.clearTimeout(thinkingCommitRef.current);
         };
     }, []);
     useEffect(() => {
@@ -214,9 +275,13 @@ export default function App() {
         }
         if (files.length === 0) return;
         const idle = (cb: () => void) =>
-            (window as any).requestIdleCallback ? (window as any).requestIdleCallback(cb, { timeout: 2000 }) : setTimeout(cb, 400);
+            (window as any).requestIdleCallback
+                ? (window as any).requestIdleCallback(cb, { timeout: 2000 })
+                : setTimeout(cb, 400);
         const cancelIdle = (id: any) =>
-            (window as any).cancelIdleCallback ? (window as any).cancelIdleCallback(id) : clearTimeout(id);
+            (window as any).cancelIdleCallback
+                ? (window as any).cancelIdleCallback(id)
+                : clearTimeout(id);
         const id = idle(() => {
             files.forEach((f) => chat.prefetch(f));
         });
@@ -240,13 +305,15 @@ export default function App() {
                 if (!ok) return;
                 try {
                     await chat.abort();
-                } catch {}
+                } catch { }
             }
             // Instant path: cached -> 0ms hydrate, then background revalidate + switch
             if (chat.hasCache(file)) {
                 chat.hydrateFromCache(file);
                 // background: keep server runtime in sync and refresh stale data without flash
-                sessions.switchTo(file).catch((e) => console.warn("switchSession failed", e));
+                sessions
+                    .switchTo(file)
+                    .catch((e) => console.warn("switchSession failed", e));
                 chat.revalidate(file);
                 return;
             }
@@ -261,10 +328,21 @@ export default function App() {
                 }
             } catch (e) {
                 console.warn("switchSession failed", e);
-                await chat.openFile(file).catch(() => {});
+                await chat.openFile(file).catch(() => { });
             }
         },
-        [sessions.switchTo, chat.openFile, chat.hydrateFromSwitch, chat.hydrateFromCache, chat.hasCache, chat.revalidate, chat.isStreaming, chat.abort, chat.activeFile, chat.prepareSwitch],
+        [
+            sessions.switchTo,
+            chat.openFile,
+            chat.hydrateFromSwitch,
+            chat.hydrateFromCache,
+            chat.hasCache,
+            chat.revalidate,
+            chat.isStreaming,
+            chat.abort,
+            chat.activeFile,
+            chat.prepareSwitch,
+        ],
     );
 
     const handleNewChat = useCallback(async () => {
@@ -275,7 +353,7 @@ export default function App() {
             if (!ok) return;
             try {
                 await chat.abort();
-            } catch {}
+            } catch { }
         }
         chat.clear();
     }, [chat.clear, chat.isStreaming, chat.abort]);
@@ -286,7 +364,12 @@ export default function App() {
             chat.invalidateCache(file);
             if (chat.activeFile === file) await chat.refreshSilent();
         },
-        [sessions.rename, chat.activeFile, chat.refreshSilent, chat.invalidateCache],
+        [
+            sessions.rename,
+            chat.activeFile,
+            chat.refreshSilent,
+            chat.invalidateCache,
+        ],
     );
 
     const handleDelete = useCallback(
@@ -306,10 +389,19 @@ export default function App() {
                     const file = res.file;
                     try {
                         await sessions.switchTo(file);
-                    } catch {}
+                    } catch { }
                     await chat.openFile(file);
-                    sessions.addOptimistic(file, "/home/solaymanehimite/Dev/ship/Phi", content);
-                    const parsed = draftModelKey.includes("/") ? { provider: draftModelKey.split("/")[0], id: draftModelKey.split("/").slice(1).join("/") } : null;
+                    sessions.addOptimistic(
+                        file,
+                        "/home/solaymanehimite/Dev/ship/Phi",
+                        content,
+                    );
+                    const parsed = draftModelKey.includes("/")
+                        ? {
+                            provider: draftModelKey.split("/")[0],
+                            id: draftModelKey.split("/").slice(1).join("/"),
+                        }
+                        : null;
                     if (parsed) {
                         try {
                             await models.setModel(parsed.provider, parsed.id);
@@ -343,13 +435,32 @@ export default function App() {
             });
             sessions.refresh({ silent: true });
         },
-        [chat.prompt, chat.data?.cwd, sessions.addOptimistic, sessions.refresh, chat.activeFile, draftModelKey, draftThinking, models.setModel, models.setThinkingLevel, chat.openFile, chat.refreshSilent, sessions.switchTo],
+        [
+            chat.prompt,
+            chat.data?.cwd,
+            sessions.addOptimistic,
+            sessions.refresh,
+            chat.activeFile,
+            draftModelKey,
+            draftThinking,
+            models.setModel,
+            models.setThinkingLevel,
+            chat.openFile,
+            chat.refreshSilent,
+            sessions.switchTo,
+        ],
     );
 
-    const messages = useMemo(() => chat.data?.context.messages ?? [], [chat.data?.context.messages]);
+    const messages = useMemo(
+        () => chat.data?.context.messages ?? [],
+        [chat.data?.context.messages],
+    );
 
     // stable header values memoized
-    const headerTitle = useMemo(() => (chat.activeFile ? activeTitle : "New chat"), [chat.activeFile, activeTitle]);
+    const headerTitle = useMemo(
+        () => (chat.activeFile ? activeTitle : "New chat"),
+        [chat.activeFile, activeTitle],
+    );
     const headerCwd = useMemo(() => formatCwd(activeCwd), [activeCwd]);
 
     return (
@@ -392,11 +503,15 @@ export default function App() {
                     <div className="pointer-events-none mx-auto flex max-w-[60%] items-center gap-2 truncate px-10 text-[13px]">
                         {activeCwd ? (
                             <>
-                                <span className="truncate font-medium text-phi-text-tertiary">{headerCwd}</span>
+                                <span className="truncate font-medium text-phi-text-tertiary">
+                                    {headerCwd}
+                                </span>
                                 <span className="text-phi-separator">/</span>
                             </>
                         ) : null}
-                        <span className="truncate font-medium text-phi-text-tertiary">{headerTitle}</span>
+                        <span className="truncate font-medium text-phi-text-tertiary">
+                            {headerTitle}
+                        </span>
                     </div>
                     <div className="w-8" />
                 </header>
@@ -408,11 +523,13 @@ export default function App() {
                                 <h1 className="text-[32px] font-semibold tracking-[-0.03em] text-phi-text-primary">
                                     Build, Fix and Ship
                                 </h1>
-                                {!sessions.loading && sessions.groups.length === 0 && !sessions.error && (
-                                    <p className="mt-6 text-[12px] text-phi-text-muted">
-                                        No sessions found — run `pi` in a project to create one.
-                                    </p>
-                                )}
+                                {!sessions.loading &&
+                                    sessions.groups.length === 0 &&
+                                    !sessions.error && (
+                                        <p className="mt-6 text-[12px] text-phi-text-muted">
+                                            No sessions found — run `pi` in a project to create one.
+                                        </p>
+                                    )}
                             </div>
                         </div>
                     ) : (
@@ -427,20 +544,31 @@ export default function App() {
                     )}
 
                     <div className="shrink-0 px-4 sm:px-7">
-                        {(modelError || (!models.loading && models.models.length === 0 && !models.error)) && (
-                            <div className="mx-auto mb-2 w-full max-w-3xl">
-                                {modelError ? (
-                                    <div className="flex items-center justify-between gap-2 rounded-lg border border-phi-error-border bg-phi-error-bg px-3 py-2 text-[12.5px] text-phi-error-text">
-                                        <span className="truncate">{modelError}</span>
-                                        <button onClick={() => setModelError(null)} className="shrink-0 text-[11px] underline opacity-80 hover:opacity-100">Dismiss</button>
-                                    </div>
-                                ) : (
-                                    <div className="rounded-lg border border-amber-500/20 bg-amber-500/10 px-3 py-2 text-[12.5px] text-amber-200/90">
-                                        No models available — check auth (run <code className="rounded bg-black/20 px-1">pi auth</code>) or configure API keys. The model selector will populate after auth.
-                                    </div>
-                                )}
-                            </div>
-                        )}
+                        {(modelError ||
+                            (!models.loading &&
+                                models.models.length === 0 &&
+                                !models.error)) && (
+                                <div className="mx-auto mb-2 w-full max-w-3xl">
+                                    {modelError ? (
+                                        <div className="flex items-center justify-between gap-2 rounded-lg border border-phi-error-border bg-phi-error-bg px-3 py-2 text-[12.5px] text-phi-error-text">
+                                            <span className="truncate">{modelError}</span>
+                                            <button
+                                                onClick={() => setModelError(null)}
+                                                className="shrink-0 text-[11px] underline opacity-80 hover:opacity-100"
+                                            >
+                                                Dismiss
+                                            </button>
+                                        </div>
+                                    ) : (
+                                        <div className="rounded-lg border border-amber-500/20 bg-amber-500/10 px-3 py-2 text-[12.5px] text-amber-200/90">
+                                            No models available — check auth (run{" "}
+                                            <code className="rounded bg-black/20 px-1">pi auth</code>)
+                                            or configure API keys. The model selector will populate
+                                            after auth.
+                                        </div>
+                                    )}
+                                </div>
+                            )}
                         <Composer
                             onSend={handleSend}
                             onAbort={chat.abort}

@@ -1,17 +1,17 @@
 import { useEffect, useState } from "react";
 import { ChevronDownIcon } from "../ui/icons";
 
-function toolSummary(name: string, args: Record<string, unknown>): string {
+function getToolDisplay(name: string, args: Record<string, unknown>): { label: string; detail: string | null } {
   const a = args as Record<string, string>;
-  if (name === "read" && a.path) return `read ${a.path}`;
-  if (name === "write" && a.path) return `write ${a.path}`;
-  if (name === "edit" && a.path) return `edit ${a.path}`;
-  if (name === "bash" && a.command) return `bash ${String(a.command).slice(0, 80)}`;
-  if (name === "grep" && a.pattern) return `grep ${a.pattern}${a.path ? ` ${a.path}` : ""}`;
-  if (name === "find" && a.pattern) return `find ${a.pattern}`;
-  if (name === "ls" && a.path) return `ls ${a.path}`;
+  if (name === "read" && a.path) return { label: "read", detail: a.path };
+  if (name === "write" && a.path) return { label: "write", detail: a.path };
+  if (name === "edit" && a.path) return { label: "edit", detail: a.path };
+  if (name === "bash" && a.command) return { label: "bash", detail: String(a.command).slice(0, 80) };
+  if (name === "grep" && a.pattern) return { label: "grep", detail: a.pattern + (a.path ? ` ${a.path}` : "") };
+  if (name === "find" && a.pattern) return { label: "find", detail: a.pattern };
+  if (name === "ls" && a.path) return { label: "ls", detail: a.path };
   const first = Object.values(args).find((v) => typeof v === "string" && v.length > 0) as string | undefined;
-  return first ? `${name} ${first.slice(0, 80)}` : name;
+  return first ? { label: name, detail: first.slice(0, 80) } : { label: name, detail: null };
 }
 
 type WorkingTool = {
@@ -96,22 +96,17 @@ export function WorkingBlock({ thinking, tools, isStreaming, elapsedMs, variant 
               </div>
             )}
             {hasTools && (
-              <div className="space-y-3">
+              <div className="space-y-1.5">
                 {tools.map((t) => {
-                  const summary = toolSummary(t.name, t.args);
-                  const resultText = t.result?.text ?? t.partial ?? "";
+                  const { label, detail } = getToolDisplay(t.name, t.args);
                   const isError = !!t.result?.isError;
                   return (
-                    <div key={t.id} className="space-y-1">
-                      <div className={`font-mono text-xs leading-4 ${isError ? "text-phi-error" : "text-phi-text-secondary"}`}>
-                        {summary}
-                      </div>
-                      {resultText ? (
-                        <pre className="max-h-80 overflow-auto whitespace-pre-wrap break-words rounded-md bg-phi-bg-sunken px-3 py-2.5 font-mono text-[12.5px] leading-5 text-phi-text-tertiary">
-                          {resultText}
-                        </pre>
-                      ) : (
-                        <div className="px-3 py-1 text-[12px] text-phi-text-muted">No output</div>
+                    <div key={t.id} className="flex flex-wrap items-center gap-1.5 py-0.5">
+                      <span className={`text-xs leading-4 ${isError ? "text-phi-error" : "text-phi-text-secondary"}`}>{label}</span>
+                      {detail && (
+                        <code className="rounded border border-phi-border-faint bg-phi-bg-sunken px-1.5 py-0.5 font-mono text-[11px] leading-none text-phi-text-tertiary">
+                          {detail}
+                        </code>
                       )}
                     </div>
                   );
