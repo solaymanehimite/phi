@@ -55,7 +55,7 @@ export function WorkingBlock({ thinking, tools, isStreaming, variant }: Props) {
             <button
                 type="button"
                 onClick={() => setOpen((v) => !v)}
-                className="group flex items-center gap-1.5 py-1 text-left text-[12px] leading-none text-phi-text-muted hover:text-phi-text-tertiary transition-colors"
+                className="group flex items-center gap-2 py-1 text-left text-[12px] leading-none text-phi-text-muted hover:text-phi-text-tertiary transition-colors"
                 aria-expanded={open}
             >
                 {!isStreamingVariant ? (
