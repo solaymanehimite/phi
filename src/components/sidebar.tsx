@@ -160,6 +160,13 @@ export const Sidebar = memo(function Sidebar({
     );
 });
 
+function repoNameFor(cwd: string): string {
+    if (!cwd || cwd === "(unknown)" || cwd === "(no cwd)") return cwd;
+    const trimmed = cwd.endsWith("/") ? cwd.slice(0, -1) : cwd;
+    const seg = trimmed.split("/").pop();
+    return seg || trimmed;
+}
+
 const GroupSection = memo(function GroupSection({
     group,
     collapsed,
@@ -182,29 +189,50 @@ const GroupSection = memo(function GroupSection({
     onPrefetch?: (file: string) => void;
 }) {
     const handleToggle = useCallback(() => onToggleGroup(group.cwd), [onToggleGroup, group.cwd]);
+    const repoName = useMemo(() => repoNameFor(group.displayCwd), [group.displayCwd]);
 
     return (
         <div>
-            <GroupCollapsibleTrigger collapsed={collapsed} onClick={handleToggle}>
-                <span className="min-w-0 flex-1 truncate">{group.displayCwd}</span>
+            <GroupCollapsibleTrigger
+                collapsed={collapsed}
+                onClick={handleToggle}
+                aria-expanded={!collapsed}
+                title={group.displayCwd}
+            >
+                <span className="flex min-w-0 flex-1 items-center gap-2">
+                    <span className="shrink-0 truncate text-[11px] font-semibold tracking-wide text-phi-text-muted">
+                        {repoName}
+                    </span>
+                    <span
+                        className="ml-auto min-w-0 max-w-[150px] shrink truncate text-right text-[10px] font-normal tracking-normal text-phi-text-faint/70"
+                        style={{ direction: "rtl" }}
+                        title={group.displayCwd}
+                    >
+                        {group.displayCwd}
+                    </span>
+                </span>
             </GroupCollapsibleTrigger>
 
-            {!collapsed && (
-                <nav aria-label={group.displayCwd} className="mt-1 space-y-0.5">
-                    {group.sessions.map((s) => (
-                        <SessionRowMemo
-                            key={s.path}
-                            session={s}
-                            active={s.path === activeFile}
-                            isStreaming={isStreaming}
-                            onSelect={onSelect}
-                            onRename={onRename}
-                            onDelete={onDelete}
-                            onPrefetch={onPrefetch}
-                        />
-                    ))}
-                </nav>
-            )}
+            <div
+                className={`grid transition-all duration-300 ease-[cubic-bezier(0.4,0,0.2,1)] ${collapsed ? "grid-rows-[0fr] opacity-0" : "grid-rows-[1fr] opacity-100"}`}
+            >
+                <div className="overflow-hidden">
+                    <nav aria-label={group.displayCwd} className="mt-1 space-y-0.5 pb-0.5">
+                        {group.sessions.map((s) => (
+                            <SessionRowMemo
+                                key={s.path}
+                                session={s}
+                                active={s.path === activeFile}
+                                isStreaming={isStreaming}
+                                onSelect={onSelect}
+                                onRename={onRename}
+                                onDelete={onDelete}
+                                onPrefetch={onPrefetch}
+                            />
+                        ))}
+                    </nav>
+                </div>
+            </div>
         </div>
     );
 });
