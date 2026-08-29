@@ -88,10 +88,15 @@ export const Composer = memo(function Composer({
         setImages((prev) => prev.filter((img) => img.id !== id));
     }, []);
 
+    const focusTextarea = useCallback(() => {
+        requestAnimationFrame(() => textareaRef.current?.focus());
+    }, []);
+
     const submit = useCallback((event?: FormEvent) => {
         event?.preventDefault();
         if (isStreaming) {
             onAbort?.();
+            focusTextarea();
             return;
         }
         const content = message.trim();
@@ -105,15 +110,18 @@ export const Composer = memo(function Composer({
         setMessage("");
         setImages([]);
         if (textareaRef.current) textareaRef.current.style.height = "auto";
-    }, [isStreaming, onAbort, message, disabled, onSend, images]);
+        focusTextarea();
+    }, [isStreaming, onAbort, message, disabled, onSend, images, focusTextarea]);
 
     const handleKeyDown = useCallback((event: KeyboardEvent<HTMLTextAreaElement>) => {
         if (event.key === "Enter" && !event.shiftKey) {
             event.preventDefault();
-            if (isStreaming) onAbort?.();
-            else submit();
+            if (isStreaming) {
+                onAbort?.();
+                focusTextarea();
+            } else submit();
         }
-    }, [isStreaming, onAbort, submit]);
+    }, [isStreaming, onAbort, submit, focusTextarea]);
 
     const handleChange = useCallback((event: React.ChangeEvent<HTMLTextAreaElement>) => setMessage(event.target.value), []);
     const handleInput = useCallback((event: React.FormEvent<HTMLTextAreaElement>) => {

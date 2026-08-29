@@ -374,7 +374,7 @@ const SessionRow = memo(function SessionRow({
                             className="size-4 shrink-0 animate-spin text-phi-text-secondary"
                         />
                     ) : null}
-                    <span className="min-w-0 flex-1 truncate">{title}</span>
+                    <span className="min-w-0 flex-1 truncate text-left">{title}</span>
                     <span className="shrink-0 text-[11px] text-phi-text-faint">{count > 0 ? `${count}` : ""}</span>
                     <span className="shrink-0 text-[11px] text-phi-text-faint">{time}</span>
                 </button>

@@ -293,6 +293,12 @@ export default function App() {
         }
     }, [chat.activeFile, chat.data?.context]);
 
+    const focusComposer = useCallback(() => {
+        requestAnimationFrame(() => {
+            document.querySelector<HTMLTextAreaElement>('textarea[aria-label="Message Pi"]')?.focus();
+        });
+    }, []);
+
     const handleSelect = useCallback(
         async (file: string) => {
             if (file === chat.activeFile) return;
@@ -313,6 +319,7 @@ export default function App() {
                     .switchTo(file)
                     .catch((e) => console.warn("switchSession failed", e));
                 chat.revalidate(file);
+                focusComposer();
                 return;
             }
             // Cold path: instant loading feedback, then 1 RTT hydrate
@@ -327,6 +334,8 @@ export default function App() {
             } catch (e) {
                 console.warn("switchSession failed", e);
                 await chat.openFile(file).catch(() => { });
+            } finally {
+                focusComposer();
             }
         },
         [
@@ -340,6 +349,7 @@ export default function App() {
             chat.abort,
             chat.activeFile,
             chat.prepareSwitch,
+            focusComposer,
         ],
     );
 
@@ -354,7 +364,8 @@ export default function App() {
             } catch { }
         }
         chat.clear();
-    }, [chat.clear, chat.isStreaming, chat.abort]);
+        focusComposer();
+    }, [chat.clear, chat.isStreaming, chat.abort, focusComposer]);
 
     const handleRename = useCallback(
         async (file: string, name: string) => {
@@ -378,6 +389,11 @@ export default function App() {
         },
         [sessions.remove, chat.activeFile, chat.clear, chat.invalidateCache],
     );
+
+    const handleAbort = useCallback(async () => {
+        await chat.abort();
+        focusComposer();
+    }, [chat.abort, focusComposer]);
 
     const handleSend = useCallback(
         async (content: string, images?: { type: "image"; data: string; mimeType: string }[]) => {
@@ -433,6 +449,7 @@ export default function App() {
                 },
             });
             sessions.refresh({ silent: true });
+            focusComposer();
         },
         [
             chat.prompt,
@@ -447,6 +464,7 @@ export default function App() {
             chat.openFile,
             chat.refreshSilent,
             sessions.switchTo,
+            focusComposer,
         ],
     );
 
@@ -570,7 +588,7 @@ export default function App() {
                             )}
                         <Composer
                             onSend={handleSend}
-                            onAbort={chat.abort}
+                            onAbort={handleAbort}
                             isStreaming={chat.isStreaming}
                             models={models.models}
                             modelsLoading={models.loading}
