@@ -1,6 +1,7 @@
 import { useCallback, useDeferredValue, useEffect, useMemo, useState, useTransition } from "react";
 import { listSessions, createSession, switchSession, renameSession, deleteSession } from "../lib/api";
 import type { SessionInfo } from "../types/session";
+import { useLocalStorage } from "./useLocalStorage";
 
 export type SessionGroup = {
   cwd: string;
@@ -53,7 +54,22 @@ export function useSessions() {
   const search = rawSearch;
   const setSearch = setRawSearch;
   const isSearchPending = rawSearch !== deferredSearch;
-  const [collapsed, setCollapsed] = useState<Set<string>>(() => new Set());
+  // Persist collapsed directories across restarts — e.g. user collapses `~/ship/Phi` and expects it to stay collapsed
+  const [collapsed, setCollapsed] = useLocalStorage<Set<string>>(
+    "phi:sidebar:collapsed",
+    new Set(),
+    {
+      serialize: (v) => JSON.stringify([...v]),
+      deserialize: (s) => {
+        try {
+          const parsed = JSON.parse(s);
+          return new Set(Array.isArray(parsed) ? (parsed as string[]) : []);
+        } catch {
+          return new Set<string>();
+        }
+      },
+    },
+  );
   const [isPending, startTransition] = useTransition();
 
   const refresh = useCallback(async (opts?: { silent?: boolean }) => {

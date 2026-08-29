@@ -269,7 +269,6 @@ const SessionRowMemo = memo(function SessionRowMemo({
             active={active}
             title={title}
             time={time}
-            count={session.messageCount}
             onClick={handleSelect}
             onRename={handleRename}
             onDelete={handleDelete}
@@ -283,7 +282,6 @@ const SessionRow = memo(function SessionRow({
     active,
     title,
     time,
-    count,
     onClick,
     onRename,
     onDelete,
@@ -293,7 +291,6 @@ const SessionRow = memo(function SessionRow({
     active: boolean;
     title: string;
     time: string;
-    count: number;
     onClick: () => void;
     onRename: (name: string) => Promise<void>;
     onDelete: () => Promise<void>;
@@ -375,7 +372,6 @@ const SessionRow = memo(function SessionRow({
                         />
                     ) : null}
                     <span className="min-w-0 flex-1 truncate text-left">{title}</span>
-                    <span className="shrink-0 text-[11px] text-phi-text-faint">{count > 0 ? `${count}` : ""}</span>
                     <span className="shrink-0 text-[11px] text-phi-text-faint">{time}</span>
                 </button>
             )}
