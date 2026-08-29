@@ -1,6 +1,7 @@
 # Phi
-
 Fast desktop GUI for [Pi](https://github.com/earendil-works/pi) — built with Tauri, React, and the Pi SDK.
+
+<img width="1647" height="1010" alt="Screenshot 2026-08-29 at 16-18-54 Phi" src="https://github.com/user-attachments/assets/badd38ef-c2f3-4474-9802-aea32e42f6a8" />
 
 ## Dev
 
