@@ -1,35 +1,35 @@
 import {
-  ArrowUp,
-  ChevronDown,
-  MessageSquare,
-  PanelLeft,
-  Square,
-  SquarePen,
-} from "lucide-react";
+  ArrowUpIcon as HeroArrowUpIcon,
+  ChatBubbleLeftIcon,
+  ChevronDownIcon as HeroChevronDownIcon,
+  ChevronDoubleLeftIcon as HeroPanelLeftIcon,
+  PencilSquareIcon,
+  StopIcon as HeroStopIcon,
+} from "@heroicons/react/24/solid";
 import type { ComponentProps } from "react";
 
-type IconProps = ComponentProps<typeof ArrowUp>;
+type IconProps = ComponentProps<typeof HeroArrowUpIcon>;
 
 export function ComposeIcon(props: IconProps) {
-  return <SquarePen {...props} size={16} strokeWidth={2.25} />;
+  return <PencilSquareIcon {...props} className={`size-4 ${props.className ?? ""}`} />;
 }
 
 export function PanelLeftIcon(props: IconProps) {
-  return <PanelLeft {...props} size={16} strokeWidth={2.25} />;
+  return <HeroPanelLeftIcon {...props} className={`size-4 ${props.className ?? ""}`} />;
 }
 
 export function ChatIcon(props: IconProps) {
-  return <MessageSquare {...props} size={16} strokeWidth={2.25} />;
+  return <ChatBubbleLeftIcon {...props} className={`size-4 ${props.className ?? ""}`} />;
 }
 
 export function ChevronDownIcon(props: IconProps) {
-  return <ChevronDown {...props} size={16} strokeWidth={2.25} />;
+  return <HeroChevronDownIcon {...props} className={`size-4 ${props.className ?? ""}`} />;
 }
 
 export function ArrowUpIcon(props: IconProps) {
-  return <ArrowUp {...props} size={16} strokeWidth={2.25} />;
+  return <HeroArrowUpIcon {...props} className={`size-4 ${props.className ?? ""}`} />;
 }
 
 export function StopIcon(props: IconProps) {
-  return <Square {...props} size={16} strokeWidth={2.25} className={`fill-current ${props.className ?? ""}`} />;
+  return <HeroStopIcon {...props} className={`size-4 ${props.className ?? ""}`} />;
 }

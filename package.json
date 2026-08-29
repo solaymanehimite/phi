@@ -17,11 +17,11 @@
   "dependencies": {
     "@earendil-works/pi-coding-agent": "^0.84.3",
     "@headlessui/react": "^2.2.10",
+    "@heroicons/react": "^2.2.0",
     "@tauri-apps/api": "^2.11.1",
     "@tauri-apps/plugin-shell": "~2",
     "cors": "^2.8.6",
     "express": "^5.2.1",
-    "lucide-react": "^1.35.0",
     "react": "^19.1.0",
     "react-colorful": "^5.8.0",
     "react-dom": "^19.1.0",

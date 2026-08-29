@@ -1,7 +1,7 @@
 import { memo, useCallback, useMemo, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
-import { Check, Copy } from "lucide-react";
+import { CheckIcon, Square2StackIcon } from "@heroicons/react/24/solid";
 
 // Single shared instance so remarkGfm isn't recreated per render
 const remarkPlugins = [remarkGfm] as const;
@@ -55,9 +55,9 @@ function CopyButton({ text }: { text: string }) {
       className="absolute right-2 top-2 z-10 inline-flex items-center gap-1 rounded-md border border-phi-border bg-phi-bg-elevated px-2 py-1 text-[11px] font-medium leading-none tracking-wide text-phi-text-tertiary shadow-[0_1px_2px_rgba(0,0,0,0.3)] transition hover:border-phi-border-strong hover:bg-phi-overlay-hover hover:text-phi-text-secondary active:bg-phi-overlay-active"
     >
       {copied ? (
-        <Check size={12} strokeWidth={2.25} className="text-emerald-400" />
+        <CheckIcon className="size-3 text-emerald-400" />
       ) : (
-        <Copy size={12} strokeWidth={2} />
+        <Square2StackIcon className="size-3" />
       )}
       <span>{copied ? "Copied" : "Copy"}</span>
     </button>

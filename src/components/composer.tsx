@@ -3,7 +3,7 @@ import { Button } from "./ui/button";
 import { ArrowUpIcon, StopIcon } from "./ui/icons";
 import { ModelSelector } from "./model-selector";
 import type { ModelInfo, ThinkingLevel } from "../types/session";
-import { Paperclip, X } from "lucide-react";
+import { PaperClipIcon, XMarkIcon } from "@heroicons/react/24/solid";
 import { SlashMenu } from "./composer/slash-menu";
 import { useSlashCommands } from "../hooks/useSlashCommands";
 import type { SlashCommand } from "../lib/api";
@@ -328,7 +328,7 @@ export const Composer = memo(function Composer({
             {isDragging && (
                 <div className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center rounded-[17px] rounded-b-none bg-phi-bg-surface/80 backdrop-blur-[1px] border-x-2 border-t-2 border-dashed border-phi-accent/60">
                     <div className="flex items-center gap-2 rounded-full bg-phi-bg-elevated px-4 py-2 text-[13px] font-medium text-phi-text-primary shadow-lg border border-phi-border">
-                        <Paperclip size={16} />
+                        <PaperClipIcon className="size-4" />
                         Drop images to attach
                     </div>
                 </div>
@@ -366,7 +366,7 @@ export const Composer = memo(function Composer({
                                 onClick={() => removeImage(img.id)}
                                 className="absolute right-1 top-1 inline-grid size-5 place-items-center rounded-full bg-black/70 text-white opacity-0 backdrop-blur transition-opacity hover:bg-black/85 group-hover:opacity-100 focus-visible:opacity-100 focus-visible:outline-none"
                             >
-                                <X size={12} strokeWidth={2.5} />
+                                <XMarkIcon className="size-3" />
                             </button>
                         </div>
                     ))}
@@ -426,7 +426,7 @@ export const Composer = memo(function Composer({
                         disabled={!!disabled || isStreaming}
                         className="disabled:opacity-40"
                     >
-                        <Paperclip size={16} strokeWidth={2} />
+                        <PaperClipIcon className="size-4" />
                     </Button>
                     <ModelSelector
                         models={models}

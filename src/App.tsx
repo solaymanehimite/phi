@@ -47,36 +47,10 @@ const ChatViewport = memo(function ChatViewport({
         startedAt?: number | null;
     };
 }) {
-    const scrollerRef = useRef<HTMLDivElement>(null);
-
-    // auto-scroll while streaming (pinned to bottom on each delta)
-    useEffect(() => {
-        const el = scrollerRef.current;
-        if (!el) return;
-        if (isStreaming) {
-            el.scrollTop = el.scrollHeight;
-        }
-    }, [isStreaming, streaming.text, streaming.thinking, streaming.tools.length]);
-
-    // after streaming finishes and history loads, pin to bottom
-    useEffect(() => {
-        if (isStreaming) return;
-        const el = scrollerRef.current;
-        if (!el) return;
-        if ((messages.length ?? 0) > 0) {
-            requestAnimationFrame(() => {
-                el.scrollTop = el.scrollHeight;
-            });
-        }
-    }, [isStreaming, messages.length]);
-
     if (!activeFile) return null;
     if (loading) {
         return (
-            <div
-                ref={scrollerRef}
-                className="mx-auto flex w-full max-w-3xl flex-1 flex-col overflow-y-auto px-6 pt-6"
-            >
+            <div className="mx-auto flex w-full max-w-3xl flex-1 flex-col overflow-y-auto px-6 pt-6">
                 <p className="py-10 text-center text-[13px] text-phi-text-muted">
                     Loading messages…
                 </p>
@@ -85,10 +59,7 @@ const ChatViewport = memo(function ChatViewport({
     }
     if (error) {
         return (
-            <div
-                ref={scrollerRef}
-                className="mx-auto flex w-full max-w-3xl flex-1 flex-col overflow-y-auto px-6 pt-6"
-            >
+            <div className="mx-auto flex w-full max-w-3xl flex-1 flex-col overflow-y-auto px-6 pt-6">
                 <div className="mx-auto mt-6 max-w-xl rounded-lg border border-phi-error-border bg-phi-error-bg px-4 py-3 text-[13px] text-phi-error-text">
                     {error}
                 </div>
@@ -97,10 +68,7 @@ const ChatViewport = memo(function ChatViewport({
     }
     if (messages.length === 0) {
         return (
-            <div
-                ref={scrollerRef}
-                className="mx-auto flex w-full max-w-3xl flex-1 flex-col overflow-y-auto px-6 pt-6"
-            >
+            <div className="mx-auto flex w-full max-w-3xl flex-1 flex-col overflow-y-auto px-6 pt-6">
                 <div className="flex flex-1 flex-col items-center justify-center pb-16 text-center">
                     <p className="text-[13px] text-phi-text-muted">
                         No messages in this session yet.
@@ -117,10 +85,7 @@ const ChatViewport = memo(function ChatViewport({
         showLive &&
         (streaming.thinking.trim().length > 0 || streaming.tools.length > 0);
     return (
-        <div
-            ref={scrollerRef}
-            className="mx-auto flex w-full flex-1 flex-col items-center overflow-y-auto px-6 pt-6"
-        >
+        <div className="mx-auto flex w-full flex-1 flex-col items-center overflow-y-auto px-6 pt-6">
             <div className="w-2xl h-full flex flex-col">
                 <Conversation messages={messages} hideLastWork={hideLastWork} />
                 {showLive && (
@@ -397,10 +362,12 @@ export default function App() {
 
     const handleSend = useCallback(
         async (content: string, images?: { type: "image"; data: string; mimeType: string }[]) => {
-            if (!chat.activeFile && draftModelKey) {
+            let preparedSessionFile: string | undefined;
+            if (!chat.activeFile && (draftModelKey || draftThinking)) {
                 try {
                     const res = await createSession();
                     const file = res.file;
+                    preparedSessionFile = file;
                     try {
                         await sessions.switchTo(file);
                     } catch { }
@@ -410,7 +377,7 @@ export default function App() {
                         "/home/solaymanehimite/Dev/ship/Phi",
                         content,
                     );
-                    const parsed = draftModelKey.includes("/")
+                    const parsed = draftModelKey?.includes("/")
                         ? {
                             provider: draftModelKey.split("/")[0],
                             id: draftModelKey.split("/").slice(1).join("/"),
@@ -418,7 +385,8 @@ export default function App() {
                         : null;
                     if (parsed) {
                         try {
-                            await models.setModel(parsed.provider, parsed.id);
+                            const res: any = await models.setModel(parsed.provider, parsed.id);
+                            if (res?.model) chat.patchModel(res.model, res.thinkingLevel);
                         } catch (e) {
                             setModelError(e instanceof Error ? e.message : String(e));
                         }
@@ -439,6 +407,7 @@ export default function App() {
             }
             await chat.prompt(content, {
                 images,
+                sessionFile: preparedSessionFile,
                 onNewFile: (file, cwd, firstMessage) => {
                     const realCwd = cwd || chat.data?.cwd || "";
                     sessions.addOptimistic(
@@ -461,6 +430,7 @@ export default function App() {
             draftThinking,
             models.setModel,
             models.setThinkingLevel,
+            chat.patchModel,
             chat.openFile,
             chat.refreshSilent,
             sessions.switchTo,
@@ -530,7 +500,9 @@ export default function App() {
                             {headerTitle}
                         </span>
                     </div>
-                    <div className="w-8" />
+                    <div className="flex w-8 justify-end">
+                        <ThemeEditor />
+                    </div>
                 </header>
 
                 <section className="flex min-h-0 flex-1 flex-col">
@@ -602,7 +574,6 @@ export default function App() {
                     </div>
                 </section>
             </main>
-            <ThemeEditor />
         </div>
     );
 }

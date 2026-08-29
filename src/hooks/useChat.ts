@@ -207,12 +207,15 @@ export function useChat() {
   }, []);
 
   const prompt = useCallback(
-    async (text: string, opts: { cwd?: string; onNewFile?: (file: string, cwd: string, firstMessage: string) => void; images?: { type: "image"; data: string; mimeType: string }[] } = {}) => {
+    async (text: string, opts: { cwd?: string; sessionFile?: string; onNewFile?: (file: string, cwd: string, firstMessage: string) => void; images?: { type: "image"; data: string; mimeType: string }[] } = {}) => {
       const trimmed = text.trim();
       const hasImages = (opts.images?.length ?? 0) > 0;
       if (!trimmed && !hasImages) return;
 
-      let file = activeFile;
+      // A new-chat model choice can create the session before this callback's
+      // React closure sees the updated activeFile. Honor an explicit file so
+      // the first prompt cannot create a second session with the global default.
+      let file = opts.sessionFile ?? activeFile;
       const cwdForNew = opts.cwd ?? "";
 
       // lazy create session if none
