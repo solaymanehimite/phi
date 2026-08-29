@@ -236,15 +236,53 @@ export const Conversation = memo(function Conversation({
             } else if (role === "toolResult") {
                 // tool results are resolved via map, no separate turn
                 continue;
-            } else {
-                // fallback/other roles: treat as separate turn with raw text
-                const fallback =
-                    typeof m.content === "string"
-                        ? m.content
-                        : JSON.stringify(m, null, 2).slice(0, 800);
-                if (!fallback.trim()) continue;
+            } else if (role === "custom") {
+                // extension custom messages — respect display flag, render plain text only
+                if ((m as Record<string, unknown>).display === false) continue;
+                let text = "";
+                const content = (m as Record<string, unknown>).content;
+                if (typeof content === "string") text = content;
+                else if (Array.isArray(content)) {
+                    text = (content as unknown[])
+                        .map((c) =>
+                            c && typeof c === "object" && "text" in (c as Record<string, unknown>)
+                                ? String((c as Record<string, unknown>).text ?? "")
+                                : typeof c === "string"
+                                    ? c
+                                    : "",
+                        )
+                        .filter(Boolean)
+                        .join("\n");
+                }
+                if (!text.trim() && typeof (m as Record<string, unknown>).text === "string") {
+                    text = String((m as Record<string, unknown>).text);
+                }
+                if (!text.trim()) continue;
                 if (!cur) cur = { user: null, thinking: "", text: "", toolCalls: [] };
-                cur.text += (cur.text ? "\n\n" : "") + fallback;
+                cur.text += (cur.text ? "\n\n" : "") + text;
+            } else {
+                // other unknown roles (compactionSummary, branchSummary, bashExecution, etc.)
+                // try to extract text safely, never JSON-stringify the whole envelope
+                let text = "";
+                const content = (m as Record<string, unknown>).content;
+                if (typeof content === "string") text = content;
+                else if (Array.isArray(content)) {
+                    text = (content as unknown[])
+                        .map((c) =>
+                            c && typeof c === "object" && "text" in (c as Record<string, unknown>)
+                                ? String((c as Record<string, unknown>).text ?? "")
+                                : typeof c === "string"
+                                    ? c
+                                    : "",
+                        )
+                        .filter(Boolean)
+                        .join("\n");
+                } else if (typeof (m as Record<string, unknown>).text === "string") {
+                    text = String((m as Record<string, unknown>).text);
+                }
+                if (!text.trim()) continue;
+                if (!cur) cur = { user: null, thinking: "", text: "", toolCalls: [] };
+                cur.text += (cur.text ? "\n\n" : "") + text;
             }
         }
         flush();

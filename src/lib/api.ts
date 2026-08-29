@@ -140,3 +140,23 @@ export async function abortPrompt(): Promise<{ ok: boolean }> {
   const res = await apiFetch(`/abort`, { method: "POST" });
   return jsonOrThrow(res);
 }
+
+export type SlashCommand = {
+  name: string;
+  description?: string;
+  source: "extension" | "skill" | "prompt";
+  argumentHint?: string;
+};
+
+export type CommandsResponse = {
+  commands: SlashCommand[];
+  extensionCommands: Array<{ name: string; description?: string; argumentHint?: string }>;
+  skills: Array<{ name: string; description?: string; filePath?: string }>;
+  prompts: Array<{ name: string; description?: string; argumentHint?: string; filePath?: string }>;
+};
+
+export async function getCommands(cwd?: string): Promise<CommandsResponse> {
+  const qs = cwd ? `?cwd=${encodeURIComponent(cwd)}` : "";
+  const res = await apiFetch(`/commands${qs}`);
+  return jsonOrThrow(res);
+}

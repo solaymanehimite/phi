@@ -597,6 +597,7 @@ export default function App() {
                             thinkingLevel={thinkingLevel}
                             onSelectModel={handleSelectModel}
                             onThinkingChange={handleThinkingChange}
+                            cwd={activeCwd}
                         />
                     </div>
                 </section>

@@ -1,9 +1,12 @@
-import { memo, useCallback, useRef, useState, type FormEvent, type KeyboardEvent, type DragEvent, type ClipboardEvent } from "react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState, type FormEvent, type KeyboardEvent, type DragEvent, type ClipboardEvent } from "react";
 import { Button } from "./ui/button";
 import { ArrowUpIcon, StopIcon } from "./ui/icons";
 import { ModelSelector } from "./model-selector";
 import type { ModelInfo, ThinkingLevel } from "../types/session";
 import { Paperclip, X } from "lucide-react";
+import { SlashMenu } from "./composer/slash-menu";
+import { useSlashCommands } from "../hooks/useSlashCommands";
+import type { SlashCommand } from "../lib/api";
 
 export type ComposerImagePayload = { type: "image"; data: string; mimeType: string };
 
@@ -19,7 +22,23 @@ type ComposerProps = {
     thinkingLevel?: string;
     onSelectModel?: (provider: string, id: string) => void | Promise<void>;
     onThinkingChange?: (level: ThinkingLevel) => void | Promise<void>;
+    cwd?: string;
 };
+
+/** Find slash query at cursor. Returns query after "/" or null if not in slash context. */
+function getSlashQuery(text: string, cursor: number): string | null {
+    const before = text.slice(0, cursor);
+    const lastSlash = before.lastIndexOf("/");
+    if (lastSlash === -1) return null;
+    // slash must be at start or after whitespace/newline
+    if (lastSlash !== 0 && !/\s/.test(before[lastSlash - 1])) return null;
+    const afterSlash = before.slice(lastSlash + 1);
+    // "/" alone -> empty query (show all)
+    if (afterSlash.length === 0) return "";
+    // any whitespace (space, tab, newline) means the slash token ended -> close palette
+    if (/\s/.test(afterSlash)) return null;
+    return afterSlash;
+}
 
 type AttachedImage = {
     id: string;
@@ -62,6 +81,7 @@ export const Composer = memo(function Composer({
     thinkingLevel,
     onSelectModel,
     onThinkingChange,
+    cwd,
 }: ComposerProps) {
     const [message, setMessage] = useState("");
     const [images, setImages] = useState<AttachedImage[]>([]);
@@ -69,6 +89,71 @@ export const Composer = memo(function Composer({
     const dragCounter = useRef(0);
     const textareaRef = useRef<HTMLTextAreaElement>(null);
     const fileInputRef = useRef<HTMLInputElement>(null);
+
+    // --- slash palette state ---
+    const { commands } = useSlashCommands(cwd);
+    const [slashQuery, setSlashQuery] = useState<string | null>(null);
+    const [slashIndex, setSlashIndex] = useState(0);
+
+    const filteredSlash = useMemo(() => {
+        if (slashQuery === null) return [];
+        const skillsOnly = commands.filter((c) => c.source === "skill");
+        const q = slashQuery.toLowerCase().trim();
+        if (!q) return skillsOnly.slice(0, 30);
+        return skillsOnly
+            .filter(
+                (c) =>
+                    c.name.toLowerCase().includes(q) ||
+                    (c.description ?? "").toLowerCase().includes(q),
+            )
+            .slice(0, 30);
+    }, [commands, slashQuery]);
+
+    const isSlashOpen = slashQuery !== null && filteredSlash.length > 0;
+
+    const updateSlashFromValue = useCallback(
+        (val: string, cursor: number) => {
+            const q = getSlashQuery(val, cursor);
+            setSlashQuery(q);
+            setSlashIndex(0);
+        },
+        [],
+    );
+
+    const closeSlash = useCallback(() => {
+        setSlashQuery(null);
+        setSlashIndex(0);
+    }, []);
+
+    const acceptSlash = useCallback(
+        (cmd: SlashCommand) => {
+            const el = textareaRef.current;
+            const cursor = el?.selectionStart ?? message.length;
+            const before = message.slice(0, cursor);
+            const after = message.slice(cursor);
+            const slashPos = before.lastIndexOf("/");
+            if (slashPos === -1) return;
+            const next = `${before.slice(0, slashPos)}/${cmd.name} ${after}`;
+            setMessage(next);
+            closeSlash();
+            requestAnimationFrame(() => {
+                if (!el) return;
+                const pos = slashPos + 1 + cmd.name.length + 1; // after "/name "
+                el.focus();
+                el.setSelectionRange(pos, pos);
+                el.style.height = "auto";
+                el.style.height = `${Math.min(el.scrollHeight, 180)}px`;
+            });
+        },
+        [message, closeSlash],
+    );
+
+    // close slash on blur outside? keep open until query null
+    useEffect(() => {
+        if (slashQuery === null) return;
+        // clamp index
+        if (slashIndex >= filteredSlash.length) setSlashIndex(0);
+    }, [filteredSlash.length, slashIndex, slashQuery]);
 
     const hasContent = message.trim().length > 0 || images.length > 0;
 
@@ -109,26 +194,78 @@ export const Composer = memo(function Composer({
         onSend(content, payload);
         setMessage("");
         setImages([]);
+        closeSlash();
         if (textareaRef.current) textareaRef.current.style.height = "auto";
         focusTextarea();
-    }, [isStreaming, onAbort, message, disabled, onSend, images, focusTextarea]);
+    }, [isStreaming, onAbort, message, disabled, onSend, images, focusTextarea, closeSlash]);
 
     const handleKeyDown = useCallback((event: KeyboardEvent<HTMLTextAreaElement>) => {
+        // Slash palette takes priority
+        if (isSlashOpen) {
+            if (event.key === "ArrowDown") {
+                event.preventDefault();
+                setSlashIndex((i) => (i + 1) % filteredSlash.length);
+                return;
+            }
+            if (event.key === "ArrowUp") {
+                event.preventDefault();
+                setSlashIndex((i) => (i - 1 + filteredSlash.length) % filteredSlash.length);
+                return;
+            }
+            if (event.key === "Enter" || event.key === "Tab") {
+                // Tab/Enter accepts selected
+                if (filteredSlash[slashIndex]) {
+                    event.preventDefault();
+                    acceptSlash(filteredSlash[slashIndex]);
+                    return;
+                }
+            }
+            if (event.key === "Escape") {
+                event.preventDefault();
+                closeSlash();
+                return;
+            }
+        }
         if (event.key === "Enter" && !event.shiftKey) {
+            // if slash open but no selection, let Enter submit normal message (which may be a slash command)
+            // To avoid ambiguity, if slash open and there's a valid filter, Enter already handled above.
             event.preventDefault();
             if (isStreaming) {
                 onAbort?.();
                 focusTextarea();
             } else submit();
         }
-    }, [isStreaming, onAbort, submit, focusTextarea]);
+        if (event.key === "Escape" && isSlashOpen) {
+            event.preventDefault();
+            closeSlash();
+        }
+    }, [isSlashOpen, filteredSlash, slashIndex, acceptSlash, isStreaming, onAbort, submit, focusTextarea, closeSlash]);
 
-    const handleChange = useCallback((event: React.ChangeEvent<HTMLTextAreaElement>) => setMessage(event.target.value), []);
+    const handleChange = useCallback((event: React.ChangeEvent<HTMLTextAreaElement>) => {
+        const val = event.target.value;
+        setMessage(val);
+        const cursor = event.target.selectionStart ?? val.length;
+        updateSlashFromValue(val, cursor);
+    }, [updateSlashFromValue]);
     const handleInput = useCallback((event: React.FormEvent<HTMLTextAreaElement>) => {
         const el = event.currentTarget as HTMLTextAreaElement;
         el.style.height = "auto";
         el.style.height = `${Math.min(el.scrollHeight, 180)}px`;
-    }, []);
+        // also update slash on input (covers paste/immediate)
+        const cursor = el.selectionStart ?? message.length;
+        updateSlashFromValue(el.value, cursor);
+    }, [message.length, updateSlashFromValue]);
+    const handleSelect = useCallback((e: React.SyntheticEvent<HTMLTextAreaElement>) => {
+        const el = e.currentTarget as HTMLTextAreaElement;
+        updateSlashFromValue(el.value, el.selectionStart ?? el.value.length);
+    }, [updateSlashFromValue]);
+    const handleKeyUp = useCallback((e: KeyboardEvent<HTMLTextAreaElement>) => {
+        // keep slash query in sync with cursor moves (arrow keys without palette)
+        if (["ArrowLeft", "ArrowRight", "Home", "End"].includes(e.key)) {
+            const el = e.currentTarget as HTMLTextAreaElement;
+            updateSlashFromValue(el.value, el.selectionStart ?? el.value.length);
+        }
+    }, [updateSlashFromValue]);
 
     const handlePaste = useCallback((e: ClipboardEvent<HTMLTextAreaElement>) => {
         const items = e.clipboardData?.items;
@@ -197,6 +334,18 @@ export const Composer = memo(function Composer({
                 </div>
             )}
 
+            {/* slash palette — above textarea, inside composer */}
+            {isSlashOpen && (
+                <div className="absolute bottom-full left-2 right-2 z-20 mb-2">
+                    <SlashMenu
+                        commands={filteredSlash}
+                        selectedIndex={slashIndex}
+                        onSelect={acceptSlash}
+                        onHover={setSlashIndex}
+                    />
+                </div>
+            )}
+
             {/* image previews above textarea */}
             {images.length > 0 && (
                 <div className="flex flex-wrap gap-2 px-1 pb-2">
@@ -229,18 +378,31 @@ export const Composer = memo(function Composer({
                 value={message}
                 rows={2}
                 aria-label="Message Pi"
+                aria-autocomplete={isSlashOpen ? "list" : undefined}
+                aria-expanded={isSlashOpen ? true : undefined}
                 placeholder={
                     isStreaming
                         ? "Streaming… press Stop or Enter to abort"
                         : images.length > 0
                             ? "Describe the images…"
-                            : "Message Pi…"
+                            : "Message Pi… — type / for commands"
                 }
                 onChange={handleChange}
                 onKeyDown={handleKeyDown}
+                onKeyUp={handleKeyUp}
+                onSelect={handleSelect}
+                onClick={handleSelect}
                 onPaste={handlePaste}
                 disabled={!!disabled}
                 onInput={handleInput}
+                onBlur={() => {
+                    // delay close to allow menu mousedown
+                    setTimeout(() => {
+                        const el = document.activeElement;
+                        if (el && el.closest('[role="listbox"]')) return;
+                        // don't auto-close on blur — keep until query changes
+                    }, 150);
+                }}
                 className="block max-h-[180px] min-h-16 w-full resize-none bg-transparent px-2.5 py-2 text-[14px] leading-6 text-phi-text-primary outline-none placeholder:text-phi-text-muted disabled:opacity-60"
             />
 

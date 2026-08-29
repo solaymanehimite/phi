@@ -48,6 +48,8 @@ export function useChat() {
   const pendingThinking = useRef("");
   const rafId = useRef<number | null>(null);
   const abortRef = useRef<AbortController | null>(null);
+  const pendingNoticesRef = useRef<string[]>([]);
+  const seenAgentRef = useRef(false);
 
   const flush = useCallback(() => {
     rafId.current = null;
@@ -257,6 +259,8 @@ export function useChat() {
       setError(null);
       pendingText.current = "";
       pendingThinking.current = "";
+      pendingNoticesRef.current = [];
+      seenAgentRef.current = false;
 
       const ac = new AbortController();
       abortRef.current = ac;
@@ -267,7 +271,34 @@ export function useChat() {
           (ev: SseEvent) => {
             const type = String(ev.type ?? "");
 
-            if (type === "message_update") {
+            if (type === "agent_start") {
+              seenAgentRef.current = true;
+            } else if (type === "message_start" || type === "message_end") {
+              const msg = (ev as Record<string, unknown>).message as Record<string, unknown> | undefined;
+              if (msg && (msg as { role?: string }).role === "custom" && msg.display !== false) {
+                const content = (msg as { content?: unknown }).content;
+                let text = "";
+                if (typeof content === "string") text = content;
+                else if (Array.isArray(content)) {
+                  text = (content as unknown[])
+                    .map((c) =>
+                      c && typeof c === "object" && "text" in (c as Record<string, unknown>)
+                        ? String((c as Record<string, unknown>).text ?? "")
+                        : typeof c === "string"
+                          ? c
+                          : "",
+                    )
+                    .filter(Boolean)
+                    .join("\n");
+                }
+                if (text.trim()) {
+                  pendingNoticesRef.current.push(text.trim());
+                  // show live as assistant text, separate from streaming.text buffering
+                  pendingText.current += (pendingText.current ? "\n\n" : "") + text.trim();
+                  scheduleFlush();
+                }
+              }
+            } else if (type === "message_update") {
               const ae = (ev.assistantMessageEvent ?? ev.event ?? {}) as Record<string, unknown>;
               const t = String(ae.type ?? "");
               if (t === "text_delta" && typeof ae.delta === "string") {
@@ -339,24 +370,79 @@ export function useChat() {
         const t = pendingText.current;
         const th = pendingThinking.current;
         if (t || th) {
-          // apply remaining deltas to a snapshot before we swap to persisted history
           pendingText.current = "";
           pendingThinking.current = "";
-          // we need to keep them visible until history loads, so update streaming one last time
           setStreaming((s) => ({ ...s, text: s.text + t, thinking: s.thinking + th }));
         }
 
-        // keep isStreaming true while we fetch persisted history to avoid unmounting Streaming and jumping scroll
-        // fetch without toggling loading to avoid spinner flicker
+        // Extension commands (e.g. /move, /curator) execute without an agent turn and
+        // produce no persisted user message. Keep the optimistic "/cmd" bubble and
+        // surface any custom notices instead of overwriting with empty history.
+        const isSlash = trimmed.startsWith("/");
+        const notices = pendingNoticesRef.current.slice();
+        const seenAgent = seenAgentRef.current;
         try {
           const res = await getMessages(file!);
-          // batch: replace history and clear streaming in same tick, then end streaming
-          setData(res);
-          putCache(file!, res);
+          const emptyHistory = !res || !Array.isArray(res.context.messages) || res.context.messages.length === 0;
+          if (isSlash && emptyHistory && !seenAgent) {
+            // keep optimistic user message already in data, append notices as assistant
+            setData((prev) => {
+              if (!prev) return prev;
+              let next: SessionMessagesResponse = prev;
+              if (notices.length > 0) {
+                const assistantMsg = {
+                  role: "assistant",
+                  content: notices.map((tx) => ({ type: "text", text: tx })),
+                  timestamp: Date.now(),
+                } as unknown as SessionMessagesResponse["context"]["messages"][number];
+                next = {
+                  ...prev,
+                  file: file!,
+                  context: { ...prev.context, messages: [...prev.context.messages, assistantMsg] },
+                } as SessionMessagesResponse;
+              }
+              putCache(file!, next);
+              return next;
+            });
+          } else if (notices.length > 0 && !emptyHistory) {
+            // custom notices were not persisted but we have history — merge them as extra assistant message
+            // so they don't get lost
+            const hasNoticeInHistory = res.context.messages.some((m) => {
+              const c = (m as Record<string, unknown>).content;
+              if (Array.isArray(c)) return c.some((b) => notices.includes(String((b as Record<string, unknown>).text ?? "")));
+              return false;
+            });
+            if (!hasNoticeInHistory) {
+              const withNotice = {
+                ...res,
+                context: {
+                  ...res.context,
+                  messages: [
+                    ...res.context.messages,
+                    {
+                      role: "assistant",
+                      content: notices.map((tx) => ({ type: "text", text: tx })),
+                      timestamp: Date.now(),
+                    } as unknown as SessionMessagesResponse["context"]["messages"][number],
+                  ],
+                },
+              } as SessionMessagesResponse;
+              setData(withNotice);
+              putCache(file!, withNotice);
+            } else {
+              setData(res);
+              putCache(file!, res);
+            }
+          } else {
+            setData(res);
+            putCache(file!, res);
+          }
         } catch {}
         setIsStreaming(false);
         abortRef.current = null;
         setStreaming({ text: "", thinking: "", tools: [], startedAt: null });
+        pendingNoticesRef.current = [];
+        seenAgentRef.current = false;
       }
     },
     [activeFile, flush, scheduleFlush],

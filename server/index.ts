@@ -438,6 +438,117 @@ app.post("/api/prompt", async (req, res) => {
   }
 });
 
+// ---- Slash commands ----
+// Aggregates extension commands + skills + prompt templates for the autocomplete palette.
+// GET /api/commands?cwd=/foo — cached 5s, cwd-aware (resourceLoader is cwd-bound).
+let commandsCache: { at: number; payload: unknown; cwd: string } | null = null;
+const COMMANDS_TTL_MS = 5_000;
+
+app.get("/api/commands", async (req, res) => {
+  try {
+    const cwd = (req.query.cwd as string) || process.cwd();
+    const now = Date.now();
+    if (commandsCache && commandsCache.cwd === cwd && now - commandsCache.at < COMMANDS_TTL_MS) {
+      return res.json(commandsCache.payload);
+    }
+    const rt: any = await getRuntime(cwd);
+    const session: any = rt.session;
+    const services: any = rt.services;
+
+    // Extension commands via ExtensionRunner
+    let extensionCommands: Array<{ name: string; description?: string; argumentHint?: string; sourceInfo?: unknown }> = [];
+    try {
+      const runner: any = session?.extensionRunner ?? session?._extensionRunner ?? services?.extensionRunner;
+      if (runner) {
+        if (typeof runner.getRegisteredCommands === "function") {
+          const regs: any[] = runner.getRegisteredCommands();
+          extensionCommands = regs.map((c: any) => ({
+            name: c.invocationName ?? c.name,
+            description: c.description,
+            argumentHint: c.argumentHint,
+            sourceInfo: c.sourceInfo,
+          }));
+        } else if (typeof runner.getCommands === "function") {
+          const regs: any[] = runner.getCommands();
+          extensionCommands = regs.map((c: any) => ({
+            name: c.name,
+            description: c.description,
+            sourceInfo: c.sourceInfo,
+          }));
+        }
+      }
+    } catch {}
+
+    // Skills & prompts via ResourceLoader
+    let skills: Array<{ name: string; description?: string; filePath?: string }> = [];
+    let prompts: Array<{ name: string; description?: string; argumentHint?: string; filePath?: string }> = [];
+    try {
+      const loader: any = services?.resourceLoader ?? session?.resourceLoader;
+      if (loader?.getSkills) {
+        const r = loader.getSkills();
+        if (Array.isArray(r?.skills)) {
+          skills = r.skills.map((s: any) => ({
+            name: s.name,
+            description: s.description,
+            filePath: s.filePath,
+            sourceInfo: s.sourceInfo,
+          }));
+        }
+      }
+      if (loader?.getPrompts) {
+        const r = loader.getPrompts();
+        if (Array.isArray(r?.prompts)) {
+          prompts = r.prompts.map((p: any) => ({
+            name: p.name,
+            description: p.description,
+            argumentHint: p.argumentHint,
+            filePath: p.filePath,
+            sourceInfo: p.sourceInfo,
+          }));
+        }
+      }
+    } catch {}
+
+    // Fallback: session.promptTemplates is always populated after bindExtensions
+    if (prompts.length === 0 && Array.isArray(session?.promptTemplates)) {
+      prompts = (session.promptTemplates as any[]).map((p: any) => ({
+        name: p.name,
+        description: p.description,
+        argumentHint: p.argumentHint,
+      }));
+    }
+
+    // Unified slash list the frontend palette consumes.
+    // Builtins are intentionally excluded — Phi's GUI already owns new/resume/model etc.
+    const commands = [
+      ...extensionCommands.map((c) => ({
+        name: c.name,
+        description: c.description,
+        source: "extension" as const,
+        argumentHint: c.argumentHint,
+      })),
+      ...skills.map((s) => ({
+        name: `skill:${s.name}`,
+        description: s.description,
+        source: "skill" as const,
+      })),
+      ...prompts.map((p) => ({
+        name: p.name,
+        description: p.description,
+        source: "prompt" as const,
+        argumentHint: p.argumentHint,
+      })),
+    ];
+
+    const payload = { commands, extensionCommands, skills, prompts };
+    commandsCache = { at: now, payload, cwd };
+    res.json(payload);
+  } catch (e: unknown) {
+    const err = e as { message?: string };
+    res.status(500).json({ error: err?.message ?? String(e) });
+  }
+});
+
 // Fallback 404 for api
 app.use("/api", (_req, res) => {
   res.status(404).json({ error: "not found" });
