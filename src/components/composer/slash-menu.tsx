@@ -11,8 +11,10 @@ type SlashMenuProps = {
 export const SlashMenu = memo(function SlashMenu({ commands, selectedIndex, onSelect, onHover }: SlashMenuProps) {
   if (commands.length === 0) {
     return (
-      <div className="rounded-xl border border-phi-border bg-phi-bg-elevated px-3 py-2.5 text-[12.5px] leading-5 text-phi-text-muted shadow-[0_12px_40px_rgba(0,0,0,0.35)]">
-        No commands match
+      <div className="rounded-xl border border-phi-border-faint bg-phi-bg-elevated p-1 text-sm/6 text-phi-white shadow-xl">
+        <div className="rounded-lg px-3 py-1 text-[13px] text-phi-text-muted">
+          No commands match
+        </div>
       </div>
     );
   }
@@ -20,7 +22,7 @@ export const SlashMenu = memo(function SlashMenu({ commands, selectedIndex, onSe
     <div
       role="listbox"
       aria-label="Slash commands"
-      className="max-h-[min(280px,40vh)] overflow-y-auto rounded-xl border border-phi-border bg-phi-bg-elevated py-1.5 shadow-[0_12px_40px_rgba(0,0,0,0.35)]"
+      className="max-h-[min(280px,40vh)] overflow-y-auto rounded-xl border border-phi-border-faint bg-phi-bg-elevated p-1 text-sm/6 text-phi-white shadow-xl transition duration-100 ease-out"
     >
       {commands.map((cmd, idx) => {
         const active = idx === selectedIndex;
@@ -35,8 +37,10 @@ export const SlashMenu = memo(function SlashMenu({ commands, selectedIndex, onSe
               e.preventDefault();
               onSelect(cmd);
             }}
-            className={`flex w-full items-center gap-2.5 px-3 py-[7px] text-left text-[13px] leading-5 transition-colors ${
-              active ? "bg-phi-overlay-active text-phi-text-primary" : "text-phi-text-secondary hover:bg-phi-overlay-hover"
+            className={`group flex w-full items-center gap-3 rounded-lg px-3 py-1 text-left text-[13px] transition-colors focus:outline-none ${
+              active
+                ? "bg-phi-overlay-strong text-phi-text-primary"
+                : "text-phi-text-secondary hover:bg-phi-overlay-strong"
             }`}
           >
             <span className="shrink-0 text-[13px] font-medium tracking-tight">/{cmd.name}</span>
