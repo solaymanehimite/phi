@@ -1,4 +1,15 @@
-import { memo, useCallback, useEffect, useMemo, useRef, useState, type FormEvent, type KeyboardEvent, type DragEvent, type ClipboardEvent } from "react";
+import {
+    memo,
+    useCallback,
+    useEffect,
+    useMemo,
+    useRef,
+    useState,
+    type FormEvent,
+    type KeyboardEvent,
+    type DragEvent,
+    type ClipboardEvent,
+} from "react";
 import { Button } from "./ui/button";
 import { ArrowUpIcon, StopIcon } from "./ui/icons";
 import { PaperClipIcon, XMarkIcon } from "@heroicons/react/24/solid";
@@ -6,7 +17,11 @@ import { SlashMenu } from "./composer/slash-menu";
 import { useSlashCommands } from "../hooks/useSlashCommands";
 import type { SlashCommand } from "../lib/api";
 
-export type ComposerImagePayload = { type: "image"; data: string; mimeType: string };
+export type ComposerImagePayload = {
+    type: "image";
+    data: string;
+    mimeType: string;
+};
 
 type ComposerProps = {
     onSend: (message: string, images?: ComposerImagePayload[]) => void;
@@ -95,14 +110,11 @@ export const Composer = memo(function Composer({
 
     const isSlashOpen = slashQuery !== null && filteredSlash.length > 0;
 
-    const updateSlashFromValue = useCallback(
-        (val: string, cursor: number) => {
-            const q = getSlashQuery(val, cursor);
-            setSlashQuery(q);
-            setSlashIndex(0);
-        },
-        [],
-    );
+    const updateSlashFromValue = useCallback((val: string, cursor: number) => {
+        const q = getSlashQuery(val, cursor);
+        setSlashQuery(q);
+        setSlashIndex(0);
+    }, []);
 
     const closeSlash = useCallback(() => {
         setSlashQuery(null);
@@ -141,17 +153,21 @@ export const Composer = memo(function Composer({
 
     const hasContent = message.trim().length > 0 || images.length > 0;
 
-    const addFiles = useCallback(async (fileList: FileList | File[]) => {
-        const files = Array.from(fileList);
-        const imageFiles = files.filter((f) => f.type.startsWith("image/"));
-        if (imageFiles.length === 0) return;
-        // cap at 8 images to avoid payload blowup
-        const remaining = 8 - images.length;
-        const toAdd = imageFiles.slice(0, Math.max(0, remaining));
-        const results = await Promise.all(toAdd.map(fileToAttached));
-        const valid = results.filter(Boolean) as AttachedImage[];
-        if (valid.length > 0) setImages((prev) => [...prev, ...valid].slice(0, 8));
-    }, [images.length]);
+    const addFiles = useCallback(
+        async (fileList: FileList | File[]) => {
+            const files = Array.from(fileList);
+            const imageFiles = files.filter((f) => f.type.startsWith("image/"));
+            if (imageFiles.length === 0) return;
+            // cap at 8 images to avoid payload blowup
+            const remaining = 8 - images.length;
+            const toAdd = imageFiles.slice(0, Math.max(0, remaining));
+            const results = await Promise.all(toAdd.map(fileToAttached));
+            const valid = results.filter(Boolean) as AttachedImage[];
+            if (valid.length > 0)
+                setImages((prev) => [...prev, ...valid].slice(0, 8));
+        },
+        [images.length],
+    );
 
     const removeImage = useCallback((id: string) => {
         setImages((prev) => prev.filter((img) => img.id !== id));
@@ -161,111 +177,157 @@ export const Composer = memo(function Composer({
         requestAnimationFrame(() => textareaRef.current?.focus());
     }, []);
 
-    const submit = useCallback((event?: FormEvent) => {
-        event?.preventDefault();
-        if (isStreaming) {
-            onAbort?.();
-            focusTextarea();
-            return;
-        }
-        const content = message.trim();
-        if ((!content && images.length === 0) || disabled) return;
-        const payload: ComposerImagePayload[] | undefined = images.length
-            ? images.map(({ data, mimeType }) => ({ type: "image", data, mimeType }))
-            : undefined;
-        // allow image-only: send a single space if text empty so server/history has a marker
-        // but keep original trimmed text; if empty and has images, send "" and let server handle
-        onSend(content, payload);
-        setMessage("");
-        setImages([]);
-        closeSlash();
-        if (textareaRef.current) textareaRef.current.style.height = "auto";
-        focusTextarea();
-    }, [isStreaming, onAbort, message, disabled, onSend, images, focusTextarea, closeSlash]);
-
-    const handleKeyDown = useCallback((event: KeyboardEvent<HTMLTextAreaElement>) => {
-        // Slash palette takes priority
-        if (isSlashOpen) {
-            if (event.key === "ArrowDown") {
-                event.preventDefault();
-                setSlashIndex((i) => (i + 1) % filteredSlash.length);
-                return;
-            }
-            if (event.key === "ArrowUp") {
-                event.preventDefault();
-                setSlashIndex((i) => (i - 1 + filteredSlash.length) % filteredSlash.length);
-                return;
-            }
-            if (event.key === "Enter" || event.key === "Tab") {
-                // Tab/Enter accepts selected
-                if (filteredSlash[slashIndex]) {
-                    event.preventDefault();
-                    acceptSlash(filteredSlash[slashIndex]);
-                    return;
-                }
-            }
-            if (event.key === "Escape") {
-                event.preventDefault();
-                closeSlash();
-                return;
-            }
-        }
-        if (event.key === "Enter" && !event.shiftKey) {
-            // if slash open but no selection, let Enter submit normal message (which may be a slash command)
-            // To avoid ambiguity, if slash open and there's a valid filter, Enter already handled above.
-            event.preventDefault();
+    const submit = useCallback(
+        (event?: FormEvent) => {
+            event?.preventDefault();
             if (isStreaming) {
                 onAbort?.();
                 focusTextarea();
-            } else submit();
-        }
-        if (event.key === "Escape" && isSlashOpen) {
-            event.preventDefault();
+                return;
+            }
+            const content = message.trim();
+            if ((!content && images.length === 0) || disabled) return;
+            const payload: ComposerImagePayload[] | undefined = images.length
+                ? images.map(({ data, mimeType }) => ({
+                    type: "image",
+                    data,
+                    mimeType,
+                }))
+                : undefined;
+            // allow image-only: send a single space if text empty so server/history has a marker
+            // but keep original trimmed text; if empty and has images, send "" and let server handle
+            onSend(content, payload);
+            setMessage("");
+            setImages([]);
             closeSlash();
-        }
-    }, [isSlashOpen, filteredSlash, slashIndex, acceptSlash, isStreaming, onAbort, submit, focusTextarea, closeSlash]);
+            if (textareaRef.current) textareaRef.current.style.height = "auto";
+            focusTextarea();
+        },
+        [
+            isStreaming,
+            onAbort,
+            message,
+            disabled,
+            onSend,
+            images,
+            focusTextarea,
+            closeSlash,
+        ],
+    );
 
-    const handleChange = useCallback((event: React.ChangeEvent<HTMLTextAreaElement>) => {
-        const val = event.target.value;
-        setMessage(val);
-        const cursor = event.target.selectionStart ?? val.length;
-        updateSlashFromValue(val, cursor);
-    }, [updateSlashFromValue]);
-    const handleInput = useCallback((event: React.FormEvent<HTMLTextAreaElement>) => {
-        const el = event.currentTarget as HTMLTextAreaElement;
-        el.style.height = "auto";
-        el.style.height = `${Math.min(el.scrollHeight, 180)}px`;
-        // also update slash on input (covers paste/immediate)
-        const cursor = el.selectionStart ?? message.length;
-        updateSlashFromValue(el.value, cursor);
-    }, [message.length, updateSlashFromValue]);
-    const handleSelect = useCallback((e: React.SyntheticEvent<HTMLTextAreaElement>) => {
-        const el = e.currentTarget as HTMLTextAreaElement;
-        updateSlashFromValue(el.value, el.selectionStart ?? el.value.length);
-    }, [updateSlashFromValue]);
-    const handleKeyUp = useCallback((e: KeyboardEvent<HTMLTextAreaElement>) => {
-        // keep slash query in sync with cursor moves (arrow keys without palette)
-        if (["ArrowLeft", "ArrowRight", "Home", "End"].includes(e.key)) {
+    const handleKeyDown = useCallback(
+        (event: KeyboardEvent<HTMLTextAreaElement>) => {
+            // Slash palette takes priority
+            if (isSlashOpen) {
+                if (event.key === "ArrowDown") {
+                    event.preventDefault();
+                    setSlashIndex((i) => (i + 1) % filteredSlash.length);
+                    return;
+                }
+                if (event.key === "ArrowUp") {
+                    event.preventDefault();
+                    setSlashIndex(
+                        (i) => (i - 1 + filteredSlash.length) % filteredSlash.length,
+                    );
+                    return;
+                }
+                if (event.key === "Enter" || event.key === "Tab") {
+                    // Tab/Enter accepts selected
+                    if (filteredSlash[slashIndex]) {
+                        event.preventDefault();
+                        acceptSlash(filteredSlash[slashIndex]);
+                        return;
+                    }
+                }
+                if (event.key === "Escape") {
+                    event.preventDefault();
+                    closeSlash();
+                    return;
+                }
+            }
+            if (event.key === "Enter" && !event.shiftKey) {
+                // if slash open but no selection, let Enter submit normal message (which may be a slash command)
+                // To avoid ambiguity, if slash open and there's a valid filter, Enter already handled above.
+                event.preventDefault();
+                if (isStreaming) {
+                    onAbort?.();
+                    focusTextarea();
+                } else submit();
+            }
+            if (event.key === "Escape" && isSlashOpen) {
+                event.preventDefault();
+                closeSlash();
+            }
+        },
+        [
+            isSlashOpen,
+            filteredSlash,
+            slashIndex,
+            acceptSlash,
+            isStreaming,
+            onAbort,
+            submit,
+            focusTextarea,
+            closeSlash,
+        ],
+    );
+
+    const handleChange = useCallback(
+        (event: React.ChangeEvent<HTMLTextAreaElement>) => {
+            const val = event.target.value;
+            setMessage(val);
+            const cursor = event.target.selectionStart ?? val.length;
+            updateSlashFromValue(val, cursor);
+        },
+        [updateSlashFromValue],
+    );
+    const handleInput = useCallback(
+        (event: React.FormEvent<HTMLTextAreaElement>) => {
+            const el = event.currentTarget as HTMLTextAreaElement;
+            el.style.height = "auto";
+            el.style.height = `${Math.min(el.scrollHeight, 180)}px`;
+            // also update slash on input (covers paste/immediate)
+            const cursor = el.selectionStart ?? message.length;
+            updateSlashFromValue(el.value, cursor);
+        },
+        [message.length, updateSlashFromValue],
+    );
+    const handleSelect = useCallback(
+        (e: React.SyntheticEvent<HTMLTextAreaElement>) => {
             const el = e.currentTarget as HTMLTextAreaElement;
             updateSlashFromValue(el.value, el.selectionStart ?? el.value.length);
-        }
-    }, [updateSlashFromValue]);
-
-    const handlePaste = useCallback((e: ClipboardEvent<HTMLTextAreaElement>) => {
-        const items = e.clipboardData?.items;
-        if (!items) return;
-        const imageFiles: File[] = [];
-        for (const item of Array.from(items)) {
-            if (item.type.startsWith("image/")) {
-                const file = item.getAsFile();
-                if (file) imageFiles.push(file);
+        },
+        [updateSlashFromValue],
+    );
+    const handleKeyUp = useCallback(
+        (e: KeyboardEvent<HTMLTextAreaElement>) => {
+            // keep slash query in sync with cursor moves (arrow keys without palette)
+            if (["ArrowLeft", "ArrowRight", "Home", "End"].includes(e.key)) {
+                const el = e.currentTarget as HTMLTextAreaElement;
+                updateSlashFromValue(el.value, el.selectionStart ?? el.value.length);
             }
-        }
-        if (imageFiles.length > 0) {
-            // prevent default paste of image as broken text? don't prevent, just add
-            void addFiles(imageFiles);
-        }
-    }, [addFiles]);
+        },
+        [updateSlashFromValue],
+    );
+
+    const handlePaste = useCallback(
+        (e: ClipboardEvent<HTMLTextAreaElement>) => {
+            const items = e.clipboardData?.items;
+            if (!items) return;
+            const imageFiles: File[] = [];
+            for (const item of Array.from(items)) {
+                if (item.type.startsWith("image/")) {
+                    const file = item.getAsFile();
+                    if (file) imageFiles.push(file);
+                }
+            }
+            if (imageFiles.length > 0) {
+                // prevent default paste of image as broken text? don't prevent, just add
+                void addFiles(imageFiles);
+            }
+        },
+        [addFiles],
+    );
 
     const handleDragEnter = useCallback((e: DragEvent) => {
         e.preventDefault();
@@ -284,20 +346,26 @@ export const Composer = memo(function Composer({
             setIsDragging(false);
         }
     }, []);
-    const handleDrop = useCallback((e: DragEvent) => {
-        e.preventDefault();
-        dragCounter.current = 0;
-        setIsDragging(false);
-        const files = e.dataTransfer.files;
-        if (files && files.length > 0) void addFiles(files);
-    }, [addFiles]);
+    const handleDrop = useCallback(
+        (e: DragEvent) => {
+            e.preventDefault();
+            dragCounter.current = 0;
+            setIsDragging(false);
+            const files = e.dataTransfer.files;
+            if (files && files.length > 0) void addFiles(files);
+        },
+        [addFiles],
+    );
 
-    const handleFileInput = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
-        const files = e.target.files;
-        if (files && files.length > 0) void addFiles(files);
-        // reset so same file can be picked again
-        e.target.value = "";
-    }, [addFiles]);
+    const handleFileInput = useCallback(
+        (e: React.ChangeEvent<HTMLInputElement>) => {
+            const files = e.target.files;
+            if (files && files.length > 0) void addFiles(files);
+            // reset so same file can be picked again
+            e.target.value = "";
+        },
+        [addFiles],
+    );
 
     return (
         <form
@@ -306,7 +374,7 @@ export const Composer = memo(function Composer({
             onDragOver={handleDragOver}
             onDragLeave={handleDragLeave}
             onDrop={handleDrop}
-            className="relative mx-auto w-full max-w-3xl rounded-[17px] rounded-b-none border border-phi-border-strong bg-phi-bg-surface p-2 shadow-[0_14px_45px_rgba(0,0,0,0.3),inset_0_1px_0_rgba(255,255,255,0.025)] transition-[border-color,box-shadow] focus-within:border-phi-border-strong focus-within:shadow-[0_16px_50px_rgba(0,0,0,0.36),0_0_0_1px_rgba(255,255,255,0.018)]"
+            className="relative mx-auto w-full max-w-3xl border-b-0 rounded-[17px] rounded-b-none border border-phi-border-strong bg-phi-bg-surface p-2 shadow-[0_14px_45px_rgba(0,0,0,0.3),inset_0_1px_0_rgba(255,255,255,0.025)] transition-[border-color,box-shadow] focus-within:border-phi-border-strong focus-within:shadow-[0_16px_50px_rgba(0,0,0,0.36),0_0_0_1px_rgba(255,255,255,0.018)]"
         >
             {/* drag overlay */}
             {isDragging && (
@@ -438,4 +506,4 @@ export const Composer = memo(function Composer({
             </div>
         </form>
     );
-})
+});
