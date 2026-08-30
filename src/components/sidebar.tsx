@@ -18,6 +18,7 @@ import {
 } from "./ui/dropdown-menu";
 import type { SessionGroup } from "../hooks/useSessions";
 import type { SessionInfo } from "../types/session";
+import PhiLogo from "./../assets/logo.svg?react";
 
 type SidebarProps = {
     groups: SessionGroup[];
@@ -88,11 +89,11 @@ export const Sidebar = memo(function Sidebar({
                 <button
                     type="button"
                     onClick={onNewChat}
-                    className="flex items-center gap-2 rounded-lg p-1 pl-1.5 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-phi-accent/40"
+                    className="flex items-center gap-0 rounded-lg p-1 pl-1.5 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-phi-accent/40"
                 >
-                    <span className="font-serif text-2xl text-phi-accent">Φ</span>
-                    <span className="text-lg font-semibold tracking-[-0.01em] text-phi-text-brand">
-                        Phi
+                    <PhiLogo className="w-7 h-7" />
+                    <span className="font-mono text-xl mt-2 -ml-[0.15rem] font-semibold text-phi-text-brand tracking-[0.1rem]">
+                        hi
                     </span>
                 </button>
                 <Button
@@ -186,8 +187,14 @@ const GroupSection = memo(function GroupSection({
     onDelete: (file: string) => Promise<void>;
     onPrefetch?: (file: string) => void;
 }) {
-    const handleToggle = useCallback(() => onToggleGroup(group.cwd), [onToggleGroup, group.cwd]);
-    const repoName = useMemo(() => repoNameFor(group.displayCwd), [group.displayCwd]);
+    const handleToggle = useCallback(
+        () => onToggleGroup(group.cwd),
+        [onToggleGroup, group.cwd],
+    );
+    const repoName = useMemo(
+        () => repoNameFor(group.displayCwd),
+        [group.displayCwd],
+    );
 
     return (
         <div>
@@ -215,7 +222,10 @@ const GroupSection = memo(function GroupSection({
                 className={`grid transition-all duration-300 ease-[cubic-bezier(0.4,0,0.2,1)] ${collapsed ? "grid-rows-[0fr] opacity-0" : "grid-rows-[1fr] opacity-100"}`}
             >
                 <div className="overflow-hidden">
-                    <nav aria-label={group.displayCwd} className="mt-1 space-y-0.5 pb-0.5">
+                    <nav
+                        aria-label={group.displayCwd}
+                        className="mt-1 space-y-0.5 pb-0.5"
+                    >
                         {group.sessions.map((s) => (
                             <SessionRowMemo
                                 key={s.path}
@@ -253,14 +263,32 @@ const SessionRowMemo = memo(function SessionRowMemo({
     onDelete: (file: string) => Promise<void>;
     onPrefetch?: (file: string) => void;
 }) {
-    const title = useMemo(() => titleFor(session), [session.name, session.firstMessage]);
+    const title = useMemo(
+        () => titleFor(session),
+        [session.name, session.firstMessage],
+    );
     // time is relative; compute once per modified change. Recomputed via parent render is enough
     // avoid Date.now() per frame storm — only changes when modified changes or active toggles
-    const time = useMemo(() => relativeTime(session.modified), [session.modified]);
-    const handleSelect = useCallback(() => onSelect(session.path), [onSelect, session.path]);
-    const handleRename = useCallback((name: string) => onRename(session.path, name), [onRename, session.path]);
-    const handleDelete = useCallback(() => onDelete(session.path), [onDelete, session.path]);
-    const handlePrefetch = useCallback(() => onPrefetch?.(session.path), [onPrefetch, session.path]);
+    const time = useMemo(
+        () => relativeTime(session.modified),
+        [session.modified],
+    );
+    const handleSelect = useCallback(
+        () => onSelect(session.path),
+        [onSelect, session.path],
+    );
+    const handleRename = useCallback(
+        (name: string) => onRename(session.path, name),
+        [onRename, session.path],
+    );
+    const handleDelete = useCallback(
+        () => onDelete(session.path),
+        [onDelete, session.path],
+    );
+    const handlePrefetch = useCallback(
+        () => onPrefetch?.(session.path),
+        [onPrefetch, session.path],
+    );
 
     return (
         <SessionRow
@@ -305,7 +333,10 @@ const SessionRow = memo(function SessionRow({
         setRenaming(false);
     }, [draft, onRename]);
 
-    const handleDraftChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => setDraft(e.target.value), []);
+    const handleDraftChange = useCallback(
+        (e: React.ChangeEvent<HTMLInputElement>) => setDraft(e.target.value),
+        [],
+    );
     const handleKeyDown = useCallback(
         (e: React.KeyboardEvent<HTMLInputElement>) => {
             if (e.key === "Enter") {
@@ -345,7 +376,9 @@ const SessionRow = memo(function SessionRow({
                         onBlur={handleBlur}
                         variant="inline"
                     />
-                    <span className="shrink-0 text-[11px] text-phi-text-faint">{time}</span>
+                    <span className="shrink-0 text-[11px] text-phi-text-faint">
+                        {time}
+                    </span>
                 </div>
             ) : (
                 <button
@@ -357,7 +390,9 @@ const SessionRow = memo(function SessionRow({
                         <ArrowPathIcon className="size-4 shrink-0 animate-spin text-phi-text-secondary" />
                     ) : null}
                     <span className="min-w-0 flex-1 truncate text-left">{title}</span>
-                    <span className="shrink-0 text-[11px] text-phi-text-faint">{time}</span>
+                    <span className="shrink-0 text-[11px] text-phi-text-faint">
+                        {time}
+                    </span>
                 </button>
             )}
 
@@ -372,7 +407,10 @@ const SessionRow = memo(function SessionRow({
                     >
                         Rename
                     </DropdownMenuItem>
-                    <DropdownMenuItem icon={<TrashIcon className="size-[15px]" />} onClick={handleDelete}>
+                    <DropdownMenuItem
+                        icon={<TrashIcon className="size-[15px]" />}
+                        onClick={handleDelete}
+                    >
                         Delete
                     </DropdownMenuItem>
                 </DropdownMenuContent>
