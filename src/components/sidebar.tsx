@@ -6,6 +6,7 @@ import {
     TrashIcon,
 } from "@heroicons/react/24/solid";
 import { memo, useCallback, useMemo, useState } from "react";
+import { ThemeEditor } from "./dev/ThemeEditor";
 import { Button } from "./ui/button";
 import { PanelLeftIcon } from "./ui/icons";
 import { Input } from "./ui/input";
@@ -80,10 +81,10 @@ export const Sidebar = memo(function Sidebar({
     );
 
     return (
-        <aside className="flex w-[268px] shrink-0 flex-col border-r border-phi-border-subtle bg-phi-bg-sidebar max-sm:absolute max-sm:inset-y-0 max-sm:z-20 max-sm:shadow-[18px_0_50px_rgba(0,0,0,0.45)]">
+        <aside className="flex w-[268px] shrink-0 flex-col bg-phi-bg-sidebar max-sm:absolute max-sm:inset-y-0 max-sm:z-20 max-sm:shadow-[18px_0_50px_rgba(0,0,0,0.45)]">
             <div
                 data-tauri-drag-region
-                className="flex h-13 shrink-0 items-center justify-between px-3"
+                className="flex h-12 shrink-0 items-center justify-between px-3"
             >
                 <button
                     type="button"
@@ -154,6 +155,10 @@ export const Sidebar = memo(function Sidebar({
                     </div>
                 )}
             </div>
+
+            <div className="flex shrink-0 items-center px-3 pb-3 pt-2">
+                <ThemeEditor className="h-7 w-7" iconClassName="size-3" />
+            </div>
         </aside>
     );
 });
@@ -186,8 +191,14 @@ const GroupSection = memo(function GroupSection({
     onDelete: (file: string) => Promise<void>;
     onPrefetch?: (file: string) => void;
 }) {
-    const handleToggle = useCallback(() => onToggleGroup(group.cwd), [onToggleGroup, group.cwd]);
-    const repoName = useMemo(() => repoNameFor(group.displayCwd), [group.displayCwd]);
+    const handleToggle = useCallback(
+        () => onToggleGroup(group.cwd),
+        [onToggleGroup, group.cwd],
+    );
+    const repoName = useMemo(
+        () => repoNameFor(group.displayCwd),
+        [group.displayCwd],
+    );
 
     return (
         <div>
@@ -215,7 +226,10 @@ const GroupSection = memo(function GroupSection({
                 className={`grid transition-all duration-300 ease-[cubic-bezier(0.4,0,0.2,1)] ${collapsed ? "grid-rows-[0fr] opacity-0" : "grid-rows-[1fr] opacity-100"}`}
             >
                 <div className="overflow-hidden">
-                    <nav aria-label={group.displayCwd} className="mt-1 space-y-0.5 pb-0.5">
+                    <nav
+                        aria-label={group.displayCwd}
+                        className="mt-1 space-y-0.5 pb-0.5"
+                    >
                         {group.sessions.map((s) => (
                             <SessionRowMemo
                                 key={s.path}
@@ -253,14 +267,32 @@ const SessionRowMemo = memo(function SessionRowMemo({
     onDelete: (file: string) => Promise<void>;
     onPrefetch?: (file: string) => void;
 }) {
-    const title = useMemo(() => titleFor(session), [session.name, session.firstMessage]);
+    const title = useMemo(
+        () => titleFor(session),
+        [session.name, session.firstMessage],
+    );
     // time is relative; compute once per modified change. Recomputed via parent render is enough
     // avoid Date.now() per frame storm — only changes when modified changes or active toggles
-    const time = useMemo(() => relativeTime(session.modified), [session.modified]);
-    const handleSelect = useCallback(() => onSelect(session.path), [onSelect, session.path]);
-    const handleRename = useCallback((name: string) => onRename(session.path, name), [onRename, session.path]);
-    const handleDelete = useCallback(() => onDelete(session.path), [onDelete, session.path]);
-    const handlePrefetch = useCallback(() => onPrefetch?.(session.path), [onPrefetch, session.path]);
+    const time = useMemo(
+        () => relativeTime(session.modified),
+        [session.modified],
+    );
+    const handleSelect = useCallback(
+        () => onSelect(session.path),
+        [onSelect, session.path],
+    );
+    const handleRename = useCallback(
+        (name: string) => onRename(session.path, name),
+        [onRename, session.path],
+    );
+    const handleDelete = useCallback(
+        () => onDelete(session.path),
+        [onDelete, session.path],
+    );
+    const handlePrefetch = useCallback(
+        () => onPrefetch?.(session.path),
+        [onPrefetch, session.path],
+    );
 
     return (
         <SessionRow
@@ -305,7 +337,10 @@ const SessionRow = memo(function SessionRow({
         setRenaming(false);
     }, [draft, onRename]);
 
-    const handleDraftChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => setDraft(e.target.value), []);
+    const handleDraftChange = useCallback(
+        (e: React.ChangeEvent<HTMLInputElement>) => setDraft(e.target.value),
+        [],
+    );
     const handleKeyDown = useCallback(
         (e: React.KeyboardEvent<HTMLInputElement>) => {
             if (e.key === "Enter") {
@@ -345,7 +380,9 @@ const SessionRow = memo(function SessionRow({
                         onBlur={handleBlur}
                         variant="inline"
                     />
-                    <span className="shrink-0 text-[11px] text-phi-text-faint">{time}</span>
+                    <span className="shrink-0 text-[11px] text-phi-text-faint">
+                        {time}
+                    </span>
                 </div>
             ) : (
                 <button
@@ -357,7 +394,9 @@ const SessionRow = memo(function SessionRow({
                         <ArrowPathIcon className="size-4 shrink-0 animate-spin text-phi-text-secondary" />
                     ) : null}
                     <span className="min-w-0 flex-1 truncate text-left">{title}</span>
-                    <span className="shrink-0 text-[11px] text-phi-text-faint">{time}</span>
+                    <span className="shrink-0 text-[11px] text-phi-text-faint">
+                        {time}
+                    </span>
                 </button>
             )}
 
@@ -372,7 +411,10 @@ const SessionRow = memo(function SessionRow({
                     >
                         Rename
                     </DropdownMenuItem>
-                    <DropdownMenuItem icon={<TrashIcon className="size-[15px]" />} onClick={handleDelete}>
+                    <DropdownMenuItem
+                        icon={<TrashIcon className="size-[15px]" />}
+                        onClick={handleDelete}
+                    >
                         Delete
                     </DropdownMenuItem>
                 </DropdownMenuContent>
