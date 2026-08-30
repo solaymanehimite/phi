@@ -1,12 +1,12 @@
 import cors from "cors";
 import express from "express";
-import { promises as fs } from "node:fs";
+import { existsSync, promises as fs } from "node:fs";
 import os from "node:os";
+import { resolve as resolvePath } from "node:path";
 import {
   SessionManager,
   ModelRuntime,
   getAgentDir,
-  createAgentSession,
   createAgentSessionRuntime,
   createAgentSessionServices,
   createAgentSessionFromServices,
@@ -21,42 +21,193 @@ const app = express();
 app.use(cors({ origin: [/tauri\.localhost/, /localhost:\d+$/, /127\.0\.0\.1:\d+$/] }));
 app.use(express.json({ limit: "10mb" }));
 
-// ---- state singletons (lazy) ----
+class ApiError extends Error {
+  constructor(
+    message: string,
+    readonly status = 400,
+  ) {
+    super(message);
+  }
+}
+
+function errorStatus(error: unknown): number {
+  return error instanceof ApiError ? error.status : 500;
+}
+
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
+
+function normalisePath(path: string): string {
+  return resolvePath(path);
+}
+
+function assertCwdMatches(actual: string, requested?: string) {
+  if (requested && normalisePath(requested) !== normalisePath(actual)) {
+    throw new ApiError("cwd does not match the session's persisted working directory");
+  }
+}
+
+// ---- shared model runtime ----
 let modelRuntime: Awaited<ReturnType<typeof ModelRuntime.create>> | undefined;
-let runtime: Awaited<ReturnType<typeof createAgentSessionRuntime>> | undefined;
-let runtimeCwd: string | undefined;
-// fallback single session when runtime not needed
-let singleSession: Awaited<ReturnType<typeof createAgentSession>>["session"] | undefined;
 
 async function getModelRuntime() {
-  if (!modelRuntime) {
-    modelRuntime = await ModelRuntime.create();
-  }
+  if (!modelRuntime) modelRuntime = await ModelRuntime.create();
   return modelRuntime;
 }
 
-async function getRuntime(cwd = process.cwd()) {
-  if (runtime && runtimeCwd === cwd) return runtime;
-  const mr = await getModelRuntime();
-  const factory = async ({ cwd: c, sessionManager, sessionStartEvent }: any) => {
-    const services = await createAgentSessionServices({ cwd: c });
-    const result = await createAgentSessionFromServices({
+// ---- live session runtime registry ----
+// A runtime is keyed by its JSONL file, not cwd. Several sessions may share a cwd.
+type AgentRuntime = Awaited<ReturnType<typeof createAgentSessionRuntime>>;
+type SessionRuntimeEntry = {
+  sessionFile: string;
+  cwd: string;
+  runtime: AgentRuntime;
+  activePrompt?: Promise<void>;
+  lastUsedAt: number;
+};
+
+const runtimeEntries = new Map<string, SessionRuntimeEntry>();
+const runtimeInitialisers = new Map<string, Promise<SessionRuntimeEntry>>();
+
+// Keep recent sessions warm without allowing an unbounded number of extension/tool contexts.
+// Active prompts are never counted toward the idle cap and are never evicted.
+const RUNTIME_IDLE_MS = 20 * 60_000;
+const MAX_IDLE_RUNTIMES = 8;
+const RUNTIME_CLEANUP_INTERVAL_MS = 60_000;
+
+function isPromptActive(entry: SessionRuntimeEntry): boolean {
+  return Boolean(entry.activePrompt) || Boolean((entry.runtime.session as any).isStreaming);
+}
+
+function touchRuntime(entry: SessionRuntimeEntry) {
+  entry.lastUsedAt = Date.now();
+}
+
+async function createRuntimeEntry(sessionManager: any): Promise<SessionRuntimeEntry> {
+  const file = sessionManager.getSessionFile?.();
+  if (!file) throw new ApiError("cannot create a live runtime for an in-memory session", 500);
+
+  const sessionFile = normalisePath(file);
+  const cwd = sessionManager.getCwd();
+  const sharedModelRuntime = await getModelRuntime();
+
+  const factory = async ({ cwd: runtimeCwd, sessionManager: runtimeSessionManager, sessionStartEvent }: any) => {
+    const services = await createAgentSessionServices({
+      cwd: runtimeCwd,
+      agentDir: getAgentDir(),
+      modelRuntime: sharedModelRuntime,
+    });
+    const created = await createAgentSessionFromServices({
       services,
-      sessionManager,
+      sessionManager: runtimeSessionManager,
       sessionStartEvent,
-      modelRuntime: mr,
     } as any);
-    return { ...result, services, diagnostics: services.diagnostics } as any;
+    return { ...created, services, diagnostics: services.diagnostics } as any;
   };
-  runtime = await createAgentSessionRuntime(factory as any, {
+
+  const runtime = await createAgentSessionRuntime(factory as any, {
     cwd,
     agentDir: getAgentDir(),
-    sessionManager: SessionManager.create(cwd),
-    modelRuntime: mr,
-  } as any);
-  runtimeCwd = cwd;
-  return runtime;
+    sessionManager,
+  });
+
+  // Extension commands and extension tools are session-local. Bind them once for
+  // this runtime rather than on each request.
+  await runtime.session.bindExtensions({});
+
+  return { sessionFile, cwd, runtime, lastUsedAt: Date.now() };
 }
+
+async function getSessionRuntime(sessionFile: string, requestedCwd?: string): Promise<SessionRuntimeEntry> {
+  if (!sessionFile) throw new ApiError("missing sessionFile");
+  const key = normalisePath(sessionFile);
+  const existing = runtimeEntries.get(key);
+  if (existing) {
+    assertCwdMatches(existing.cwd, requestedCwd);
+    touchRuntime(existing);
+    return existing;
+  }
+
+  // A missing file is not a resumable persisted session. Never let
+  // SessionManager.open() fall back to process.cwd() for that case.
+  try {
+    await fs.access(key);
+  } catch {
+    throw new ApiError("session file does not exist", 404);
+  }
+
+  // Validate the persisted session before waiting for or building its runtime.
+  // Existing sessions never inherit process.cwd().
+  const sessionManager = SessionManager.open(key);
+  assertCwdMatches(sessionManager.getCwd(), requestedCwd);
+
+  const pending = runtimeInitialisers.get(key);
+  if (pending) return pending;
+
+  const initialiser = createRuntimeEntry(sessionManager)
+    .then((entry) => {
+      runtimeEntries.set(key, entry);
+      void cleanupRuntimeRegistry();
+      return entry;
+    })
+    .finally(() => runtimeInitialisers.delete(key));
+  runtimeInitialisers.set(key, initialiser);
+  return initialiser;
+}
+
+async function createSessionRuntime(cwd: string): Promise<SessionRuntimeEntry> {
+  const sessionManager = SessionManager.create(normalisePath(cwd));
+  const file = sessionManager.getSessionFile?.();
+  if (!file) throw new ApiError("failed to create a persisted session", 500);
+  const key = normalisePath(file);
+
+  const entry = await createRuntimeEntry(sessionManager);
+  runtimeEntries.set(key, entry);
+  void cleanupRuntimeRegistry();
+  return entry;
+}
+
+async function disposeRuntimeEntry(entry: SessionRuntimeEntry, abort = false) {
+  if (runtimeEntries.get(entry.sessionFile) === entry) {
+    runtimeEntries.delete(entry.sessionFile);
+  }
+  if (abort && isPromptActive(entry)) {
+    try {
+      await entry.runtime.session.abort();
+    } catch {
+      // Dispose still needs to release extension and tool resources.
+    }
+  }
+  try {
+    await entry.runtime.dispose();
+  } catch (error) {
+    console.warn(`[phi sidecar] failed to dispose runtime ${entry.sessionFile}: ${errorMessage(error)}`);
+  }
+}
+
+async function cleanupRuntimeRegistry() {
+  const now = Date.now();
+  const idle = [...runtimeEntries.values()]
+    // Pi intentionally defers writing a brand-new JSONL until it has an
+    // assistant message. Keep that small draft runtime alive rather than
+    // evicting state that cannot yet be reloaded from disk.
+    .filter((entry) => !isPromptActive(entry) && existsSync(entry.sessionFile))
+    .sort((a, b) => a.lastUsedAt - b.lastUsedAt);
+
+  const evictionCandidates = new Set<SessionRuntimeEntry>();
+  for (const entry of idle) {
+    if (now - entry.lastUsedAt >= RUNTIME_IDLE_MS) evictionCandidates.add(entry);
+  }
+  for (const entry of idle.slice(0, Math.max(0, idle.length - MAX_IDLE_RUNTIMES))) {
+    evictionCandidates.add(entry);
+  }
+
+  await Promise.all([...evictionCandidates].map((entry) => disposeRuntimeEntry(entry)));
+}
+
+const cleanupTimer = setInterval(() => void cleanupRuntimeRegistry(), RUNTIME_CLEANUP_INTERVAL_MS);
+cleanupTimer.unref?.();
 
 // ---- helpers ----
 function sseHeaders(res: express.Response) {
@@ -67,19 +218,58 @@ function sseHeaders(res: express.Response) {
 }
 
 function sendSSE(res: express.Response, event: unknown) {
-  res.write(`data: ${JSON.stringify(event)}\n\n`);
+  if (!res.writableEnded && !res.destroyed) {
+    res.write(`data: ${JSON.stringify(event)}\n\n`);
+  }
+}
+
+function sessionPayloadFromManager(file: string, sm: any) {
+  return {
+    file: sm.getSessionFile?.() ?? file,
+    header: sm.getHeader(),
+    entries: sm.getEntries(),
+    context: sm.buildSessionContext(),
+    sessionName: sm.getSessionName(),
+    cwd: sm.getCwd(),
+  };
+}
+
+async function sessionPayload(file: string) {
+  const key = normalisePath(file);
+  const live = runtimeEntries.get(key);
+  if (live) return sessionPayloadFromManager(live.sessionFile, live.runtime.session.sessionManager);
+
+  try {
+    await fs.access(key);
+  } catch {
+    throw new ApiError("session file does not exist", 404);
+  }
+  return sessionPayloadFromManager(key, SessionManager.open(key));
+}
+
+function serialiseModel(model: any) {
+  if (!model) return null;
+  return {
+    provider: model.provider,
+    id: model.id,
+    name: model.name ?? model.id,
+    api: model.api,
+    reasoning: Boolean(model.reasoning),
+    input: model.input ?? ["text"],
+    output: model.output,
+    cost: model.cost ?? { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+    contextWindow: model.contextWindow ?? 0,
+    maxTokens: model.maxTokens ?? 0,
+    thinkingLevelMap: model.thinkingLevelMap ?? null,
+  };
 }
 
 // ---- routes ----
-
-// Health
 app.get("/api/health", (_req, res) => {
   res.json({ ok: true, port: PORT, agentDir: getAgentDir(), cwd: process.cwd(), home: os.homedir() });
 });
 
-// Models — returns auth-filtered catalogue for the selector
-// Normalize to plain JSON so frontend doesn't depend on SDK class shape
-// Cached 30s to avoid hammering getAvailable/checkAuth on every rerender/poll.
+// Models are process-wide because ModelRuntime owns provider configuration and credentials.
 let modelsCache: { at: number; payload: any } | null = null;
 const MODELS_TTL_MS = 30_000;
 app.get("/api/models", async (_req, res) => {
@@ -90,470 +280,437 @@ app.get("/api/models", async (_req, res) => {
       return res.json(modelsCache.payload);
     }
     const mr = await getModelRuntime();
-    const availableRaw: any[] = await (mr as any).getAvailable?.() ?? [];
-    const available = availableRaw.map((m: any) => ({
-      provider: m.provider,
-      id: m.id,
-      name: m.name ?? m.id,
-      api: m.api,
-      reasoning: !!m.reasoning,
-      input: m.input ?? ["text"],
-      output: m.output,
-      cost: m.cost ?? { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
-      contextWindow: m.contextWindow ?? 0,
-      maxTokens: m.maxTokens ?? 0,
-      thinkingLevelMap: m.thinkingLevelMap ?? null,
-    }));
-    const payload = { available, error: (mr as any).getError?.() ?? null };
+    const availableRaw: any[] = (await (mr as any).getAvailable?.()) ?? [];
+    const payload = {
+      available: availableRaw.map(serialiseModel),
+      error: (mr as any).getError?.() ?? null,
+    };
     modelsCache = { at: now, payload };
     res.setHeader("Cache-Control", "public, max-age=30");
     res.json(payload);
-  } catch (e: any) {
-    res.status(500).json({ error: e?.message ?? String(e) });
+  } catch (error) {
+    res.status(errorStatus(error)).json({ error: errorMessage(error) });
   }
 });
 
-// Sessions cache — biggest win for sidebar
-// Disk-heavy listAll is cached 3s with ETag + deduped concurrent calls
+// Sessions cache — listAll can be disk-heavy for a populated Pi directory.
 let sessionsCache: { at: number; payload: any; etag: string } | null = null;
-const SESSIONS_TTL_MS = 3000;
-let pendingListAll: Promise<any> | null = null;
+const SESSIONS_TTL_MS = 3_000;
+let pendingListAll: Promise<any[]> | null = null;
 
 function etagFor(payload: any): string {
-  if (!Array.isArray(payload) || payload.length === 0) return `"0-0"`;
-  return `"${payload.length}-${(payload[0] as any)?.modified ?? ""}"`;
+  if (!Array.isArray(payload) || payload.length === 0) return '"0-0"';
+  return `"${payload.length}-${payload[0]?.modified ?? ""}"`;
 }
 
 function invalidateSessionsCache() {
   sessionsCache = null;
 }
 
-// List sessions
-// GET /api/sessions?cwd=/foo  (project)  or  /api/sessions (all) or /api/sessions?all=1
 app.get("/api/sessions", async (req, res) => {
   try {
     const cwd = req.query.cwd as string | undefined;
     const all = req.query.all === "1" || req.query.all === "true";
 
-    // cached fast-path for all=1 (sidebar)
     if (all && sessionsCache && Date.now() - sessionsCache.at < SESSIONS_TTL_MS) {
       if (req.headers["if-none-match"] === sessionsCache.etag) return res.status(304).end();
       res.setHeader("ETag", sessionsCache.etag);
       return res.json(sessionsCache.payload);
     }
 
-    const doList = async () => {
-      if (cwd && !all) return SessionManager.list(cwd);
-      let infos: any[];
-      infos = await (SessionManager as any).listAll();
-      if (!Array.isArray(infos)) infos = await SessionManager.listAll(undefined as any);
-      return infos;
-    };
-
-    // dedupe concurrent callers (session hop spam)
-    if (!pendingListAll) {
-      pendingListAll = doList().finally(() => setTimeout(() => (pendingListAll = null), 50));
-    }
-    const infos = await pendingListAll;
-
+    let infos: any[];
     if (all) {
+      if (!pendingListAll) {
+        pendingListAll = Promise.resolve((SessionManager as any).listAll())
+          .then((result) => (Array.isArray(result) ? result : (SessionManager as any).listAll(undefined)))
+          .finally(() => setTimeout(() => (pendingListAll = null), 50));
+      }
+      infos = await pendingListAll;
       const etag = etagFor(infos);
       if (req.headers["if-none-match"] === etag) return res.status(304).end();
       res.setHeader("ETag", etag);
       sessionsCache = { at: Date.now(), payload: infos, etag };
+    } else {
+      infos = cwd ? await SessionManager.list(cwd) : await (SessionManager as any).listAll();
     }
     res.json(infos);
-  } catch (e: any) {
-    res.status(500).json({ error: e?.message ?? String(e) });
+  } catch (error) {
+    res.status(errorStatus(error)).json({ error: errorMessage(error) });
   }
 });
 
-// Get messages for a session file
-// GET /api/sessions/messages?file=/path/to/session.jsonl
 app.get("/api/sessions/messages", async (req, res) => {
   try {
     const file = req.query.file as string;
-    if (!file) return res.status(400).json({ error: "missing file query param" });
-    const sm = SessionManager.open(file);
-    const header = sm.getHeader();
-    const entries = sm.getEntries();
-    const ctx = sm.buildSessionContext();
-    // return both raw entries and resolved context
-    res.json({
-      file,
-      header,
-      entries,
-      context: ctx,
-      sessionName: sm.getSessionName(),
-      cwd: sm.getCwd(),
-    });
-  } catch (e: any) {
-    res.status(500).json({ error: e?.message ?? String(e) });
+    if (!file) throw new ApiError("missing file query param");
+    res.json(await sessionPayload(file));
+  } catch (error) {
+    res.status(errorStatus(error)).json({ error: errorMessage(error) });
   }
 });
 
-// New session
+// New sessions get their own runtime immediately. This makes a model selection
+// made before the first prompt target the same runtime that receives that prompt.
 app.post("/api/sessions/new", async (req, res) => {
   try {
-    const cwd = (req.body?.cwd as string) || process.cwd();
-    const rt = await getRuntime(cwd);
-    await rt.newSession();
-    // runtime.session changed — return new file
-    const file = (rt.session as any).sessionFile ?? (rt as any).session?.sessionFile;
+    const cwd = normalisePath((req.body?.cwd as string) || process.cwd());
+    const entry = await createSessionRuntime(cwd);
     invalidateSessionsCache();
-    res.json({ ok: true, file });
-  } catch (e: any) {
-    res.status(500).json({ error: e?.message ?? String(e) });
+    res.json({ ok: true, file: entry.sessionFile, cwd: entry.cwd });
+  } catch (error) {
+    res.status(errorStatus(error)).json({ error: errorMessage(error) });
   }
 });
 
-// Switch session — returns messages inline so frontend can skip 2nd fetch (1 RTT saved)
+// "Switch" now means select/ensure a session runtime. It never replaces or
+// tears down another entry, so an in-flight prompt keeps running.
 app.post("/api/sessions/switch", async (req, res) => {
   try {
-    const { file, cwd } = req.body as { file: string; cwd?: string };
-    if (!file) return res.status(400).json({ error: "missing file" });
-    // The session file lives under ~/.pi, so derive the project from its header
-    // instead of using the session file's parent directory.
-    const sm = SessionManager.open(file);
-    const rt = await getRuntime(cwd || sm.getCwd());
-    await rt.switchSession(file);
+    const { file, cwd } = req.body as { file?: string; cwd?: string };
+    if (!file) throw new ApiError("missing file");
+    await getSessionRuntime(file, cwd);
     invalidateSessionsCache();
-    // inline payload — frontend was doing Promise.all([switch, getMessages])
-    res.json({
-      ok: true,
-      file,
-      header: sm.getHeader(),
-      entries: sm.getEntries(),
-      context: sm.buildSessionContext(),
-      sessionName: sm.getSessionName(),
-      cwd: sm.getCwd(),
-    });
-  } catch (e: any) {
-    res.status(500).json({ error: e?.message ?? String(e) });
+    res.json({ ok: true, ...(await sessionPayload(file)) });
+  } catch (error) {
+    res.status(errorStatus(error)).json({ error: errorMessage(error) });
   }
 });
 
-// Rename session
 app.post("/api/sessions/rename", async (req, res) => {
   try {
-    const { file, name } = req.body as { file: string; name: string };
-    if (!file) return res.status(400).json({ error: "missing file" });
-    const sm = SessionManager.open(file);
-    sm.appendSessionInfo(name);
+    const { file, name } = req.body as { file?: string; name?: string };
+    if (!file) throw new ApiError("missing file");
+    const key = normalisePath(file);
+    const live = runtimeEntries.get(key);
+    let sm: any;
+    if (live) {
+      touchRuntime(live);
+      sm = live.runtime.session.sessionManager;
+    } else {
+      try {
+        await fs.access(key);
+      } catch {
+        throw new ApiError("session file does not exist", 404);
+      }
+      sm = SessionManager.open(key);
+    }
+    sm.appendSessionInfo(name ?? "");
     invalidateSessionsCache();
     res.json({ ok: true, name: sm.getSessionName() });
-  } catch (e: any) {
-    res.status(500).json({ error: e?.message ?? String(e) });
+  } catch (error) {
+    res.status(errorStatus(error)).json({ error: errorMessage(error) });
   }
 });
 
-// Delete session (trash/unlink)
 app.delete("/api/sessions", async (req, res) => {
   try {
     const file = (req.query.file as string) || (req.body as any)?.file;
-    if (!file) return res.status(400).json({ error: "missing file" });
-    // try SDK helper if available, else unlink — frontend confirms
+    if (!file) throw new ApiError("missing file");
+    const key = normalisePath(file);
+    const liveEntry = runtimeEntries.get(key);
+    if (liveEntry) await disposeRuntimeEntry(liveEntry, true);
+
     try {
       const maybeTrash = (SessionManager as any).trash ?? (SessionManager as any).remove;
       if (typeof maybeTrash === "function") await maybeTrash(file);
       else await fs.unlink(file);
-    } catch {
-      await fs.unlink(file);
+    } catch (error: any) {
+      // A draft session has a live runtime but no JSONL until its first assistant
+      // message. Disposing that runtime is enough to delete the draft.
+      if (error?.code !== "ENOENT") await fs.unlink(file);
     }
     invalidateSessionsCache();
     res.json({ ok: true });
-  } catch (e: any) {
-    res.status(500).json({ error: e?.message ?? String(e) });
+  } catch (error) {
+    res.status(errorStatus(error)).json({ error: errorMessage(error) });
   }
 });
 
-// Abort current streaming session
-app.post("/api/abort", async (_req, res) => {
+// Abort only the requested live session. An idle or evicted session is a no-op.
+app.post("/api/abort", async (req, res) => {
   try {
-    const target = runtime?.session ?? singleSession;
-    if (target) await (target as any).abort();
-    res.json({ ok: true });
-  } catch (e: any) {
-    res.status(500).json({ error: e?.message ?? String(e) });
+    const { sessionFile } = req.body as { sessionFile?: string };
+    if (!sessionFile) throw new ApiError("missing sessionFile");
+    const entry = runtimeEntries.get(normalisePath(sessionFile));
+    if (!entry || !isPromptActive(entry)) return res.json({ ok: true, active: false });
+    touchRuntime(entry);
+    await entry.runtime.session.abort();
+    res.json({ ok: true, active: true });
+  } catch (error) {
+    res.status(errorStatus(error)).json({ error: errorMessage(error) });
   }
 });
 
-// Model switch — supports changing model and/or thinkingLevel in one call
-// Body: { provider, modelId, thinkingLevel? } where provider+modelId changes model.
-// A bare { thinkingLevel } only changes effort for the current model.
-// Effort visibility is filtered to the CURRENT model's thinkingLevelMap (gap B).
+// Model changes are transcript-local. There is deliberately no global fallback
+// session, so overlapping requests cannot mutate another session's model.
 app.post("/api/model", async (req, res) => {
   try {
-    const { provider, modelId, thinkingLevel } = req.body as {
+    const { sessionFile, provider, modelId, thinkingLevel } = req.body as {
+      sessionFile?: string;
       provider?: string;
       modelId?: string;
       thinkingLevel?: string;
     };
-
-    if (!provider && !modelId && !thinkingLevel) {
-      return res.status(400).json({ error: "missing provider/modelId or thinkingLevel" });
+    if (!sessionFile) throw new ApiError("missing sessionFile");
+    if ((!provider || !modelId) && !thinkingLevel) {
+      throw new ApiError("missing provider/modelId or thinkingLevel");
     }
+
+    const entry = await getSessionRuntime(sessionFile);
+    const target: any = entry.runtime.session;
+    if (isPromptActive(entry)) throw new ApiError("cannot switch model while streaming", 409);
 
     const mr = await getModelRuntime();
-    // Ensure a session exists even if user sets model before first prompt
-    let target: any = runtime?.session ?? singleSession;
-    if (!target) {
-      const rt = await getRuntime(process.cwd());
-      target = rt.session;
-    }
-    if (!target) return res.status(500).json({ error: "no session available" });
-
     let nextModel: any = target.model;
     let nextLevel: string | undefined = target.thinkingLevel;
 
     if (provider && modelId) {
       const found = (mr as any).getModel?.(provider, modelId);
-      if (!found) return res.status(404).json({ error: `unknown model ${provider}/${modelId}` });
-      // Disallow switch while streaming — matches sidebar abort guard (App.tsx)
-      if (target.isStreaming) return res.status(409).json({ error: "cannot switch model while streaming" });
-      await (target as any).setModel(found);
+      if (!found) throw new ApiError(`unknown model ${provider}/${modelId}`, 404);
+      await target.setModel(found);
       nextModel = found;
     }
 
     if (thinkingLevel) {
-      // Validate against current/next model's supported levels when map exists
       const map = nextModel?.thinkingLevelMap as Record<string, string | null> | undefined;
       if (map) {
         const supported = Object.entries(map)
-          .filter(([, v]) => v !== null)
-          .map(([k]) => k);
-        // if map is present and non-empty, enforce membership (allow "off" as well)
+          .filter(([, value]) => value !== null)
+          .map(([level]) => level);
         if (supported.length && !supported.includes(thinkingLevel) && !(thinkingLevel in map)) {
-          // Be lenient: still allow via clamp on frontend, but warn here with 400 for strictness
-          // For gap B we reject unsupported to keep slider honest
-          return res.status(400).json({ error: `thinkingLevel "${thinkingLevel}" not supported by ${nextModel?.provider}/${nextModel?.id}` });
+          throw new ApiError(`thinkingLevel "${thinkingLevel}" not supported by ${nextModel?.provider}/${nextModel?.id}`);
         }
       }
-      (target as any).setThinkingLevel(thinkingLevel);
-      nextLevel = thinkingLevel;
+      target.setThinkingLevel(thinkingLevel);
+      nextLevel = target.thinkingLevel;
     }
 
-    // Return canonical post-mutation view so frontend can optimistically sync
-    const outModel = nextModel
-      ? {
-          provider: nextModel.provider,
-          id: nextModel.id,
-          name: nextModel.name ?? nextModel.id,
-          api: nextModel.api,
-          reasoning: !!nextModel.reasoning,
-          input: nextModel.input ?? ["text"],
-          cost: nextModel.cost ?? { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
-          contextWindow: nextModel.contextWindow ?? 0,
-          maxTokens: nextModel.maxTokens ?? 0,
-          thinkingLevelMap: nextModel.thinkingLevelMap ?? null,
-        }
-      : null;
-
-    res.json({ ok: true, model: outModel ?? target.model ?? null, thinkingLevel: nextLevel ?? target.thinkingLevel });
-  } catch (e: any) {
-    res.status(500).json({ error: e?.message ?? String(e) });
+    touchRuntime(entry);
+    invalidateSessionsCache();
+    res.json({ ok: true, model: serialiseModel(nextModel ?? target.model), thinkingLevel: nextLevel ?? target.thinkingLevel });
+  } catch (error) {
+    res.status(errorStatus(error)).json({ error: errorMessage(error) });
   }
 });
 
-// Prompt with SSE streaming
-// POST /api/prompt  { text, sessionFile?, cwd?, images? }
-// Streams SSE events: { type: "message_update" | ... }
+// POST /api/prompt { sessionFile, cwd, text, images? }
+// One active prompt is allowed per session runtime. Disconnecting an SSE client
+// only detaches that client; it does not abort the agent run.
 app.post("/api/prompt", async (req, res) => {
-  sseHeaders(res);
-  // ensure headers flushed immediately (fixes nginx / vite proxy buffering)
-  if (typeof (res as any).flushHeaders === "function") (res as any).flushHeaders();
-
   const { text, sessionFile, cwd, images } = req.body as {
-    text: string;
+    text?: string;
     sessionFile?: string;
     cwd?: string;
     images?: any[];
   };
 
-  const hasImages = Array.isArray(images) && images.length > 0;
-  if ((!text || typeof text !== "string" || !text.trim()) && !hasImages) {
-    sendSSE(res, { type: "error", error: "missing text" });
-    return res.end();
-  }
-  const promptText = typeof text === "string" && text.trim() ? text : (hasImages ? " " : text);
-
   try {
-    const mr = await getModelRuntime();
-    const sessionCwd = cwd || (sessionFile ? SessionManager.open(sessionFile).getCwd() : process.cwd());
-
-    // Resolve/create session
-    let session: any;
-    if (runtime && runtimeCwd === sessionCwd) {
-      // if sessionFile specified and differs, switch first
-      if (sessionFile) {
-        const currentFile = (runtime.session as any)?.sessionFile;
-        if (currentFile !== sessionFile) {
-          await runtime.switchSession(sessionFile);
-        }
-      }
-      session = runtime.session;
-    } else {
-      // first prompt: create a session via createAgentSession
-      const sm = sessionFile
-        ? SessionManager.open(sessionFile)
-        : SessionManager.create(sessionCwd);
-      // try to use runtime, else single session
-      try {
-        const rt = await getRuntime(sessionCwd);
-        if (sessionFile) await rt.switchSession(sessionFile);
-        session = rt.session;
-      } catch {
-        const created = await createAgentSession({
-          sessionManager: sm,
-          modelRuntime: mr,
-        } as any);
-        singleSession = created.session;
-        session = created.session;
-      }
+    const hasImages = Array.isArray(images) && images.length > 0;
+    if ((!text || typeof text !== "string" || !text.trim()) && !hasImages) {
+      throw new ApiError("missing text");
     }
+    if (!sessionFile) throw new ApiError("missing sessionFile");
+    if (!cwd) throw new ApiError("missing cwd");
 
-    // Heartbeat to keep proxies alive (Vite/ Tauri)
+    // getSessionRuntime opens the session header once when needed and verifies
+    // cwd before any directory-bound services are created.
+    const entry = await getSessionRuntime(sessionFile, cwd);
+    if (isPromptActive(entry)) throw new ApiError("a prompt is already running for this session", 409);
+
+    const promptText = typeof text === "string" && text.trim() ? text : " ";
+    const session: any = entry.runtime.session;
+    touchRuntime(entry);
+
+    sseHeaders(res);
+    if (typeof (res as any).flushHeaders === "function") (res as any).flushHeaders();
+
+    let connectionClosed = false;
     const heartbeat = setInterval(() => {
-      res.write(`: ping\n\n`);
+      if (!connectionClosed) res.write(": ping\n\n");
     }, 15_000);
-
-    const off = session.subscribe((event: unknown) => {
-      sendSSE(res, event);
-    });
-
-    // Ensure cleanup on client abort
-    req.on("close", () => {
+    const off = session.subscribe((event: unknown) => sendSSE(res, event));
+    res.on("close", () => {
+      connectionClosed = true;
       clearInterval(heartbeat);
-      try { off?.(); } catch {}
+      try {
+        off();
+      } catch {
+        // Subscription cleanup is best effort after a broken connection.
+      }
     });
 
-    await session.prompt(promptText, images ? { images } : undefined);
+    // Set this synchronously before yielding so a second request cannot pass the
+    // one-prompt check while the first prompt starts.
+    const promptPromise = session.prompt(promptText, images ? { images } : undefined);
+    entry.activePrompt = promptPromise;
 
-    clearInterval(heartbeat);
-    off();
-    invalidateSessionsCache();
-
-    // Signal completion for frontend convenience
-    sendSSE(res, { type: "done" });
-    res.end();
-  } catch (e: any) {
-    sendSSE(res, { type: "error", error: e?.message ?? String(e), stack: e?.stack });
+    try {
+      await promptPromise;
+      invalidateSessionsCache();
+      if (!connectionClosed) {
+        sendSSE(res, { type: "done" });
+        res.end();
+      }
+    } catch (error) {
+      if (!connectionClosed) {
+        sendSSE(res, { type: "error", error: errorMessage(error) });
+        res.end();
+      }
+    } finally {
+      clearInterval(heartbeat);
+      try {
+        off();
+      } catch {
+        // no-op
+      }
+      if (entry.activePrompt === promptPromise) entry.activePrompt = undefined;
+      touchRuntime(entry);
+      void cleanupRuntimeRegistry();
+    }
+  } catch (error) {
+    if (!res.headersSent) return res.status(errorStatus(error)).json({ error: errorMessage(error) });
+    sendSSE(res, { type: "error", error: errorMessage(error) });
     res.end();
   }
 });
 
+// Exposes just enough state for a future reconnecting client. The current UI
+// keeps its SSE readers open while switching, so it primarily uses local state.
+app.get("/api/runtimes", (_req, res) => {
+  const runtimes = [...runtimeEntries.values()].map((entry) => ({
+    sessionFile: entry.sessionFile,
+    cwd: entry.cwd,
+    status: isPromptActive(entry) ? "running" : "idle",
+    lastUsedAt: entry.lastUsedAt,
+  }));
+  res.json({ runtimes });
+});
+
 // ---- Slash commands ----
-// Aggregates extension commands + skills + prompt templates for the autocomplete palette.
-// GET /api/commands?cwd=/foo — cached 5s, cwd-aware (resourceLoader is cwd-bound).
 let commandsCache: { at: number; payload: unknown; cwd: string } | null = null;
 const COMMANDS_TTL_MS = 5_000;
 
+type CommandSource = { session: any; services: any; dispose?: () => Promise<void> | void };
+
+async function commandSourceForCwd(cwd: string): Promise<CommandSource> {
+  const normalisedCwd = normalisePath(cwd);
+  const live = [...runtimeEntries.values()].find((entry) => normalisePath(entry.cwd) === normalisedCwd);
+  if (live) {
+    touchRuntime(live);
+    return { session: live.runtime.session, services: live.runtime.services };
+  }
+
+  // Command discovery must not allocate a registry entry or replace a live
+  // session. Use an in-memory session solely to let extensions register commands.
+  const sharedModelRuntime = await getModelRuntime();
+  const services = await createAgentSessionServices({
+    cwd: normalisedCwd,
+    agentDir: getAgentDir(),
+    modelRuntime: sharedModelRuntime,
+  });
+  const sessionManager = SessionManager.inMemory(normalisedCwd);
+  const runtime = await createAgentSessionRuntime(async ({ sessionManager: targetManager, sessionStartEvent }: any) => {
+    const created = await createAgentSessionFromServices({
+      services,
+      sessionManager: targetManager,
+      sessionStartEvent,
+    } as any);
+    return { ...created, services, diagnostics: services.diagnostics } as any;
+  }, {
+    cwd: normalisedCwd,
+    agentDir: getAgentDir(),
+    sessionManager,
+  });
+  await runtime.session.bindExtensions({});
+  return { session: runtime.session, services, dispose: () => runtime.dispose() };
+}
+
+function commandsFromSource(source: CommandSource) {
+  const { session, services } = source;
+  let extensionCommands: Array<{ name: string; description?: string; argumentHint?: string; sourceInfo?: unknown }> = [];
+  try {
+    const runner: any = session?.extensionRunner ?? session?._extensionRunner ?? services?.extensionRunner;
+    if (runner?.getRegisteredCommands) {
+      extensionCommands = runner.getRegisteredCommands().map((command: any) => ({
+        name: command.invocationName ?? command.name,
+        description: command.description,
+        argumentHint: command.argumentHint,
+        sourceInfo: command.sourceInfo,
+      }));
+    } else if (runner?.getCommands) {
+      extensionCommands = runner.getCommands().map((command: any) => ({
+        name: command.name,
+        description: command.description,
+        sourceInfo: command.sourceInfo,
+      }));
+    }
+  } catch {
+    // A broken extension must not make the composer unusable.
+  }
+
+  const loader: any = services?.resourceLoader ?? session?.resourceLoader;
+  const skillResult = loader?.getSkills?.();
+  const promptResult = loader?.getPrompts?.();
+  const skills = Array.isArray(skillResult?.skills)
+    ? skillResult.skills.map((skill: any) => ({ name: skill.name, description: skill.description, filePath: skill.filePath }))
+    : [];
+  let prompts = Array.isArray(promptResult?.prompts)
+    ? promptResult.prompts.map((prompt: any) => ({
+        name: prompt.name,
+        description: prompt.description,
+        argumentHint: prompt.argumentHint,
+        filePath: prompt.filePath,
+      }))
+    : [];
+
+  if (prompts.length === 0 && Array.isArray(session?.promptTemplates)) {
+    prompts = session.promptTemplates.map((prompt: any) => ({
+      name: prompt.name,
+      description: prompt.description,
+      argumentHint: prompt.argumentHint,
+    }));
+  }
+
+  const commands = [
+    ...extensionCommands.map((command) => ({
+      name: command.name,
+      description: command.description,
+      source: "extension" as const,
+      argumentHint: command.argumentHint,
+    })),
+    ...skills.map((skill: any) => ({ name: `skill:${skill.name}`, description: skill.description, source: "skill" as const })),
+    ...prompts.map((prompt: any) => ({
+      name: prompt.name,
+      description: prompt.description,
+      source: "prompt" as const,
+      argumentHint: prompt.argumentHint,
+    })),
+  ];
+
+  return { commands, extensionCommands, skills, prompts };
+}
+
 app.get("/api/commands", async (req, res) => {
   try {
-    const cwd = (req.query.cwd as string) || process.cwd();
+    const cwd = normalisePath((req.query.cwd as string) || process.cwd());
     const now = Date.now();
     if (commandsCache && commandsCache.cwd === cwd && now - commandsCache.at < COMMANDS_TTL_MS) {
       return res.json(commandsCache.payload);
     }
-    const rt: any = await getRuntime(cwd);
-    const session: any = rt.session;
-    const services: any = rt.services;
 
-    // Extension commands via ExtensionRunner
-    let extensionCommands: Array<{ name: string; description?: string; argumentHint?: string; sourceInfo?: unknown }> = [];
+    const source = await commandSourceForCwd(cwd);
     try {
-      const runner: any = session?.extensionRunner ?? session?._extensionRunner ?? services?.extensionRunner;
-      if (runner) {
-        if (typeof runner.getRegisteredCommands === "function") {
-          const regs: any[] = runner.getRegisteredCommands();
-          extensionCommands = regs.map((c: any) => ({
-            name: c.invocationName ?? c.name,
-            description: c.description,
-            argumentHint: c.argumentHint,
-            sourceInfo: c.sourceInfo,
-          }));
-        } else if (typeof runner.getCommands === "function") {
-          const regs: any[] = runner.getCommands();
-          extensionCommands = regs.map((c: any) => ({
-            name: c.name,
-            description: c.description,
-            sourceInfo: c.sourceInfo,
-          }));
-        }
-      }
-    } catch {}
-
-    // Skills & prompts via ResourceLoader
-    let skills: Array<{ name: string; description?: string; filePath?: string }> = [];
-    let prompts: Array<{ name: string; description?: string; argumentHint?: string; filePath?: string }> = [];
-    try {
-      const loader: any = services?.resourceLoader ?? session?.resourceLoader;
-      if (loader?.getSkills) {
-        const r = loader.getSkills();
-        if (Array.isArray(r?.skills)) {
-          skills = r.skills.map((s: any) => ({
-            name: s.name,
-            description: s.description,
-            filePath: s.filePath,
-            sourceInfo: s.sourceInfo,
-          }));
-        }
-      }
-      if (loader?.getPrompts) {
-        const r = loader.getPrompts();
-        if (Array.isArray(r?.prompts)) {
-          prompts = r.prompts.map((p: any) => ({
-            name: p.name,
-            description: p.description,
-            argumentHint: p.argumentHint,
-            filePath: p.filePath,
-            sourceInfo: p.sourceInfo,
-          }));
-        }
-      }
-    } catch {}
-
-    // Fallback: session.promptTemplates is always populated after bindExtensions
-    if (prompts.length === 0 && Array.isArray(session?.promptTemplates)) {
-      prompts = (session.promptTemplates as any[]).map((p: any) => ({
-        name: p.name,
-        description: p.description,
-        argumentHint: p.argumentHint,
-      }));
+      const payload = commandsFromSource(source);
+      commandsCache = { at: now, payload, cwd };
+      res.json(payload);
+    } finally {
+      await source.dispose?.();
     }
-
-    // Unified slash list the frontend palette consumes.
-    // Builtins are intentionally excluded — Phi's GUI already owns new/resume/model etc.
-    const commands = [
-      ...extensionCommands.map((c) => ({
-        name: c.name,
-        description: c.description,
-        source: "extension" as const,
-        argumentHint: c.argumentHint,
-      })),
-      ...skills.map((s) => ({
-        name: `skill:${s.name}`,
-        description: s.description,
-        source: "skill" as const,
-      })),
-      ...prompts.map((p) => ({
-        name: p.name,
-        description: p.description,
-        source: "prompt" as const,
-        argumentHint: p.argumentHint,
-      })),
-    ];
-
-    const payload = { commands, extensionCommands, skills, prompts };
-    commandsCache = { at: now, payload, cwd };
-    res.json(payload);
-  } catch (e: unknown) {
-    const err = e as { message?: string };
-    res.status(500).json({ error: err?.message ?? String(e) });
+  } catch (error) {
+    res.status(errorStatus(error)).json({ error: errorMessage(error) });
   }
 });
 
-// Fallback 404 for api
 app.use("/api", (_req, res) => {
   res.status(404).json({ error: "not found" });
 });

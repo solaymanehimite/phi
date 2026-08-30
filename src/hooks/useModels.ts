@@ -33,20 +33,18 @@ export function useModels() {
   // derived grouping helpers for selector categories
   const providerIds = useMemo(() => [...new Set(models.map((m) => m.provider))].sort(), [models]);
 
-  const setModel = useCallback(async (provider: string, modelId: string) => {
-    const res = await apiSetModel({ provider, modelId });
-    return res;
+  const setModel = useCallback(async (sessionFile: string, provider: string, modelId: string) => {
+    return apiSetModel({ sessionFile, provider, modelId });
   }, []);
 
-  const setThinkingLevel = useCallback(async (level: ThinkingLevel) => {
-    const res = await apiSetThinkingLevel(level);
-    return res;
+  const setThinkingLevel = useCallback(async (sessionFile: string, level: ThinkingLevel) => {
+    return apiSetThinkingLevel(sessionFile, level);
   }, []);
 
   const switchModel = useCallback(
-    async (provider: string, modelId: string, level?: ThinkingLevel) => {
-      if (level) return apiSetModel({ provider, modelId, thinkingLevel: level });
-      return apiSetModel({ provider, modelId });
+    async (sessionFile: string, provider: string, modelId: string, level?: ThinkingLevel) => {
+      if (level) return apiSetModel({ sessionFile, provider, modelId, thinkingLevel: level });
+      return apiSetModel({ sessionFile, provider, modelId });
     },
     [],
   );
