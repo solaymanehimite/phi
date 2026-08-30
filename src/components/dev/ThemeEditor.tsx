@@ -200,7 +200,12 @@ function getAlpha(original: string): string | null {
     return null;
 }
 
-export function ThemeEditor() {
+type ThemeEditorProps = {
+    className?: string;
+    iconClassName?: string;
+};
+
+export function ThemeEditor({ className = "", iconClassName = "" }: ThemeEditorProps) {
     const [values, setValues] = useState<Record<string, string>>({});
     const [active, setActive] = useState<string | null>(null);
     const [copied, setCopied] = useState(false);
@@ -256,9 +261,9 @@ export function ThemeEditor() {
         <Popover className="relative z-50">
             <PopoverTrigger
                 aria-label="Open theme editor"
-                className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-phi-text-tertiary transition-colors hover:bg-phi-overlay-hover hover:text-phi-text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-phi-accent/40 data-open:bg-phi-overlay-active"
+                className={`inline-flex h-8 w-8 items-center justify-center rounded-lg text-phi-text-tertiary transition-colors hover:bg-phi-overlay-hover hover:text-phi-text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-phi-accent/40 data-open:bg-phi-overlay-active ${className}`}
             >
-                <PaintBrushIcon className="size-3.5" />
+                <PaintBrushIcon className={`size-3.5 ${iconClassName}`} />
             </PopoverTrigger>
 
             <PopoverContent

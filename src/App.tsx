@@ -5,14 +5,13 @@ import { ModelSelector } from "./components/model-selector";
 import { Conversation } from "./components/conversation/conversation";
 import { Streaming } from "./components/conversation/streaming";
 import { Sidebar } from "./components/sidebar";
+import { Tabs } from "./components/tabs";
 import { Button } from "./components/ui/button";
 import { PanelLeftIcon } from "./components/ui/icons";
-import { ThemeEditor } from "./components/dev/ThemeEditor";
 import { useSessions } from "./hooks/useSessions";
 import { useChat } from "./hooks/useChat";
 import { useModels } from "./hooks/useModels";
 import { createSession, health } from "./lib/api";
-import { formatCwd } from "./lib/paths";
 
 // Isolated scroll-aware viewport so App doesn't need to re-render on every streaming token
 const ChatViewport = memo(function ChatViewport({
@@ -120,6 +119,37 @@ export default function App() {
     >(undefined);
     const [homeCwd, setHomeCwd] = useState("");
     const [newChatCwd, setNewChatCwd] = useState<string | null>(null);
+    const [openTabIds, setOpenTabIds] = useState<(string | null)[]>([null]);
+    const openTabIdsRef = useRef<(string | null)[]>([null]);
+
+    const openSessionTab = useCallback((id: string) => {
+        const current = openTabIdsRef.current;
+        const next = current.filter((tabId) => tabId !== null);
+        if (!next.includes(id)) next.push(id);
+        if (next.length === current.length && next.every((tabId, index) => tabId === current[index])) return;
+        openTabIdsRef.current = next;
+        setOpenTabIds(next);
+    }, []);
+
+    const ensureNewChatTab = useCallback(() => {
+        const current = openTabIdsRef.current;
+        if (current.includes(null)) return;
+        const next = [...current, null];
+        openTabIdsRef.current = next;
+        setOpenTabIds(next);
+    }, []);
+
+    // A draft tab becomes the persisted session tab when its first prompt creates a file.
+    const promoteNewChatTab = useCallback((file: string) => {
+        const current = openTabIdsRef.current;
+        if (current.includes(file)) return;
+        const next = [...current];
+        const draftIndex = next.indexOf(null);
+        if (draftIndex >= 0) next[draftIndex] = file;
+        else next.push(file);
+        openTabIdsRef.current = next;
+        setOpenTabIds(next);
+    }, []);
 
     useEffect(() => {
         let cancelled = false;
@@ -293,7 +323,11 @@ export default function App() {
 
     const handleSelect = useCallback(
         async (file: string) => {
-            if (file === chat.activeFile) return;
+            openSessionTab(file);
+            if (file === chat.activeFile) {
+                focusComposer();
+                return;
+            }
             // Selection only changes the viewport. Streams and their SSE readers
             // remain attached to their own session files in useChat.
             if (chat.hasCache(file)) {
@@ -318,6 +352,7 @@ export default function App() {
             }
         },
         [
+            openSessionTab,
             sessions.switchTo,
             chat.openFile,
             chat.hydrateFromSwitch,
@@ -331,9 +366,30 @@ export default function App() {
     );
 
     const handleNewChat = useCallback(() => {
+        ensureNewChatTab();
         chat.clear();
         focusComposer();
-    }, [chat.clear, focusComposer]);
+    }, [chat.clear, ensureNewChatTab, focusComposer]);
+
+    const handleCloseTab = useCallback(
+        (id: string | null) => {
+            const current = openTabIdsRef.current;
+            if (id === null && current.length === 1) return;
+            const index = current.indexOf(id);
+            if (index < 0) return;
+
+            const next = current.filter((tabId) => tabId !== id);
+            const nextActiveId = next[index] ?? next[index - 1] ?? null;
+            openTabIdsRef.current = next.length > 0 ? next : [null];
+            setOpenTabIds(openTabIdsRef.current);
+
+            const isActive = id === chat.activeFile || (id === null && chat.activeFile === null);
+            if (!isActive) return;
+            if (nextActiveId === null) handleNewChat();
+            else void handleSelect(nextActiveId);
+        },
+        [chat.activeFile, handleNewChat, handleSelect],
+    );
 
     const handleRename = useCallback(
         async (file: string, name: string) => {
@@ -352,10 +408,11 @@ export default function App() {
     const handleDelete = useCallback(
         async (file: string) => {
             await sessions.remove(file);
+            if (openTabIdsRef.current.includes(file)) handleCloseTab(file);
             chat.invalidateCache(file);
             chat.removeFile(file);
         },
-        [sessions.remove, chat.removeFile, chat.invalidateCache],
+        [sessions.remove, handleCloseTab, chat.removeFile, chat.invalidateCache],
     );
 
     const handleAbort = useCallback(async () => {
@@ -377,6 +434,7 @@ export default function App() {
                     const res = await createSession(selectedCwd);
                     const file = res.file;
                     preparedSessionFile = file;
+                    promoteNewChatTab(file);
                     try {
                         await sessions.switchTo(file, selectedCwd);
                     } catch { }
@@ -425,6 +483,7 @@ export default function App() {
                 sessionFile: preparedSessionFile,
                 onNewFile: (file, cwd, firstMessage) => {
                     const realCwd = cwd || chat.data?.cwd || selectedCwd || "";
+                    promoteNewChatTab(file);
                     sessions.addOptimistic(
                         file,
                         realCwd || "/home/solaymanehimite/Dev/ship/Phi",
@@ -447,6 +506,7 @@ export default function App() {
             draftThinking,
             models.setModel,
             models.setThinkingLevel,
+            promoteNewChatTab,
             chat.patchModel,
             chat.openFile,
             chat.refreshSilent,
@@ -460,15 +520,29 @@ export default function App() {
         [chat.data?.context.messages],
     );
 
-    // stable header values memoized
-    const headerTitle = useMemo(
-        () => (chat.activeFile ? activeTitle : "New chat"),
-        [chat.activeFile, activeTitle],
+    const tabItems = useMemo(
+        () =>
+            openTabIds.map((id) => {
+                if (id === null) {
+                    return { id, title: "New chat" };
+                }
+                const session = sessions.sessions.find((item) => item.path === id);
+                const fallback = id.split("/").pop() || "Session";
+                const title =
+                    session?.name?.trim() ||
+                    session?.firstMessage?.trim() ||
+                    (id === chat.activeFile ? activeTitle : fallback);
+                return {
+                    id,
+                    title: title.length > 42 ? `${title.slice(0, 42).trim()}…` : title,
+                    isRunning: chat.runningFiles.has(id),
+                };
+            }),
+        [activeTitle, chat.activeFile, chat.runningFiles, openTabIds, sessions.sessions],
     );
-    const headerCwd = useMemo(() => formatCwd(activeCwd), [activeCwd]);
 
     return (
-        <div className="flex h-screen min-h-[480px] overflow-hidden bg-phi-bg-app text-phi-text-primary antialiased selection:bg-phi-accent/25">
+        <div className="flex h-screen min-h-[480px] overflow-hidden bg-phi-bg-sidebar text-phi-text-primary antialiased selection:bg-phi-accent/25">
             {sidebarOpen && (
                 <Sidebar
                     groups={sessions.groups}
@@ -489,12 +563,11 @@ export default function App() {
                 />
             )}
 
-            <main className="relative flex min-w-0 flex-1 flex-col bg-phi-bg-main">
-                <header
-                    data-tauri-drag-region
-                    className="flex h-13 shrink-0 items-center border-b border-phi-border-subtle px-3"
-                >
-                    {!sidebarOpen && (
+            <main
+                className="relative flex min-w-0 flex-1 flex-col bg-phi-bg-sidebar px-2 pb-2"
+            >
+                <Tabs
+                    leadingAction={!sidebarOpen ? (
                         <Button
                             variant="icon"
                             aria-label="Open sidebar"
@@ -503,111 +576,100 @@ export default function App() {
                         >
                             <PanelLeftIcon />
                         </Button>
-                    )}
-                    <div className="pointer-events-none mx-auto flex max-w-[60%] items-center gap-2 truncate px-10 text-[13px]">
-                        {activeCwd ? (
-                            <>
-                                <span className="truncate font-medium text-phi-text-tertiary">
-                                    {headerCwd}
-                                </span>
-                                <span className="text-phi-separator">/</span>
-                            </>
-                        ) : null}
-                        <span className="truncate font-medium text-phi-text-tertiary">
-                            {headerTitle}
-                        </span>
-                    </div>
-                    <div className="flex w-8 justify-end">
-                        <ThemeEditor />
-                    </div>
-                </header>
-
-                <section className="flex min-h-0 flex-1 flex-col">
-                    {!chat.activeFile ? (
-                        <div className="mx-auto flex w-full max-w-3xl flex-1 flex-col overflow-y-auto px-6 pt-6">
-                            <div className="flex flex-1 flex-col items-center justify-center pb-16 text-center">
-                                <h1 className="text-[32px] font-semibold tracking-[-0.03em] text-phi-text-primary">
-                                    Build, Fix and Ship
-                                </h1>
-                                {!sessions.loading &&
-                                    sessions.groups.length === 0 &&
-                                    !sessions.error && (
-                                        <p className="mt-6 text-[12px] text-phi-text-muted">
-                                            No sessions found — run `pi` in a project to create one.
-                                        </p>
-                                    )}
-                            </div>
-                        </div>
-                    ) : (
-                        <ChatViewport
-                            activeFile={chat.activeFile}
-                            loading={chat.loading}
-                            error={chat.error}
-                            messages={messages}
-                            isStreaming={chat.isStreaming}
-                            streaming={chat.streaming}
-                        />
-                    )}
-
-                    <div className="shrink-0 px-4 sm:px-7">
-                        {(modelError ||
-                            (!models.loading &&
-                                models.models.length === 0 &&
-                                !models.error)) && (
-                                <div className="mx-auto mb-2 w-full max-w-3xl">
-                                    {modelError ? (
-                                        <div className="flex items-center justify-between gap-2 rounded-lg border border-phi-error-border bg-phi-error-bg px-3 py-2 text-[12.5px] text-phi-error-text">
-                                            <span className="truncate">{modelError}</span>
-                                            <button
-                                                onClick={() => setModelError(null)}
-                                                className="shrink-0 text-[11px] underline opacity-80 hover:opacity-100"
-                                            >
-                                                Dismiss
-                                            </button>
-                                        </div>
-                                    ) : (
-                                        <div className="rounded-lg border border-amber-500/20 bg-amber-500/10 px-3 py-2 text-[12.5px] text-amber-200/90">
-                                            No models available — check auth (run{" "}
-                                            <code className="rounded bg-black/20 px-1">pi auth</code>)
-                                            or configure API keys. The model selector will populate
-                                            after auth.
-                                        </div>
-                                    )}
+                    ) : null}
+                    tabs={tabItems}
+                    activeId={chat.activeFile}
+                    onSelect={(id) => id === null ? handleNewChat() : void handleSelect(id)}
+                    onClose={handleCloseTab}
+                />
+                <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border border-phi-border-subtle bg-phi-bg-main shadow-[0_8px_30px_rgba(0,0,0,0.12)]">
+                    <section className="flex min-h-0 flex-1 flex-col">
+                        {!chat.activeFile ? (
+                            <div className="mx-auto flex w-full max-w-3xl flex-1 flex-col overflow-y-auto px-6 pt-6">
+                                <div className="flex flex-1 flex-col items-center justify-center pb-16 text-center">
+                                    <h1 className="text-[32px] font-semibold tracking-[-0.03em] text-phi-text-primary">
+                                        Build, Fix and Ship
+                                    </h1>
+                                    {!sessions.loading &&
+                                        sessions.groups.length === 0 &&
+                                        !sessions.error && (
+                                            <p className="mt-6 text-[12px] text-phi-text-muted">
+                                                No sessions found — run `pi` in a project to create one.
+                                            </p>
+                                        )}
                                 </div>
-                            )}
-                        <div className="mx-auto pl-6 mb-1 flex w-full max-w-3xl min-w-0 items-center gap-1">
-                            {!chat.activeFile && (
-                                <DirectoryPicker
-                                    cwd={(newChatCwd ?? homeCwd) || null}
-                                    homeCwd={homeCwd}
-                                    projects={sessions.groups.map(({ cwd, displayCwd }) => ({
-                                        cwd,
-                                        displayCwd,
-                                    }))}
-                                    onChange={setNewChatCwd}
-                                    disabled={chat.isStreaming}
-                                />
-                            )}
-                            <ModelSelector
-                                models={models.models}
-                                value={selectedModelKey}
-                                thinkingLevel={thinkingLevel}
-                                onSelect={handleSelectModel}
-                                onThinkingChange={handleThinkingChange}
-                                disabled={chat.isStreaming}
+                            </div>
+                        ) : (
+                            <ChatViewport
+                                activeFile={chat.activeFile}
+                                loading={chat.loading}
+                                error={chat.error}
+                                messages={messages}
                                 isStreaming={chat.isStreaming}
-                                loading={models.loading}
-                                error={models.error}
+                                streaming={chat.streaming}
+                            />
+                        )}
+
+                        <div className="shrink-0 px-4 sm:px-7">
+                            {(modelError ||
+                                (!models.loading &&
+                                    models.models.length === 0 &&
+                                    !models.error)) && (
+                                    <div className="mx-auto mb-2 w-full max-w-3xl">
+                                        {modelError ? (
+                                            <div className="flex items-center justify-between gap-2 rounded-lg border border-phi-error-border bg-phi-error-bg px-3 py-2 text-[12.5px] text-phi-error-text">
+                                                <span className="truncate">{modelError}</span>
+                                                <button
+                                                    onClick={() => setModelError(null)}
+                                                    className="shrink-0 text-[11px] underline opacity-80 hover:opacity-100"
+                                                >
+                                                    Dismiss
+                                                </button>
+                                            </div>
+                                        ) : (
+                                            <div className="rounded-lg border border-amber-500/20 bg-amber-500/10 px-3 py-2 text-[12.5px] text-amber-200/90">
+                                                No models available — check auth (run{" "}
+                                                <code className="rounded bg-black/20 px-1">pi auth</code>)
+                                                or configure API keys. The model selector will populate
+                                                after auth.
+                                            </div>
+                                        )}
+                                    </div>
+                                )}
+                            <div className="mx-auto pl-6 mb-1 flex w-full max-w-3xl min-w-0 items-center gap-1">
+                                {!chat.activeFile && (
+                                    <DirectoryPicker
+                                        cwd={(newChatCwd ?? homeCwd) || null}
+                                        homeCwd={homeCwd}
+                                        projects={sessions.groups.map(({ cwd, displayCwd }) => ({
+                                            cwd,
+                                            displayCwd,
+                                        }))}
+                                        onChange={setNewChatCwd}
+                                        disabled={chat.isStreaming}
+                                    />
+                                )}
+                                <ModelSelector
+                                    models={models.models}
+                                    value={selectedModelKey}
+                                    thinkingLevel={thinkingLevel}
+                                    onSelect={handleSelectModel}
+                                    onThinkingChange={handleThinkingChange}
+                                    disabled={chat.isStreaming}
+                                    isStreaming={chat.isStreaming}
+                                    loading={models.loading}
+                                    error={models.error}
+                                />
+                            </div>
+                            <Composer
+                                onSend={handleSend}
+                                onAbort={handleAbort}
+                                isStreaming={chat.isStreaming}
+                                cwd={chat.activeFile ? activeCwd : (newChatCwd ?? homeCwd)}
                             />
                         </div>
-                        <Composer
-                            onSend={handleSend}
-                            onAbort={handleAbort}
-                            isStreaming={chat.isStreaming}
-                            cwd={chat.activeFile ? activeCwd : (newChatCwd ?? homeCwd)}
-                        />
-                    </div>
-                </section>
+                    </section>
+                </div>
             </main>
         </div>
     );
