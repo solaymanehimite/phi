@@ -18,7 +18,14 @@ import { Popover, PopoverContent, PopoverTrigger } from "./ui/popover";
 import type { ModelInfo, ThinkingLevel } from "../types/session";
 
 // Canonical order — matches pi-ai ThinkingLevel union, used for the slider
-const CANONICAL_LEVELS: ThinkingLevel[] = ["minimal", "low", "medium", "high", "xhigh", "max"];
+const CANONICAL_LEVELS: ThinkingLevel[] = [
+    "minimal",
+    "low",
+    "medium",
+    "high",
+    "xhigh",
+    "max",
+];
 // Keep legacy order for compat but we render canonical; helper normalizes
 export const THINKING_LEVELS = CANONICAL_LEVELS;
 
@@ -45,20 +52,41 @@ const PROVIDER_ICON_URLS: Record<string, string> = {
 };
 
 function prettyProvider(id: string): string {
-    if (id === "openai") return "OpenAI";
-    if (id === "anthropic") return "Anthropic";
-    if (id === "google" || id === "google-vertex") return "Google";
-    if (id === "xai") return "xAI";
-    if (id === "kimi" || id === "kimi-coding") return "Kimi";
-    if (id === "opencode") return "Opencode";
+    const normalized = id.toLowerCase();
+    if (normalized === "openai") return "OpenAI";
+    if (normalized === "openai-codex") return "OpenAI Codex";
+    if (normalized === "anthropic") return "Anthropic";
+    if (normalized === "google" || normalized === "google-vertex")
+        return "Google";
+    if (normalized === "xai") return "xAI";
+    if (normalized === "kimi" || normalized === "kimi-coding") return "Kimi";
+    if (normalized === "opencode") return "Opencode Zen";
     return id.charAt(0).toUpperCase() + id.slice(1);
 }
 
-function ProviderImg({ provider, size = 16, className = "" }: { provider: string; size?: number; className?: string }) {
+function ProviderImg({
+    provider,
+    size = 16,
+    className = "",
+}: {
+    provider: string;
+    size?: number;
+    className?: string;
+}) {
     const url = PROVIDER_ICON_URLS[provider];
     const Icon = PROVIDER_ICONS[provider] ?? StarIcon;
     if (url) {
-        return <img src={url} alt="" width={size} height={size} className={`object-contain ${className}`} style={{ width: size, height: size }} draggable={false} />;
+        return (
+            <img
+                src={url}
+                alt=""
+                width={size}
+                height={size}
+                className={`object-contain ${className}`}
+                style={{ width: size, height: size }}
+                draggable={false}
+            />
+        );
     }
     return <Icon className={className} style={{ width: size, height: size }} />;
 }
@@ -81,7 +109,8 @@ function formatCost(n: number | undefined): string {
 
 function availableLevelsFor(model: ModelInfo | undefined): ThinkingLevel[] {
     if (!model) return CANONICAL_LEVELS;
-    const map = model.thinkingLevelMap as Record<string, string | null> | null | undefined;
+    const map = model.thinkingLevelMap as
+        Record<string, string | null> | null | undefined;
     if (!map || typeof map !== "object" || Object.keys(map).length === 0) {
         // No map → assume model supports the canonical reasoning ladder if reasoning=true, else still show all
         // For non-reasoning models pi still accepts but maps to null — show all so user isn't blocked before server validates
@@ -124,7 +153,9 @@ export const ModelSelector = memo(function ModelSelector({
         if (!value) return list[0] ?? null;
         const parsed = parseModelKey(value);
         if (parsed) {
-            const found = list.find((m) => m.provider === parsed.provider && m.id === parsed.id);
+            const found = list.find(
+                (m) => m.provider === parsed.provider && m.id === parsed.id,
+            );
             if (found) return found;
             // synthetic for unavailable/legacy model
             return {
@@ -160,26 +191,39 @@ export const ModelSelector = memo(function ModelSelector({
         return list[0] ?? null;
     }, [list, value]);
 
-    const selectedKey = selected ? modelKey(selected) : value ?? "";
+    const selectedKey = selected ? modelKey(selected) : (value ?? "");
     // Thinking effort is controlled by parent when provided, else local fallback only for unauthed/loading state
     const [localEffort, setLocalEffort] = useState<ThinkingLevel>("medium");
     const effortRaw = (thinkingLevel as ThinkingLevel | undefined) ?? localEffort;
     // Normalize to canonical — if server sends "off" treat as minimal for slider position but keep label
-    const effortForSlider = (CANONICAL_LEVELS.includes(effortRaw as ThinkingLevel) ? effortRaw : "medium") as ThinkingLevel;
+    const effortForSlider = (
+        CANONICAL_LEVELS.includes(effortRaw as ThinkingLevel) ? effortRaw : "medium"
+    ) as ThinkingLevel;
 
     const [query, setQuery] = useState("");
     const [activeCategory, setActiveCategory] = useState<string>("all");
 
-    const providerIds = useMemo(() => [...new Set(list.map((m) => m.provider))].sort(), [list]);
+    const providerIds = useMemo(
+        () => [...new Set(list.map((m) => m.provider))].sort(),
+        [list],
+    );
 
     const categories = useMemo(() => {
-        const cats: Array<{ id: string; label: string; icon?: typeof StarIcon; iconUrl?: string }> = [
-            { id: "all", label: "All", icon: ListBulletIcon },
-        ];
+        const cats: Array<{
+            id: string;
+            label: string;
+            icon?: typeof StarIcon;
+            iconUrl?: string;
+        }> = [{ id: "all", label: "All", icon: ListBulletIcon }];
         for (const pid of providerIds) {
             const url = PROVIDER_ICON_URLS[pid];
             if (url) cats.push({ id: pid, label: prettyProvider(pid), iconUrl: url });
-            else cats.push({ id: pid, label: prettyProvider(pid), icon: PROVIDER_ICONS[pid] ?? StarIcon });
+            else
+                cats.push({
+                    id: pid,
+                    label: prettyProvider(pid),
+                    icon: PROVIDER_ICONS[pid] ?? StarIcon,
+                });
         }
         return cats;
     }, [providerIds]);
@@ -191,31 +235,59 @@ export const ModelSelector = memo(function ModelSelector({
         }
         if (query.trim()) {
             const q = query.toLowerCase();
-            out = out.filter((m) => m.name.toLowerCase().includes(q) || m.id.toLowerCase().includes(q) || m.provider.toLowerCase().includes(q));
+            out = out.filter(
+                (m) =>
+                    m.name.toLowerCase().includes(q) ||
+                    m.id.toLowerCase().includes(q) ||
+                    m.provider.toLowerCase().includes(q),
+            );
         }
         return out;
     }, [list, query, activeCategory]);
 
+    const activeCategoryLabel =
+        activeCategory === "all" ? "All Models" : prettyProvider(activeCategory);
+
     // Gap B: only levels supported by the CURRENT model are shown in the slider
-    const availableLevels = useMemo(() => availableLevelsFor(selected ?? undefined), [selected]);
-    const effortIdx = Math.max(0, availableLevels.indexOf(effortForSlider as ThinkingLevel));
+    const availableLevels = useMemo(
+        () => availableLevelsFor(selected ?? undefined),
+        [selected],
+    );
+    const effortIdx = Math.max(
+        0,
+        availableLevels.indexOf(effortForSlider as ThinkingLevel),
+    );
     // If current effort not in available, clamp to nearest (fallback to middle)
-    const clampedIdx = availableLevels.includes(effortForSlider as ThinkingLevel) ? effortIdx : Math.floor(availableLevels.length / 2);
+    const clampedIdx = availableLevels.includes(effortForSlider as ThinkingLevel)
+        ? effortIdx
+        : Math.floor(availableLevels.length / 2);
     const clampedEffort = availableLevels[clampedIdx] ?? "medium";
-    const pct = availableLevels.length <= 1 ? 100 : (clampedIdx / (availableLevels.length - 1)) * 100;
+    const pct =
+        availableLevels.length <= 1
+            ? 100
+            : (clampedIdx / (availableLevels.length - 1)) * 100;
 
-    const handleSelect = useCallback(async (m: ModelInfo) => {
-        if (disabled || isStreaming) return;
-        if (!onSelect) return;
-        await onSelect(m.provider, m.id);
-    }, [disabled, isStreaming, onSelect]);
+    const handleSelect = useCallback(
+        async (m: ModelInfo) => {
+            if (disabled || isStreaming) return;
+            if (!onSelect) return;
+            await onSelect(m.provider, m.id);
+        },
+        [disabled, isStreaming, onSelect],
+    );
 
-    const handleThinkingChange = useCallback(async (level: ThinkingLevel) => {
-        if (disabled || isStreaming) return;
-        if (onThinkingChange) await onThinkingChange(level);
-        else setLocalEffort(level);
-    }, [disabled, isStreaming, onThinkingChange]);
-    const handleQueryChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => setQuery(e.target.value), []);
+    const handleThinkingChange = useCallback(
+        async (level: ThinkingLevel) => {
+            if (disabled || isStreaming) return;
+            if (onThinkingChange) await onThinkingChange(level);
+            else setLocalEffort(level);
+        },
+        [disabled, isStreaming, onThinkingChange],
+    );
+    const handleQueryChange = useCallback(
+        (e: React.ChangeEvent<HTMLInputElement>) => setQuery(e.target.value),
+        [],
+    );
     const handleClearQuery = useCallback(() => setQuery(""), []);
 
     const isDisabled = !!disabled || !!isStreaming;
@@ -226,15 +298,35 @@ export const ModelSelector = memo(function ModelSelector({
                 <PopoverTrigger
                     disabled={isDisabled}
                     className="group inline-flex max-w-full min-w-0 items-center gap-1.5 rounded-md px-1.5 py-1 text-left text-phi-text-secondary transition-colors hover:bg-phi-overlay-hover hover:text-phi-text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-phi-accent/40 disabled:pointer-events-none disabled:opacity-60"
-                    aria-label={selected ? `Change model, currently ${selected.provider}/${selected.id}` : "Change model"}
+                    aria-label={
+                        selected
+                            ? `Change model, currently ${selected.provider}/${selected.id}`
+                            : "Change model"
+                    }
                 >
-                    {!loading && selected && <ProviderImg provider={selected.provider} size={14} className="shrink-0 text-phi-text-secondary" />}
-                    <span className="min-w-0 truncate text-[12.5px] font-medium">{loading ? "Loading models…" : selected?.name ?? (list.length === 0 ? "No models" : "Select model")}</span>
-                    <span className="shrink-0 text-[11px] font-normal text-phi-text-muted/60">{clampedEffort}</span>
+                    {!loading && selected && (
+                        <ProviderImg
+                            provider={selected.provider}
+                            size={14}
+                            className="shrink-0 text-phi-text-secondary"
+                        />
+                    )}
+                    <span className="min-w-0 truncate text-[12.5px] font-medium">
+                        {loading
+                            ? "Loading models…"
+                            : (selected?.name ??
+                                (list.length === 0 ? "No models" : "Select model"))}
+                    </span>
+                    <span className="shrink-0 text-[11px] font-normal text-phi-text-muted/60">
+                        {clampedEffort}
+                    </span>
                     <ChevronDownIcon className="size-3.5 shrink-0 text-phi-text-muted transition-transform group-data-open:rotate-180" />
                 </PopoverTrigger>
 
-                <PopoverContent anchor={{ to: "top start", gap: 12 }} className="h-[360px] w-[500px] overflow-hidden">
+                <PopoverContent
+                    anchor={{ to: "top start", gap: 12 }}
+                    className="h-[360px] w-[500px] overflow-hidden"
+                >
                     <div className="flex h-full flex-col">
                         {/* search header — plain, part of popover */}
                         <div className="flex items-center gap-2 px-3 pt-3 pb-2">
@@ -263,7 +355,10 @@ export const ModelSelector = memo(function ModelSelector({
                         )}
                         {!loading && !error && list.length === 0 && (
                             <div className="mx-3 mb-2 rounded-md border border-amber-500/20 bg-amber-500/10 px-2.5 py-2 text-[11.5px] leading-snug text-amber-200/90">
-                                No models available — check auth (run <code className="rounded bg-black/20 px-1 py-0.5">pi auth</code>) or add an API key for your provider. The selector will populate after auth.
+                                No models available — check auth (run{" "}
+                                <code className="rounded bg-black/20 px-1 py-0.5">pi auth</code>
+                                ) or add an API key for your provider. The selector will
+                                populate after auth.
                             </div>
                         )}
 
@@ -278,13 +373,14 @@ export const ModelSelector = memo(function ModelSelector({
                                             onClick={() => setActiveCategory(cat.id)}
                                             aria-label={cat.label}
                                             title={cat.label}
-                                            className={`group relative grid size-8 place-items-center rounded-xl ${
-                                                isActive
+                                            className={`group relative grid size-8 place-items-center rounded-xl ${isActive
                                                     ? "bg-phi-overlay-strong text-phi-text-primary"
                                                     : "text-phi-text-muted hover:bg-phi-overlay hover:text-phi-text-secondary"
-                                            }`}
+                                                }`}
                                         >
-                                            {isActive && <span className="absolute -right-1.5 top-1/2 h-5 w-0.5 -translate-y-1/2 rounded-full bg-phi-accent" />}
+                                            {isActive && (
+                                                <span className="absolute -right-1.5 top-1/2 h-5 w-0.5 -translate-y-1/2 rounded-full bg-phi-accent" />
+                                            )}
                                             {cat.iconUrl ? (
                                                 <img
                                                     src={cat.iconUrl}
@@ -305,10 +401,17 @@ export const ModelSelector = memo(function ModelSelector({
                             {/* model list */}
                             <div className="relative flex min-w-0 flex-1 flex-col overflow-hidden">
                                 <div className="flex-1 overflow-y-auto p-2 pb-20">
+                                    <div className="px-3 pb-2 pt-1 text-[14px] font-semibold text-phi-text-tertiary">
+                                        {activeCategoryLabel}
+                                    </div>
                                     {loading ? (
-                                        <p className="px-3 py-10 text-center text-[13px] text-phi-text-muted">Loading models…</p>
+                                        <p className="px-3 py-10 text-center text-[13px] text-phi-text-muted">
+                                            Loading models…
+                                        </p>
                                     ) : filtered.length === 0 ? (
-                                        <p className="px-3 py-10 text-center text-[13px] text-phi-text-muted">No models found</p>
+                                        <p className="px-3 py-10 text-center text-[13px] text-phi-text-muted">
+                                            No models found
+                                        </p>
                                     ) : (
                                         <div className="space-y-0.5">
                                             {filtered.map((model) => {
@@ -320,12 +423,17 @@ export const ModelSelector = memo(function ModelSelector({
                                                         key={k}
                                                         onClick={() => handleSelect(model)}
                                                         disabled={isDisabled}
-                                                        className={`group flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left ${
-                                                            isSelected ? "bg-phi-overlay-strong" : "hover:bg-phi-overlay"
-                                                        } disabled:opacity-60`}
+                                                        className={`group flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left ${isSelected
+                                                                ? "bg-phi-overlay-strong"
+                                                                : "hover:bg-phi-overlay"
+                                                            } disabled:opacity-60`}
                                                     >
                                                         <span className="grid size-7 shrink-0 place-items-center rounded-lg bg-phi-overlay text-phi-text-muted group-[.bg-phi-overlay-strong]:bg-phi-bg-surface">
-                                                            <ProviderImg provider={model.provider} size={14} className="" />
+                                                            <ProviderImg
+                                                                provider={model.provider}
+                                                                size={14}
+                                                                className=""
+                                                            />
                                                         </span>
                                                         <span className="min-w-0 flex-1">
                                                             <span className="block truncate text-[13px] font-[550] leading-none text-phi-text-primary">
@@ -333,13 +441,20 @@ export const ModelSelector = memo(function ModelSelector({
                                                             </span>
                                                             <span className="mt-1 flex items-center gap-1 truncate text-[11.5px] leading-none text-phi-text-muted">
                                                                 <span className="inline-flex items-center gap-0.5">
-                                                                    {formatCost(model.cost.input)} <ArrowDownIcon className="size-[11px] shrink-0" />
+                                                                    {formatCost(model.cost.input)}{" "}
+                                                                    <ArrowDownIcon className="size-[11px] shrink-0" />
                                                                 </span>
                                                                 <span className="opacity-60">-</span>
                                                                 <span className="inline-flex items-center gap-0.5">
-                                                                    {formatCost(model.cost.output)} <ArrowUpIcon className="size-[11px] shrink-0" />
+                                                                    {formatCost(model.cost.output)}{" "}
+                                                                    <ArrowUpIcon className="size-[11px] shrink-0" />
                                                                 </span>
-                                                                {isMulti && <EyeIcon className="size-[11px] shrink-0" aria-label="Multimodal" />}
+                                                                {isMulti && (
+                                                                    <EyeIcon
+                                                                        className="size-[11px] shrink-0"
+                                                                        aria-label="Multimodal"
+                                                                    />
+                                                                )}
                                                             </span>
                                                         </span>
                                                     </button>
@@ -352,10 +467,16 @@ export const ModelSelector = memo(function ModelSelector({
                                 {/* sticky thinking effort — bottom right, attached like provider rail */}
                                 <div className="pointer-events-auto absolute bottom-0 right-0 w-[210px] rounded-tl-2xl bg-phi-bg-sunken px-3 pb-3 pr-4 pt-2.5">
                                     <div className="mb-2 flex items-center justify-between">
-                                        <span className="text-[11px] font-medium tracking-wide text-phi-text-muted">Thinking effort</span>
+                                        <span className="text-[11px] font-medium tracking-wide text-phi-text-muted">
+                                            Thinking effort
+                                        </span>
                                         <span
                                             className="text-[11px] font-medium transition-colors duration-300"
-                                            style={{ color: THINKING_COLORS[clampedEffort as ThinkingLevel] ?? "var(--color-phi-text-muted)" }}
+                                            style={{
+                                                color:
+                                                    THINKING_COLORS[clampedEffort as ThinkingLevel] ??
+                                                    "var(--color-phi-text-muted)",
+                                            }}
                                         >
                                             {clampedEffort}
                                         </span>
@@ -367,7 +488,9 @@ export const ModelSelector = memo(function ModelSelector({
                                                 className="h-full rounded-full transition-all duration-300 ease-out"
                                                 style={{
                                                     width: `${pct}%`,
-                                                    backgroundColor: THINKING_COLORS[clampedEffort as ThinkingLevel] ?? "var(--color-phi-text-muted)",
+                                                    backgroundColor:
+                                                        THINKING_COLORS[clampedEffort as ThinkingLevel] ??
+                                                        "var(--color-phi-text-muted)",
                                                 }}
                                             />
                                         </div>
@@ -377,16 +500,26 @@ export const ModelSelector = memo(function ModelSelector({
                                             max={Math.max(0, availableLevels.length - 1)}
                                             step={1}
                                             value={clampedIdx}
-                                            onChange={(e) => handleThinkingChange(availableLevels[Number(e.target.value)])}
+                                            onChange={(e) =>
+                                                handleThinkingChange(
+                                                    availableLevels[Number(e.target.value)],
+                                                )
+                                            }
                                             disabled={isDisabled || availableLevels.length <= 1}
                                             className="absolute inset-0 h-2.5 w-full cursor-pointer appearance-none bg-transparent disabled:cursor-not-allowed disabled:opacity-30 [&::-webkit-slider-thumb]:h-3.5 [&::-webkit-slider-thumb]:w-3.5 [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-phi-white [&::-webkit-slider-thumb]:shadow-[0_1px_4px_rgba(0,0,0,0.4)] [&::-webkit-slider-thumb]:transition-transform [&::-webkit-slider-thumb]:active:scale-110 [&::-moz-range-thumb]:h-3.5 [&::-moz-range-thumb]:w-3.5 [&::-moz-range-thumb]:rounded-full [&::-moz-range-thumb]:border-0 [&::-moz-range-thumb]:bg-phi-white"
                                             aria-label="Thinking effort"
                                         />
                                     </div>
                                     {availableLevels.length <= 1 && (
-                                        <p className="mt-1.5 text-[10px] leading-none text-phi-text-muted/70">Single effort — model default</p>
+                                        <p className="mt-1.5 text-[10px] leading-none text-phi-text-muted/70">
+                                            Single effort — model default
+                                        </p>
                                     )}
-                                    {isStreaming && <p className="mt-1.5 text-[10px] leading-none text-phi-text-muted/70">Locked while streaming</p>}
+                                    {isStreaming && (
+                                        <p className="mt-1.5 text-[10px] leading-none text-phi-text-muted/70">
+                                            Locked while streaming
+                                        </p>
+                                    )}
                                 </div>
                             </div>
                         </div>
@@ -395,7 +528,7 @@ export const ModelSelector = memo(function ModelSelector({
             </>
         </Popover>
     );
-})
+});
 
 // kept for potential reuse — not used in composer after remarks
 export function ComposerPill({
@@ -407,11 +540,10 @@ export function ComposerPill({
     return (
         <button
             type="button"
-            className={`inline-flex h-7 items-center gap-1.5 rounded-full border px-2.5 text-[12px] font-medium transition focus:outline-none focus-visible:ring-2 focus-visible:ring-phi-accent/30 ${
-                active
+            className={`inline-flex h-7 items-center gap-1.5 rounded-full border px-2.5 text-[12px] font-medium transition focus:outline-none focus-visible:ring-2 focus-visible:ring-phi-accent/30 ${active
                     ? "border-phi-accent/20 bg-phi-accent/10 text-phi-accent"
                     : "border-phi-border-faint bg-phi-bg-sunken text-phi-text-tertiary hover:bg-phi-overlay-strong hover:text-phi-text-secondary"
-            } ${className}`}
+                } ${className}`}
             {...props}
         >
             {children}
