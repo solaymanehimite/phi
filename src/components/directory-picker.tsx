@@ -210,7 +210,7 @@ export function DirectoryPicker({
         <Popover className="relative min-w-0">
             <PopoverTrigger
                 disabled={disabled}
-                className="group inline-flex max-w-full min-w-0 ml-4 items-center gap-1.5 rounded-md px-1.5 py-1 text-left text-phi-text-secondary transition-colors hover:bg-phi-overlay-hover hover:text-phi-text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-phi-accent/40 disabled:pointer-events-none disabled:opacity-60"
+                className="group inline-flex max-w-full min-w-0 items-center gap-1.5 rounded-md px-1.5 py-1 text-left text-phi-text-secondary transition-colors hover:bg-phi-overlay-hover hover:text-phi-text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-phi-accent/40 disabled:pointer-events-none disabled:opacity-60"
                 aria-label={`Change project${cwd ? `, currently ${cwd}` : ", no project selected"}`}
             >
                 <FolderIcon className="size-4 shrink-0 text-phi-text-secondary" />
