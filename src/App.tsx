@@ -1,6 +1,7 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Composer } from "./components/composer";
 import { DirectoryPicker } from "./components/directory-picker";
+import { ModelSelector } from "./components/model-selector";
 import { Conversation } from "./components/conversation/conversation";
 import { Streaming } from "./components/conversation/streaming";
 import { Sidebar } from "./components/sidebar";
@@ -174,7 +175,8 @@ export default function App() {
             chat.patchModel(optimistic, undefined, sessionFile);
             try {
                 const res: any = await models.setModel(sessionFile, provider, id);
-                if (res?.model) chat.patchModel(res.model, res.thinkingLevel, sessionFile);
+                if (res?.model)
+                    chat.patchModel(res.model, res.thinkingLevel, sessionFile);
             } catch (e) {
                 const msg = e instanceof Error ? e.message : String(e);
                 setModelError(msg);
@@ -201,7 +203,8 @@ export default function App() {
         if (!level || !sessionFile) return;
         try {
             const res: any = await models.setThinkingLevel(sessionFile, level);
-            if (res?.thinkingLevel) chat.patchModel(null as any, res.thinkingLevel, sessionFile);
+            if (res?.thinkingLevel)
+                chat.patchModel(null as any, res.thinkingLevel, sessionFile);
         } catch (e) {
             const msg = e instanceof Error ? e.message : String(e);
             setModelError(msg);
@@ -282,7 +285,9 @@ export default function App() {
 
     const focusComposer = useCallback(() => {
         requestAnimationFrame(() => {
-            document.querySelector<HTMLTextAreaElement>('textarea[aria-label="Message Pi"]')?.focus();
+            document
+                .querySelector<HTMLTextAreaElement>('textarea[aria-label="Message Pi"]')
+                ?.focus();
         });
     }, []);
 
@@ -293,7 +298,9 @@ export default function App() {
             // remain attached to their own session files in useChat.
             if (chat.hasCache(file)) {
                 chat.hydrateFromCache(file);
-                sessions.switchTo(file).catch((e) => console.warn("switchSession failed", e));
+                sessions
+                    .switchTo(file)
+                    .catch((e) => console.warn("switchSession failed", e));
                 chat.revalidate(file);
                 focusComposer();
                 return;
@@ -357,7 +364,10 @@ export default function App() {
     }, [chat.abort, focusComposer]);
 
     const handleSend = useCallback(
-        async (content: string, images?: { type: "image"; data: string; mimeType: string }[]) => {
+        async (
+            content: string,
+            images?: { type: "image"; data: string; mimeType: string }[],
+        ) => {
             let preparedSessionFile: string | undefined;
             const selectedCwd = !chat.activeFile
                 ? (newChatCwd ?? homeCwd) || undefined
@@ -384,8 +394,13 @@ export default function App() {
                         : null;
                     if (parsed) {
                         try {
-                            const res: any = await models.setModel(file, parsed.provider, parsed.id);
-                            if (res?.model) chat.patchModel(res.model, res.thinkingLevel, file);
+                            const res: any = await models.setModel(
+                                file,
+                                parsed.provider,
+                                parsed.id,
+                            );
+                            if (res?.model)
+                                chat.patchModel(res.model, res.thinkingLevel, file);
                         } catch (e) {
                             setModelError(e instanceof Error ? e.message : String(e));
                         }
@@ -560,29 +575,36 @@ export default function App() {
                                     )}
                                 </div>
                             )}
-                        {!chat.activeFile && (
-                            <div className="mx-auto mb-1 w-full max-w-3xl">
+                        <div className="mx-auto pl-6 mb-1 flex w-full max-w-3xl min-w-0 items-center gap-1">
+                            {!chat.activeFile && (
                                 <DirectoryPicker
                                     cwd={(newChatCwd ?? homeCwd) || null}
                                     homeCwd={homeCwd}
-                                    projects={sessions.groups.map(({ cwd, displayCwd }) => ({ cwd, displayCwd }))}
+                                    projects={sessions.groups.map(({ cwd, displayCwd }) => ({
+                                        cwd,
+                                        displayCwd,
+                                    }))}
                                     onChange={setNewChatCwd}
                                     disabled={chat.isStreaming}
                                 />
-                            </div>
-                        )}
+                            )}
+                            <ModelSelector
+                                models={models.models}
+                                value={selectedModelKey}
+                                thinkingLevel={thinkingLevel}
+                                onSelect={handleSelectModel}
+                                onThinkingChange={handleThinkingChange}
+                                disabled={chat.isStreaming}
+                                isStreaming={chat.isStreaming}
+                                loading={models.loading}
+                                error={models.error}
+                            />
+                        </div>
                         <Composer
                             onSend={handleSend}
                             onAbort={handleAbort}
                             isStreaming={chat.isStreaming}
-                            models={models.models}
-                            modelsLoading={models.loading}
-                            modelsError={models.error}
-                            selectedModelKey={selectedModelKey}
-                            thinkingLevel={thinkingLevel}
-                            onSelectModel={handleSelectModel}
-                            onThinkingChange={handleThinkingChange}
-                            cwd={chat.activeFile ? activeCwd : newChatCwd ?? homeCwd}
+                            cwd={chat.activeFile ? activeCwd : (newChatCwd ?? homeCwd)}
                         />
                     </div>
                 </section>

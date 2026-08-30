@@ -1,8 +1,6 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState, type FormEvent, type KeyboardEvent, type DragEvent, type ClipboardEvent } from "react";
 import { Button } from "./ui/button";
 import { ArrowUpIcon, StopIcon } from "./ui/icons";
-import { ModelSelector } from "./model-selector";
-import type { ModelInfo, ThinkingLevel } from "../types/session";
 import { PaperClipIcon, XMarkIcon } from "@heroicons/react/24/solid";
 import { SlashMenu } from "./composer/slash-menu";
 import { useSlashCommands } from "../hooks/useSlashCommands";
@@ -15,13 +13,6 @@ type ComposerProps = {
     onAbort?: () => void;
     isStreaming?: boolean;
     disabled?: boolean;
-    models?: ModelInfo[];
-    modelsLoading?: boolean;
-    modelsError?: string | null;
-    selectedModelKey?: string;
-    thinkingLevel?: string;
-    onSelectModel?: (provider: string, id: string) => void | Promise<void>;
-    onThinkingChange?: (level: ThinkingLevel) => void | Promise<void>;
     cwd?: string;
 };
 
@@ -74,13 +65,6 @@ export const Composer = memo(function Composer({
     onAbort,
     isStreaming,
     disabled,
-    models,
-    modelsLoading,
-    modelsError,
-    selectedModelKey,
-    thinkingLevel,
-    onSelectModel,
-    onThinkingChange,
     cwd,
 }: ComposerProps) {
     const [message, setMessage] = useState("");
@@ -428,17 +412,6 @@ export const Composer = memo(function Composer({
                     >
                         <PaperClipIcon className="size-4" />
                     </Button>
-                    <ModelSelector
-                        models={models}
-                        value={selectedModelKey}
-                        thinkingLevel={thinkingLevel}
-                        onSelect={onSelectModel}
-                        onThinkingChange={onThinkingChange}
-                        disabled={!!disabled}
-                        isStreaming={!!isStreaming}
-                        loading={!!modelsLoading}
-                        error={modelsError ?? null}
-                    />
                 </div>
 
                 {isStreaming ? (

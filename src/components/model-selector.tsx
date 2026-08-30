@@ -4,6 +4,7 @@ import {
     ArrowUpIcon,
     BeakerIcon,
     BoltIcon,
+    ChevronDownIcon,
     MapIcon,
     CpuChipIcon,
     EyeIcon,
@@ -224,12 +225,13 @@ export const ModelSelector = memo(function ModelSelector({
             <>
                 <PopoverTrigger
                     disabled={isDisabled}
-                    className="inline-flex h-8 items-center gap-2 rounded-lg px-2.5 text-[13px] font-medium text-phi-text-primary transition-colors hover:bg-phi-overlay-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-phi-accent/40 data-open:bg-phi-overlay-active disabled:opacity-60 disabled:pointer-events-none"
-                    aria-label={selected ? `${selected.provider}/${selected.id}` : undefined}
+                    className="group inline-flex max-w-full min-w-0 items-center gap-1.5 rounded-md px-1.5 py-1 text-left text-phi-text-secondary transition-colors hover:bg-phi-overlay-hover hover:text-phi-text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-phi-accent/40 disabled:pointer-events-none disabled:opacity-60"
+                    aria-label={selected ? `Change model, currently ${selected.provider}/${selected.id}` : "Change model"}
                 >
-                    {!loading && selected && <ProviderImg provider={selected.provider} size={14} className="shrink-0 text-phi-text-muted" />}
-                    <span className="max-w-[140px] truncate">{loading ? "Loading models…" : selected?.name ?? (list.length === 0 ? "No models" : "Select model")}</span>
-                    <span className="text-[11px] font-normal text-phi-text-muted/60">{clampedEffort}</span>
+                    {!loading && selected && <ProviderImg provider={selected.provider} size={14} className="shrink-0 text-phi-text-secondary" />}
+                    <span className="min-w-0 truncate text-[12.5px] font-medium">{loading ? "Loading models…" : selected?.name ?? (list.length === 0 ? "No models" : "Select model")}</span>
+                    <span className="shrink-0 text-[11px] font-normal text-phi-text-muted/60">{clampedEffort}</span>
+                    <ChevronDownIcon className="size-3.5 shrink-0 text-phi-text-muted transition-transform group-data-open:rotate-180" />
                 </PopoverTrigger>
 
                 <PopoverContent anchor={{ to: "top start", gap: 12 }} className="h-[360px] w-[500px] overflow-hidden">
