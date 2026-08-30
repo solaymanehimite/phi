@@ -99,6 +99,12 @@
   }
 }
 
+@layer components {
+  .session-row:has([data-open]) .session-row-time {
+    opacity: 0;
+  }
+}
+
 @layer base {
   html,
   body,

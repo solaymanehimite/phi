@@ -365,10 +365,10 @@ const SessionRow = memo(function SessionRow({
         <div
             onMouseEnter={onPrefetch}
             onFocusCapture={onPrefetch}
-            className={`group flex h-8 w-full items-center gap-1 rounded-lg px-1 text-left text-[13px] ${active ? "bg-phi-overlay-active text-phi-text-primary" : "text-phi-text-tertiary hover:bg-phi-overlay-hover hover:text-phi-text-secondary"}`}
+            className={`session-row group relative flex h-8 w-full items-center gap-1 rounded-lg px-1 text-left text-[13px] ${active ? "bg-phi-overlay-active text-phi-text-primary" : "text-phi-text-tertiary hover:bg-phi-overlay-hover hover:text-phi-text-secondary"}`}
         >
             {renaming ? (
-                <div className="flex min-w-0 flex-1 items-center gap-2.5 truncate rounded-lg px-1.5 py-1">
+                <div className="flex min-w-0 flex-1 items-center gap-2.5 truncate rounded-lg px-1.5 py-1 pr-8">
                     {isStreaming ? (
                         <ArrowPathIcon className="size-4 shrink-0 animate-spin text-phi-text-secondary" />
                     ) : null}
@@ -380,45 +380,48 @@ const SessionRow = memo(function SessionRow({
                         onBlur={handleBlur}
                         variant="inline"
                     />
-                    <span className="shrink-0 text-[11px] text-phi-text-faint">
-                        {time}
-                    </span>
                 </div>
             ) : (
                 <button
                     type="button"
                     onClick={onClick}
-                    className="flex min-w-0 flex-1 items-center gap-2.5 truncate rounded-lg px-1.5 py-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-phi-accent/40"
+                    className="flex min-w-0 flex-1 items-center gap-2.5 truncate rounded-lg px-1.5 py-1 pr-8 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-phi-accent/40"
                 >
                     {isStreaming ? (
                         <ArrowPathIcon className="size-4 shrink-0 animate-spin text-phi-text-secondary" />
                     ) : null}
                     <span className="min-w-0 flex-1 truncate text-left">{title}</span>
-                    <span className="shrink-0 text-[11px] text-phi-text-faint">
-                        {time}
-                    </span>
                 </button>
             )}
 
-            <DropdownMenu>
-                <DropdownMenuTrigger aria-label="Session actions">
-                    <EllipsisHorizontalIcon className="size-3.5" />
-                </DropdownMenuTrigger>
-                <DropdownMenuContent>
-                    <DropdownMenuItem
-                        icon={<PencilIcon className="size-[15px]" />}
-                        onClick={handleStartRename}
+            <span className="session-row-time pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-[11px] text-phi-text-faint group-hover:opacity-0">
+                {time}
+            </span>
+
+            <div className="absolute right-1 top-1/2 z-10 -translate-y-1/2">
+                <DropdownMenu>
+                    <DropdownMenuTrigger
+                        aria-label="Session actions"
+                        className="pointer-events-none group-hover:pointer-events-auto"
                     >
-                        Rename
-                    </DropdownMenuItem>
-                    <DropdownMenuItem
-                        icon={<TrashIcon className="size-[15px]" />}
-                        onClick={handleDelete}
-                    >
-                        Delete
-                    </DropdownMenuItem>
-                </DropdownMenuContent>
-            </DropdownMenu>
+                        <EllipsisHorizontalIcon className="size-3.5" />
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent>
+                        <DropdownMenuItem
+                            icon={<PencilIcon className="size-[15px]" />}
+                            onClick={handleStartRename}
+                        >
+                            Rename
+                        </DropdownMenuItem>
+                        <DropdownMenuItem
+                            icon={<TrashIcon className="size-[15px]" />}
+                            onClick={handleDelete}
+                        >
+                            Delete
+                        </DropdownMenuItem>
+                    </DropdownMenuContent>
+                </DropdownMenu>
+            </div>
         </div>
     );
 });

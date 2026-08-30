@@ -14,7 +14,7 @@ export function DropdownMenuTrigger({
 }: DropdownMenuTriggerProps) {
     return (
         <MenuButton
-            className={`grid size-6 place-items-center rounded text-phi-icon opacity-0 transition-colors hover:bg-phi-overlay-strong hover:text-phi-text-secondary focus:opacity-100 focus:outline-none group-hover:opacity-100 data-open:bg-phi-overlay-strong data-open:text-phi-text-secondary data-open:opacity-100 ${className}`}
+            className={`grid size-6 place-items-center rounded text-phi-icon opacity-0 transition-colors hover:bg-phi-overlay-strong hover:text-phi-text-secondary focus:outline-none group-hover:opacity-100 focus-visible:opacity-100 data-open:bg-phi-overlay-strong data-open:text-phi-text-secondary data-open:opacity-100 ${className}`}
             {...props}
         >
             {children}
@@ -57,7 +57,11 @@ export function DropdownMenuItem({
                 onClick={onClick}
                 className="group flex w-full items-center gap-3 rounded-lg px-3 py-1 text-left text-[13px] text-phi-text-secondary data-focus:bg-phi-overlay-strong"
             >
-                {icon ? <span className="shrink-0 text-phi-text-tertiary group-hover:text-phi-text-secondary group-data-[focus]:text-phi-text-secondary">{icon}</span> : null}
+                {icon ? (
+                    <span className="shrink-0 text-phi-text-tertiary group-hover:text-phi-text-secondary group-data-[focus]:text-phi-text-secondary">
+                        {icon}
+                    </span>
+                ) : null}
                 {children}
             </button>
         </MenuItem>
