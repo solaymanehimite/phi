@@ -159,7 +159,8 @@ export default function App() {
     const handleSelectModel = useCallback(
         async (provider: string, id: string) => {
             const key = `${provider}/${id}`;
-            if (!chat.activeFile) {
+            const sessionFile = chat.activeFile;
+            if (!sessionFile) {
                 setDraftModelKey(key);
                 setModelError(null);
                 return;
@@ -170,10 +171,10 @@ export default function App() {
             );
             const optimistic: any = info ?? { provider, id, modelId: id, name: id };
             // Optimistic only — no refresh. Model switch must not reload messages or flash "Loading…"
-            chat.patchModel(optimistic, undefined);
+            chat.patchModel(optimistic, undefined, sessionFile);
             try {
-                const res: any = await models.setModel(provider, id);
-                if (res?.model) chat.patchModel(res.model, res.thinkingLevel);
+                const res: any = await models.setModel(sessionFile, provider, id);
+                if (res?.model) chat.patchModel(res.model, res.thinkingLevel, sessionFile);
             } catch (e) {
                 const msg = e instanceof Error ? e.message : String(e);
                 setModelError(msg);
@@ -188,16 +189,19 @@ export default function App() {
     const pendingThinkingRef = useRef<
         import("./types/session").ThinkingLevel | null
     >(null);
+    const pendingThinkingFileRef = useRef<string | null>(null);
 
     // flush pending thinking level to server (debounced)
     const flushThinking = useCallback(async () => {
         const level = pendingThinkingRef.current;
+        const sessionFile = pendingThinkingFileRef.current;
         pendingThinkingRef.current = null;
+        pendingThinkingFileRef.current = null;
         thinkingCommitRef.current = null;
-        if (!level || !chat.activeFile) return;
+        if (!level || !sessionFile) return;
         try {
-            const res: any = await models.setThinkingLevel(level);
-            if (res?.thinkingLevel) chat.patchModel(null as any, res.thinkingLevel);
+            const res: any = await models.setThinkingLevel(sessionFile, level);
+            if (res?.thinkingLevel) chat.patchModel(null as any, res.thinkingLevel, sessionFile);
         } catch (e) {
             const msg = e instanceof Error ? e.message : String(e);
             setModelError(msg);
@@ -210,11 +214,13 @@ export default function App() {
                 setDraftThinking(level);
                 return;
             }
+            const sessionFile = chat.activeFile;
             setModelError(null);
             // Instant optimistic so slider feels snappy; never reload messages
-            chat.patchModel(null as any, level);
+            chat.patchModel(null as any, level, sessionFile);
             // Debounce server sync — sliding through values only commits last one
             pendingThinkingRef.current = level;
+            pendingThinkingFileRef.current = sessionFile;
             if (thinkingCommitRef.current != null)
                 window.clearTimeout(thinkingCommitRef.current);
             thinkingCommitRef.current = window.setTimeout(() => {
@@ -237,6 +243,7 @@ export default function App() {
             window.clearTimeout(thinkingCommitRef.current);
             thinkingCommitRef.current = null;
             pendingThinkingRef.current = null;
+            pendingThinkingFileRef.current = null;
         }
     }, [chat.activeFile]);
 
@@ -282,35 +289,20 @@ export default function App() {
     const handleSelect = useCallback(
         async (file: string) => {
             if (file === chat.activeFile) return;
-            if (chat.isStreaming) {
-                const ok = window.confirm(
-                    "A response is still streaming. Switching sessions will abort it. Switch anyway?",
-                );
-                if (!ok) return;
-                try {
-                    await chat.abort();
-                } catch { }
-            }
-            // Instant path: cached -> 0ms hydrate, then background revalidate + switch
+            // Selection only changes the viewport. Streams and their SSE readers
+            // remain attached to their own session files in useChat.
             if (chat.hasCache(file)) {
                 chat.hydrateFromCache(file);
-                // background: keep server runtime in sync and refresh stale data without flash
-                sessions
-                    .switchTo(file)
-                    .catch((e) => console.warn("switchSession failed", e));
+                sessions.switchTo(file).catch((e) => console.warn("switchSession failed", e));
                 chat.revalidate(file);
                 focusComposer();
                 return;
             }
-            // Cold path: instant loading feedback, then 1 RTT hydrate
             chat.prepareSwitch(file);
             try {
                 const res = await sessions.switchTo(file);
-                if ((res as any)?.context) {
-                    chat.hydrateFromSwitch(res as any);
-                } else {
-                    await chat.openFile(file);
-                }
+                if ((res as any)?.context) chat.hydrateFromSwitch(res as any);
+                else await chat.openFile(file);
             } catch (e) {
                 console.warn("switchSession failed", e);
                 await chat.openFile(file).catch(() => { });
@@ -325,27 +317,16 @@ export default function App() {
             chat.hydrateFromCache,
             chat.hasCache,
             chat.revalidate,
-            chat.isStreaming,
-            chat.abort,
             chat.activeFile,
             chat.prepareSwitch,
             focusComposer,
         ],
     );
 
-    const handleNewChat = useCallback(async () => {
-        if (chat.isStreaming) {
-            const ok = window.confirm(
-                "A response is still streaming. Starting a new chat will abort it. Continue?",
-            );
-            if (!ok) return;
-            try {
-                await chat.abort();
-            } catch { }
-        }
+    const handleNewChat = useCallback(() => {
         chat.clear();
         focusComposer();
-    }, [chat.clear, chat.isStreaming, chat.abort, focusComposer]);
+    }, [chat.clear, focusComposer]);
 
     const handleRename = useCallback(
         async (file: string, name: string) => {
@@ -365,9 +346,9 @@ export default function App() {
         async (file: string) => {
             await sessions.remove(file);
             chat.invalidateCache(file);
-            if (chat.activeFile === file) chat.clear();
+            chat.removeFile(file);
         },
-        [sessions.remove, chat.activeFile, chat.clear, chat.invalidateCache],
+        [sessions.remove, chat.removeFile, chat.invalidateCache],
     );
 
     const handleAbort = useCallback(async () => {
@@ -403,15 +384,15 @@ export default function App() {
                         : null;
                     if (parsed) {
                         try {
-                            const res: any = await models.setModel(parsed.provider, parsed.id);
-                            if (res?.model) chat.patchModel(res.model, res.thinkingLevel);
+                            const res: any = await models.setModel(file, parsed.provider, parsed.id);
+                            if (res?.model) chat.patchModel(res.model, res.thinkingLevel, file);
                         } catch (e) {
                             setModelError(e instanceof Error ? e.message : String(e));
                         }
                     }
                     if (draftThinking) {
                         try {
-                            await models.setThinkingLevel(draftThinking);
+                            await models.setThinkingLevel(file, draftThinking);
                         } catch (e) {
                             setModelError(e instanceof Error ? e.message : String(e));
                         }
@@ -488,7 +469,7 @@ export default function App() {
                     onDelete={handleDelete}
                     loading={sessions.loading}
                     error={sessions.error}
-                    isStreaming={chat.isStreaming}
+                    runningFiles={chat.runningFiles}
                     onPrefetch={chat.prefetch}
                 />
             )}

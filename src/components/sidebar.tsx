@@ -33,7 +33,7 @@ type SidebarProps = {
     onDelete: (file: string) => Promise<void>;
     loading: boolean;
     error: string | null;
-    isStreaming?: boolean;
+    runningFiles: ReadonlySet<string>;
     onPrefetch?: (file: string) => void;
 };
 
@@ -71,7 +71,7 @@ export const Sidebar = memo(function Sidebar({
     onDelete,
     loading,
     error,
-    isStreaming,
+    runningFiles,
     onPrefetch,
 }: SidebarProps) {
     const handleSearchChange = useCallback(
@@ -106,15 +106,7 @@ export const Sidebar = memo(function Sidebar({
             </div>
 
             <div className="px-2 pt-2">
-                <Button
-                    className="w-full justify-start"
-                    onClick={onNewChat}
-                    title={
-                        isStreaming
-                            ? "A response is streaming — starting a new chat will abort it"
-                            : undefined
-                    }
-                >
+                <Button className="w-full justify-start" onClick={onNewChat}>
                     <PlusIcon className="size-4" />
                     New chat
                 </Button>
@@ -151,7 +143,7 @@ export const Sidebar = memo(function Sidebar({
                                 group={group}
                                 collapsed={collapsed.has(group.cwd)}
                                 activeFile={activeFile}
-                                isStreaming={isStreaming}
+                                runningFiles={runningFiles}
                                 onToggleGroup={onToggleGroup}
                                 onSelect={onSelect}
                                 onRename={onRename}
@@ -177,7 +169,7 @@ const GroupSection = memo(function GroupSection({
     group,
     collapsed,
     activeFile,
-    isStreaming,
+    runningFiles,
     onToggleGroup,
     onSelect,
     onRename,
@@ -187,7 +179,7 @@ const GroupSection = memo(function GroupSection({
     group: SessionGroup;
     collapsed: boolean;
     activeFile: string | null;
-    isStreaming?: boolean;
+    runningFiles: ReadonlySet<string>;
     onToggleGroup: (cwd: string) => void;
     onSelect: (file: string) => void;
     onRename: (file: string, name: string) => Promise<void>;
@@ -229,7 +221,7 @@ const GroupSection = memo(function GroupSection({
                                 key={s.path}
                                 session={s}
                                 active={s.path === activeFile}
-                                isStreaming={isStreaming}
+                                isStreaming={runningFiles.has(s.path)}
                                 onSelect={onSelect}
                                 onRename={onRename}
                                 onDelete={onDelete}
@@ -342,7 +334,7 @@ const SessionRow = memo(function SessionRow({
         >
             {renaming ? (
                 <div className="flex min-w-0 flex-1 items-center gap-2.5 truncate rounded-lg px-1.5 py-1">
-                    {isStreaming && active ? (
+                    {isStreaming ? (
                         <ArrowPathIcon className="size-4 shrink-0 animate-spin text-phi-text-secondary" />
                     ) : null}
                     <Input
@@ -359,14 +351,9 @@ const SessionRow = memo(function SessionRow({
                 <button
                     type="button"
                     onClick={onClick}
-                    title={
-                        isStreaming && !active
-                            ? "A response is streaming — switching will abort it"
-                            : undefined
-                    }
-                    className={`flex min-w-0 flex-1 items-center gap-2.5 truncate rounded-lg px-1.5 py-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-phi-accent/40 ${isStreaming && !active ? "opacity-60" : ""}`}
+                    className="flex min-w-0 flex-1 items-center gap-2.5 truncate rounded-lg px-1.5 py-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-phi-accent/40"
                 >
-                    {isStreaming && active ? (
+                    {isStreaming ? (
                         <ArrowPathIcon className="size-4 shrink-0 animate-spin text-phi-text-secondary" />
                     ) : null}
                     <span className="min-w-0 flex-1 truncate text-left">{title}</span>

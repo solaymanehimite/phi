@@ -115,6 +115,7 @@ export async function getModels(): Promise<ModelsResponse> {
 }
 
 export async function setModel(opts: {
+  sessionFile: string;
   provider: string;
   modelId: string;
   thinkingLevel?: ThinkingLevel;
@@ -127,17 +128,21 @@ export async function setModel(opts: {
   return jsonOrThrow(res);
 }
 
-export async function setThinkingLevel(thinkingLevel: ThinkingLevel): Promise<{ ok: boolean; thinkingLevel: string }> {
+export async function setThinkingLevel(sessionFile: string, thinkingLevel: ThinkingLevel): Promise<{ ok: boolean; thinkingLevel: string }> {
   const res = await apiFetch(`/model`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ thinkingLevel }),
+    body: JSON.stringify({ sessionFile, thinkingLevel }),
   });
   return jsonOrThrow(res);
 }
 
-export async function abortPrompt(): Promise<{ ok: boolean }> {
-  const res = await apiFetch(`/abort`, { method: "POST" });
+export async function abortPrompt(sessionFile: string): Promise<{ ok: boolean; active: boolean }> {
+  const res = await apiFetch(`/abort`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ sessionFile }),
+  });
   return jsonOrThrow(res);
 }
 
