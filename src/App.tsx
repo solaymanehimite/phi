@@ -29,16 +29,7 @@ const ChatViewport = memo(function ChatViewport({
     isStreaming: boolean;
     streaming: {
         text: string;
-        thinking: string;
-        tools: {
-            toolCallId: string;
-            toolName: string;
-            args: Record<string, unknown>;
-            partial?: string;
-            result?: string;
-            isError?: boolean;
-            done?: boolean;
-        }[];
+        workItems: import("./types/work").WorkItem[];
         error?: string;
         startedAt?: number | null;
     };
@@ -77,9 +68,7 @@ const ChatViewport = memo(function ChatViewport({
         );
     }
     const showLive = isStreaming;
-    const hideLastWork =
-        showLive &&
-        (streaming.thinking.trim().length > 0 || streaming.tools.length > 0);
+    const hideLastWork = showLive && streaming.workItems.length > 0;
     return (
         <div className="mx-auto flex w-full flex-1 flex-col items-center overflow-y-auto px-6 pt-6">
             <div className="w-2xl h-full flex flex-col">
@@ -88,8 +77,7 @@ const ChatViewport = memo(function ChatViewport({
                     <div className="pt-2">
                         <Streaming
                             text={streaming.text}
-                            thinking={streaming.thinking}
-                            tools={streaming.tools}
+                            workItems={streaming.workItems}
                             error={streaming.error}
                             isStreaming={isStreaming}
                         />

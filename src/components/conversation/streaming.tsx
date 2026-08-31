@@ -1,38 +1,28 @@
 import { memo } from "react";
 import { Markdown } from "./markdown";
 import { WorkingBlock } from "./working-block";
-
-type StreamingTool = {
-    toolCallId: string;
-    toolName: string;
-    args: Record<string, unknown>;
-    partial?: string;
-    result?: string;
-    isError?: boolean;
-    done?: boolean;
-};
+import type { WorkItem } from "../../types/work";
 
 export const Streaming = memo(function Streaming({
     text,
-    thinking,
-    tools,
+    workItems,
     error,
     isStreaming,
 }: {
     text: string;
-    thinking: string;
-    tools: StreamingTool[];
+    workItems: WorkItem[];
     error?: string;
     isStreaming?: boolean;
 }) {
-    const hasWork = Boolean((thinking && thinking.trim()) || tools.length > 0);
-    // keep live working block visible even after text starts — distinct from final answer
+    const hasWork = workItems.length > 0;
+    // Keep the live working block visible even after text starts. It is distinct
+    // from the final answer.
     const showWorking = hasWork || !!isStreaming;
 
     if (!text && !hasWork && !error) {
         return (
             <div className="space-y-3">
-                <WorkingBlock thinking={thinking} tools={tools.map((t) => ({ id: t.toolCallId, name: t.toolName, args: t.args, partial: t.partial, result: t.result ? { text: t.result, isError: !!t.isError } : undefined }))} isStreaming={isStreaming} variant="streaming" />
+                <WorkingBlock items={workItems} isStreaming={isStreaming} variant="streaming" />
             </div>
         );
     }
@@ -41,8 +31,7 @@ export const Streaming = memo(function Streaming({
         <div className="space-y-3 pb-6">
             {showWorking && (
                 <WorkingBlock
-                    thinking={thinking}
-                    tools={tools.map((t) => ({ id: t.toolCallId, name: t.toolName, args: t.args, partial: t.partial, result: t.result ? { text: t.result, isError: !!t.isError } : undefined }))}
+                    items={workItems}
                     isStreaming={isStreaming}
                     variant="streaming"
                 />
@@ -55,4 +44,4 @@ export const Streaming = memo(function Streaming({
             )}
         </div>
     );
-})
+});

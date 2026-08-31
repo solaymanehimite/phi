@@ -1,4 +1,5 @@
 import { memo, useMemo } from "react";
+import type { WorkItem } from "../../types/work";
 import { Markdown } from "./markdown";
 import { WorkingBlock } from "./working-block";
 
@@ -94,9 +95,8 @@ function getUserImages(content: unknown): Array<{ data: string; mimeType: string
 
 type Turn = {
     user: Record<string, unknown> | null;
-    thinking: string;
     text: string;
-    toolCalls: Array<{ id: string; name: string; args: Record<string, unknown> }>;
+    workItems: WorkItem[];
 };
 
 const TurnRow = memo(function TurnRow({
@@ -111,28 +111,27 @@ const TurnRow = memo(function TurnRow({
     const userText = turn.user ? renderUser(turn.user.content) : "";
     const userImages = turn.user ? getUserImages(turn.user.content) : [];
     const hasUser = Boolean(userText.trim() || userImages.length > 0);
-    const thinking = turn.thinking.trim();
     const text = turn.text.trim();
-    const toolCalls = turn.toolCalls;
+    const workItems = turn.workItems.map((item) => {
+        if (item.kind !== "tool") return item;
 
-    const hasWork = Boolean(thinking || toolCalls.length > 0);
-    const workTools = toolCalls.map((tc) => {
-        let result = toolResults.get(tc.id);
+        let result = toolResults.get(item.id);
         if (!result) {
             for (const [k, v] of toolResults.entries()) {
-                if (k.startsWith(tc.id) || tc.id.startsWith(k)) {
+                if (k.startsWith(item.id) || item.id.startsWith(k)) {
                     result = v;
                     break;
                 }
             }
         }
-        return { id: tc.id, name: tc.name, args: tc.args, result };
+        return result ? { ...item, result } : item;
     });
 
+    const hasWork = workItems.length > 0;
     const showWork = hasWork && !hideWork;
 
     // empty turn
-    if (!hasUser && !thinking && !text && toolCalls.length === 0) return null;
+    if (!hasUser && !text && !hasWork) return null;
 
     return (
         <div className="py-2">
@@ -161,8 +160,7 @@ const TurnRow = memo(function TurnRow({
                 <div className="space-y-3 py-1">
                     {showWork && (
                         <WorkingBlock
-                            thinking={thinking}
-                            tools={workTools}
+                            items={workItems}
                             variant="history"
                         />
                     )}
@@ -206,12 +204,10 @@ export const Conversation = memo(function Conversation({
     const turns = useMemo(() => {
         const out: Turn[] = [];
         let cur: Turn | null = null;
+        let assistantMessageIndex = 0;
 
         const flush = () => {
-            if (
-                cur &&
-                (cur.user || cur.thinking || cur.text || cur.toolCalls.length > 0)
-            ) {
+            if (cur && (cur.user || cur.text || cur.workItems.length > 0)) {
                 out.push(cur);
             }
             cur = null;
@@ -221,17 +217,38 @@ export const Conversation = memo(function Conversation({
             const role = String(m.role ?? "");
             if (role === "user") {
                 flush();
-                cur = { user: m, thinking: "", text: "", toolCalls: [] };
+                cur = { user: m, text: "", workItems: [] };
             } else if (role === "assistant") {
-                if (!cur) cur = { user: null, thinking: "", text: "", toolCalls: [] };
+                if (!cur) cur = { user: null, text: "", workItems: [] };
                 const content = Array.isArray(m.content) ? m.content : [];
-                for (const block of content) {
+                const messageIndex = assistantMessageIndex++;
+                for (const [contentIndex, block] of content.entries()) {
                     const th = getThinking(block);
-                    if (th) cur.thinking += (cur.thinking ? "\n\n" : "") + th;
+                    if (th) {
+                        const previous = cur.workItems[cur.workItems.length - 1];
+                        if (previous?.kind === "thinking") {
+                            previous.text += (previous.text ? "\n\n" : "") + th;
+                        } else {
+                            cur.workItems.push({
+                                kind: "thinking",
+                                id: `thinking:${messageIndex}:${contentIndex}`,
+                                text: th,
+                                order: { message: messageIndex, content: contentIndex },
+                            });
+                        }
+                    }
                     const tx = getTextContent(block);
                     if (tx) cur.text += (cur.text ? "\n\n" : "") + tx;
                     const tc = getToolCall(block);
-                    if (tc) cur.toolCalls.push(tc);
+                    if (tc) {
+                        cur.workItems.push({
+                            kind: "tool",
+                            id: tc.id,
+                            name: tc.name,
+                            args: tc.args,
+                            order: { message: messageIndex, content: contentIndex },
+                        });
+                    }
                 }
             } else if (role === "toolResult") {
                 // tool results are resolved via map, no separate turn
@@ -258,7 +275,7 @@ export const Conversation = memo(function Conversation({
                     text = String((m as Record<string, unknown>).text);
                 }
                 if (!text.trim()) continue;
-                if (!cur) cur = { user: null, thinking: "", text: "", toolCalls: [] };
+                if (!cur) cur = { user: null, text: "", workItems: [] };
                 cur.text += (cur.text ? "\n\n" : "") + text;
             } else {
                 // other unknown roles (compactionSummary, branchSummary, bashExecution, etc.)
@@ -281,7 +298,7 @@ export const Conversation = memo(function Conversation({
                     text = String((m as Record<string, unknown>).text);
                 }
                 if (!text.trim()) continue;
-                if (!cur) cur = { user: null, thinking: "", text: "", toolCalls: [] };
+                if (!cur) cur = { user: null, text: "", workItems: [] };
                 cur.text += (cur.text ? "\n\n" : "") + text;
             }
         }
@@ -291,7 +308,7 @@ export const Conversation = memo(function Conversation({
 
     const lastTurnWithWork = useMemo(() => {
         for (let i = turns.length - 1; i >= 0; i--) {
-            if (turns[i].thinking.trim() || turns[i].toolCalls.length > 0) return i;
+            if (turns[i].workItems.length > 0) return i;
         }
         return -1;
     }, [turns]);

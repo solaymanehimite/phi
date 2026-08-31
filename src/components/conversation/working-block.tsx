@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import type { WorkItem } from "../../types/work";
 import { ChevronDownIcon } from "../ui/icons";
 
 function getToolDisplay(name: string, args: Record<string, unknown>): { label: string; detail: string | null } {
@@ -14,26 +15,16 @@ function getToolDisplay(name: string, args: Record<string, unknown>): { label: s
     return first ? { label: name, detail: first.slice(0, 80) } : { label: name, detail: null };
 }
 
-type WorkingTool = {
-    id: string;
-    name: string;
-    args: Record<string, unknown>;
-    result?: { text: string; isError: boolean };
-    partial?: string;
-};
-
 type Props = {
-    thinking?: string;
-    tools: WorkingTool[];
+    items: WorkItem[];
     isStreaming?: boolean;
     variant: "streaming" | "history";
 };
 
-export function WorkingBlock({ thinking, tools, isStreaming, variant }: Props) {
+export function WorkingBlock({ items, isStreaming, variant }: Props) {
     const isStreamingVariant = variant === "streaming";
-    const hasThinking = Boolean(thinking && thinking.trim().length > 0);
-    const hasTools = tools.length > 0;
-    if (!hasThinking && !hasTools && !(isStreamingVariant && isStreaming)) return null;
+    const hasWork = items.length > 0;
+    if (!hasWork && !(isStreamingVariant && isStreaming)) return null;
 
     const [open, setOpen] = useState(() => (isStreamingVariant ? Boolean(isStreaming) : false));
 
@@ -104,29 +95,31 @@ export function WorkingBlock({ thinking, tools, isStreaming, variant }: Props) {
             >
                 <div className="overflow-hidden">
                     <div className="space-y-3 pb-2 pt-2">
-                        {hasThinking && (
-                            <div className="whitespace-pre-wrap break-words text-[13px] leading-6 text-phi-text-tertiary">
-                                {thinking}
-                            </div>
-                        )}
-                        {hasTools && (
-                            <div className="space-y-1.5">
-                                {tools.map((t) => {
-                                    const { label, detail } = getToolDisplay(t.name, t.args);
-                                    const isError = !!t.result?.isError;
-                                    return (
-                                        <div key={t.id} className="flex flex-wrap items-center gap-1.5 py-0.5">
-                                            <span className={`text-xs leading-4 ${isError ? "text-phi-error" : "text-phi-text-secondary"}`}>{label}</span>
-                                            {detail && (
-                                                <code className="rounded border border-phi-border-faint bg-phi-bg-sunken px-1.5 py-0.5 font-mono text-[11px] leading-none text-phi-text-tertiary">
-                                                    {detail}
-                                                </code>
-                                            )}
-                                        </div>
-                                    );
-                                })}
-                            </div>
-                        )}
+                        {items.map((item) => {
+                            if (item.kind === "thinking") {
+                                return (
+                                    <div
+                                        key={item.id}
+                                        className="whitespace-pre-wrap break-words text-[13px] leading-6 text-phi-text-tertiary"
+                                    >
+                                        {item.text}
+                                    </div>
+                                );
+                            }
+
+                            const { label, detail } = getToolDisplay(item.name, item.args);
+                            const isError = !!item.result?.isError;
+                            return (
+                                <div key={item.id} className="flex flex-wrap items-center gap-1.5 py-0.5">
+                                    <span className={`text-xs leading-4 ${isError ? "text-phi-error" : "text-phi-text-secondary"}`}>{label}</span>
+                                    {detail && (
+                                        <code className="rounded border border-phi-border-faint bg-phi-bg-sunken px-1.5 py-0.5 font-mono text-[11px] leading-none text-phi-text-tertiary">
+                                            {detail}
+                                        </code>
+                                    )}
+                                </div>
+                            );
+                        })}
                     </div>
                 </div>
             </div>
