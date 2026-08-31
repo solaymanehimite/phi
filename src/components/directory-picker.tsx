@@ -117,24 +117,16 @@ function DirectoryPanel({
 
             <div className="max-h-56 overflow-y-auto py-1.5">
                 {filteredProjects.length > 0 ? (
-                    filteredProjects.map((project, index) => {
+                    filteredProjects.map((project) => {
                         const selected = project.cwd === cwd;
-                        const rounding =
-                            filteredProjects.length === 1
-                                ? "rounded-lg"
-                                : index === 0
-                                    ? "rounded-t-lg"
-                                    : index === filteredProjects.length - 1
-                                        ? "rounded-b-lg"
-                                        : "rounded-none";
                         return (
                             <button
                                 key={project.cwd}
                                 type="button"
                                 onClick={() => selectProject(project.cwd)}
-                                className={`group flex w-full items-center gap-3 ${rounding} px-3 py-2 text-left text-[13px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-phi-accent/40 ${selected
-                                        ? "bg-phi-overlay-strong text-phi-text-primary"
-                                        : "text-phi-text-secondary hover:bg-phi-overlay-strong hover:text-phi-text-primary"
+                                className={`group flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left text-[13px] hover:bg-phi-overlay-strong hover:text-phi-text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-phi-accent/40 ${selected
+                                        ? "text-phi-text-primary"
+                                        : "text-phi-text-secondary"
                                     }`}
                             >
                                 <span
