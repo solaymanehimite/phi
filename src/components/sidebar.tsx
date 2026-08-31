@@ -20,7 +20,7 @@ import {
 } from "./ui/dropdown-menu";
 import type { SessionGroup } from "../hooks/useSessions";
 import type { SessionInfo } from "../types/session";
-import logo from "../../public/logo.svg";
+import PhiLogo from "../../public/logo.svg?react";
 
 type SidebarProps = {
     groups: SessionGroup[];
@@ -86,13 +86,7 @@ export const Sidebar = memo(function Sidebar({
                     onClick={onNewChat}
                     className="flex items-center mt-2 ml-2 focus-visible:outline-none"
                 >
-                    <img
-                        src={logo}
-                        className="h-5"
-                        style={{
-                            imageRendering: "pixelated",
-                        }}
-                    />
+                    <PhiLogo className="h-5 w-auto" />
                 </button>
                 <div className="flex items-center gap-1">
                     <SearchSessionsButton onClick={onOpenSearch} />
