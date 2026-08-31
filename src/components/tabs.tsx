@@ -35,7 +35,7 @@ export const Tabs = memo(function Tabs({
             <div
                 role="tablist"
                 aria-label="Open chats"
-                className="flex min-w-0 flex-1 items-end gap-1 overflow-x-auto px-0 scrollbar-none"
+                className="flex min-w-0 flex-1 items-end gap-2 overflow-x-auto px-0 scrollbar-none"
             >
                 {tabs.map((tab) => {
                     const active = tab.id === activeId;
@@ -70,7 +70,7 @@ export const Tabs = memo(function Tabs({
                                     aria-label={`Close ${tab.title}`}
                                     title={`Close ${tab.title}`}
                                     onClick={() => onClose(tab.id)}
-                                    className="mr-1 flex size-5 shrink-0 items-center justify-center rounded-md text-phi-text-muted opacity-0 hover:bg-phi-overlay-active hover:text-phi-text-primary focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-phi-accent/50 group-hover:opacity-100"
+                                    className="mr-1.5 flex size-5 shrink-0 items-center justify-center rounded-md text-phi-text-muted opacity-0 hover:bg-phi-overlay-active hover:text-phi-text-primary focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-phi-accent/50 group-hover:opacity-100"
                                 >
                                     <XMarkIcon className="size-3.5" />
                                 </button>
