@@ -19,6 +19,7 @@ import {
 } from "./ui/dropdown-menu";
 import type { SessionGroup } from "../hooks/useSessions";
 import type { SessionInfo } from "../types/session";
+import logo from "../../public/logo.svg"
 
 type SidebarProps = {
     groups: SessionGroup[];
@@ -84,17 +85,20 @@ export const Sidebar = memo(function Sidebar({
         <aside className="flex w-[268px] shrink-0 flex-col bg-phi-bg-sidebar max-sm:absolute max-sm:inset-y-0 max-sm:z-20 max-sm:shadow-[18px_0_50px_rgba(0,0,0,0.45)]">
             <div
                 data-tauri-drag-region
-                className="flex h-12 shrink-0 items-center justify-between px-3"
+                className="flex shrink-0 mb-4 mt-2 items-center justify-between px-3"
             >
                 <button
                     type="button"
                     onClick={onNewChat}
-                    className="flex items-center gap-2 rounded-lg p-1 pl-1.5 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-phi-accent/40"
+                    className="flex items-center mt-2 ml-2 focus-visible:outline-none"
                 >
-                    <span className="font-serif text-2xl text-phi-accent">Φ</span>
-                    <span className="text-lg font-semibold tracking-[-0.01em] text-phi-text-brand">
-                        Phi
-                    </span>
+                    <img
+                        src={logo}
+                        className="h-5"
+                        style={{
+                            imageRendering: "pixelated",
+                        }}
+                    />
                 </button>
                 <Button
                     variant="icon"
