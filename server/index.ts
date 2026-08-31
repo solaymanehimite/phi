@@ -18,7 +18,7 @@ const PORT = Number.parseInt(String(rawPort), 10) || 3001;
 const HOST = "127.0.0.1";
 
 const app = express();
-app.use(cors({ origin: [/tauri\.localhost/, /localhost:\d+$/, /127\.0\.0\.1:\d+$/] }));
+app.use(cors());
 app.use(express.json({ limit: "10mb" }));
 
 class ApiError extends Error {

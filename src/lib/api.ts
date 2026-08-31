@@ -12,25 +12,32 @@ export async function getApiBase(): Promise<string> {
 
 async function getBase(): Promise<string> {
   if (cachedBase) return cachedBase;
-  // Branch on Tauri: __TAURI__ injected by Tauri in WebView only (not browser dev)
-  const isTauri = typeof window !== "undefined" && "__TAURI__" in window;
-  if (!isTauri) return "/api";
+  if (typeof window === "undefined") return "/api";
   if (!portPromise) {
     portPromise = (async () => {
       try {
         const { invoke } = await import("@tauri-apps/api/core");
         const port = await invoke<number>("get_sidecar_port");
-        if (port && Number.isFinite(port)) {
+        if (port && Number.isFinite(port) && port !== 3001) {
           cachedBase = `http://127.0.0.1:${port}/api`;
           return cachedBase;
         }
+        // dev fallback or invoke returned 3001 before sidecar ready -> retry next time
+        if (port === 3001) throw new Error("sidecar not ready");
       } catch (e) {
         console.warn("[phi] get_sidecar_port failed, falling back to /api", e);
+        // don't cache failure — retry on next call after 500ms
+        portPromise = null;
       }
       return "/api";
     })();
   }
-  return portPromise;
+  const base = await portPromise;
+  // if we fell back to /api but we're in Tauri, clear cache so next fetch retries invoke
+  if (base === "/api" && typeof window !== "undefined" && "__TAURI_INTERNALS__" in window) {
+    portPromise = null;
+  }
+  return base;
 }
 
 async function apiFetch(path: string, init?: RequestInit): Promise<Response> {
