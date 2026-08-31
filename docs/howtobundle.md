@@ -166,10 +166,10 @@ CI: run `build:sidecar` *on each runner triple* before `tauri build` (GitHub Act
 
 ---
 
-## 7. When to Do This
+## 7. Current status
 
-Not now. Ship Alpha with `bun run dev:all`. Revisit this doc when:
-* you need to share a `.dmg` with a tester without Node, or
-* you want Tauri updater distribution.
+Phi is configured for both development and packaged builds.
 
-Until then, keep it on `/server` as plain Node.
+Use `bun run dev:all` for browser development. Use `bun run build:sidecar`, `bun run build`, and `bunx tauri build` for a packaged application. The packaged app starts the bundled sidecar on a free localhost port and connects to it through the port exposed by Rust.
+
+Before publishing releases, build the sidecar separately for every target platform and verify the packaged app can read the user's Pi configuration and session directory.
