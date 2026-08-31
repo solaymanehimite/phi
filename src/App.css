@@ -69,6 +69,35 @@
   --color-phi-thinking-max: #c22faa;
 }
 
+.session-command-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  background: rgb(0 0 0 / 0.58);
+}
+
+.session-command-content {
+  position: fixed;
+  top: 15vh;
+  left: 50%;
+  z-index: 51;
+  width: min(calc(100vw - 32px), 640px);
+  overflow: hidden;
+  border: 1px solid var(--color-phi-border-strong);
+  border-radius: 14px;
+  background: var(--color-phi-bg-elevated);
+  box-shadow: 0 24px 80px rgb(0 0 0 / 0.5);
+  transform: translateX(-50%);
+}
+
+.session-command-content [cmdk-list] {
+  scroll-padding-block: 8px;
+}
+
+.session-command-content [cmdk-group-heading] {
+  user-select: none;
+}
+
 @keyframes phi-dot-matrix {
   0%,
   100% {

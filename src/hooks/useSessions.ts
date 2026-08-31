@@ -1,4 +1,4 @@
-import { useCallback, useDeferredValue, useEffect, useMemo, useState, useTransition } from "react";
+import { useCallback, useEffect, useMemo, useState, useTransition } from "react";
 import { listSessions, createSession, switchSession, renameSession, deleteSession } from "../lib/api";
 import type { SessionInfo } from "../types/session";
 import { useLocalStorage } from "./useLocalStorage";
@@ -48,12 +48,6 @@ export function useSessions() {
   const [sessions, setSessions] = useState<SessionInfo[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [rawSearch, setRawSearch] = useState("");
-  const deferredSearch = useDeferredValue(rawSearch);
-  // rawSearch drives input instantly; deferredSearch drives filtering (prevents per-keystroke full group recompute)
-  const search = rawSearch;
-  const setSearch = setRawSearch;
-  const isSearchPending = rawSearch !== deferredSearch;
   // Persist collapsed directories across restarts — e.g. user collapses `~/ship/Phi` and expects it to stay collapsed
   const [collapsed, setCollapsed] = useLocalStorage<Set<string>>(
     "phi:sidebar:collapsed",
@@ -91,18 +85,7 @@ export function useSessions() {
     refresh();
   }, [refresh]);
 
-  const filtered = useMemo(() => {
-    if (!deferredSearch.trim()) return sessions;
-    const q = deferredSearch.toLowerCase();
-    return sessions.filter((s) => {
-      const name = (s.name ?? "").toLowerCase();
-      const first = (s.firstMessage ?? "").toLowerCase();
-      const cwd = (s.cwd ?? "").toLowerCase();
-      return name.includes(q) || first.includes(q) || cwd.includes(q);
-    });
-  }, [sessions, deferredSearch]);
-
-  const groups = useMemo(() => groupByCwd(filtered), [filtered]);
+  const groups = useMemo(() => groupByCwd(sessions), [sessions]);
 
   const toggleGroup = useCallback((cwd: string) => {
     startTransition(() => {
@@ -182,13 +165,9 @@ export function useSessions() {
 
   return {
     sessions,
-    filtered,
     groups,
     loading,
     error,
-    search,
-    setSearch,
-    isSearchPending,
     isPending,
     collapsed,
     toggleGroup,

@@ -5,6 +5,7 @@ import { ModelSelector } from "./components/model-selector";
 import { Conversation } from "./components/conversation/conversation";
 import { Streaming } from "./components/conversation/streaming";
 import { Sidebar } from "./components/sidebar";
+import { SearchSessionsButton, SessionCommand } from "./components/session-command";
 import { Tabs } from "./components/tabs";
 import { Button } from "./components/ui/button";
 import { PanelLeftIcon } from "./components/ui/icons";
@@ -530,7 +531,14 @@ export default function App() {
     );
 
     return (
-        <div className="flex h-screen min-h-[480px] overflow-hidden bg-phi-bg-sidebar text-phi-text-primary antialiased selection:bg-phi-accent/25">
+        <SessionCommand
+            groups={sessions.groups}
+            loading={sessions.loading}
+            error={sessions.error}
+            onSelect={(file) => void handleSelect(file)}
+        >
+            {(openSearch) => (
+                <div className="flex h-screen min-h-[480px] overflow-hidden bg-phi-bg-sidebar text-phi-text-primary antialiased selection:bg-phi-accent/25">
             {sidebarOpen && (
                 <Sidebar
                     groups={sessions.groups}
@@ -538,8 +546,7 @@ export default function App() {
                     onSelect={handleSelect}
                     onClose={() => setSidebarOpen(false)}
                     onNewChat={handleNewChat}
-                    search={sessions.search}
-                    onSearchChange={sessions.setSearch}
+                    onOpenSearch={openSearch}
                     collapsed={sessions.collapsed}
                     onToggleGroup={sessions.toggleGroup}
                     onRename={handleRename}
@@ -556,14 +563,17 @@ export default function App() {
             >
                 <Tabs
                     leadingAction={!sidebarOpen ? (
-                        <Button
-                            variant="icon"
-                            aria-label="Open sidebar"
-                            title="Open sidebar"
-                            onClick={() => setSidebarOpen(true)}
-                        >
-                            <PanelLeftIcon />
-                        </Button>
+                        <div className="flex items-center gap-1">
+                            <SearchSessionsButton onClick={openSearch} />
+                            <Button
+                                variant="icon"
+                                aria-label="Open sidebar"
+                                title="Open sidebar"
+                                onClick={() => setSidebarOpen(true)}
+                            >
+                                <PanelLeftIcon />
+                            </Button>
+                        </div>
                     ) : null}
                     tabs={tabItems}
                     activeId={chat.activeFile}
@@ -659,6 +669,8 @@ export default function App() {
                     </section>
                 </div>
             </main>
-        </div>
+                </div>
+            )}
+        </SessionCommand>
     );
 }

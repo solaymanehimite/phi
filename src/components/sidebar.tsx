@@ -11,6 +11,7 @@ import { Button } from "./ui/button";
 import { PanelLeftIcon } from "./ui/icons";
 import { Input } from "./ui/input";
 import { GroupCollapsibleTrigger } from "./ui/collapsible";
+import { SearchSessionsButton } from "./session-command";
 import {
     DropdownMenu,
     DropdownMenuContent,
@@ -19,7 +20,7 @@ import {
 } from "./ui/dropdown-menu";
 import type { SessionGroup } from "../hooks/useSessions";
 import type { SessionInfo } from "../types/session";
-import logo from "../../public/logo.svg"
+import logo from "../../public/logo.svg";
 
 type SidebarProps = {
     groups: SessionGroup[];
@@ -27,8 +28,7 @@ type SidebarProps = {
     onSelect: (file: string) => void;
     onClose: () => void;
     onNewChat: () => void;
-    search: string;
-    onSearchChange: (v: string) => void;
+    onOpenSearch: () => void;
     collapsed: Set<string>;
     onToggleGroup: (cwd: string) => void;
     onRename: (file: string, name: string) => Promise<void>;
@@ -65,8 +65,7 @@ export const Sidebar = memo(function Sidebar({
     onSelect,
     onClose,
     onNewChat,
-    search,
-    onSearchChange,
+    onOpenSearch,
     collapsed,
     onToggleGroup,
     onRename,
@@ -76,11 +75,6 @@ export const Sidebar = memo(function Sidebar({
     runningFiles,
     onPrefetch,
 }: SidebarProps) {
-    const handleSearchChange = useCallback(
-        (e: React.ChangeEvent<HTMLInputElement>) => onSearchChange(e.target.value),
-        [onSearchChange],
-    );
-
     return (
         <aside className="flex w-[268px] shrink-0 flex-col bg-phi-bg-sidebar max-sm:absolute max-sm:inset-y-0 max-sm:z-20 max-sm:shadow-[18px_0_50px_rgba(0,0,0,0.45)]">
             <div
@@ -100,14 +94,17 @@ export const Sidebar = memo(function Sidebar({
                         }}
                     />
                 </button>
-                <Button
-                    variant="icon"
-                    aria-label="Close sidebar"
-                    title="Close sidebar"
-                    onClick={onClose}
-                >
-                    <PanelLeftIcon />
-                </Button>
+                <div className="flex items-center gap-1">
+                    <SearchSessionsButton onClick={onOpenSearch} />
+                    <Button
+                        variant="icon"
+                        aria-label="Close sidebar"
+                        title="Close sidebar"
+                        onClick={onClose}
+                    >
+                        <PanelLeftIcon />
+                    </Button>
+                </div>
             </div>
 
             <div className="px-2 pt-2">
@@ -115,16 +112,6 @@ export const Sidebar = memo(function Sidebar({
                     <PlusIcon className="size-4" />
                     New chat
                 </Button>
-            </div>
-
-            <div className="px-4 pt-3">
-                <Input
-                    value={search}
-                    onChange={handleSearchChange}
-                    placeholder="Search sessions…"
-                    aria-label="Search sessions"
-                    variant="search"
-                />
             </div>
 
             <div className="min-h-0 flex-1 overflow-y-auto px-2 pt-4">
@@ -138,10 +125,10 @@ export const Sidebar = memo(function Sidebar({
                     </div>
                 ) : groups.length === 0 ? (
                     <p className="px-2 py-6 text-center text-[12px] text-phi-text-muted">
-                        {search ? "No matches" : "No sessions yet"}
+                        No sessions yet
                     </p>
                 ) : (
-                    <div className="space-y-4">
+                    <div className="space-y-2">
                         {groups.map((group) => (
                             <GroupSection
                                 key={group.cwd}
@@ -209,18 +196,12 @@ const GroupSection = memo(function GroupSection({
             <GroupCollapsibleTrigger
                 collapsed={collapsed}
                 onClick={handleToggle}
+                className="h-8 rounded-lg"
                 aria-expanded={!collapsed}
                 title={group.displayCwd}
             >
                 <span className="flex min-w-0 flex-1 items-center gap-2">
-                    <span className="shrink-0 truncate text-[11px] font-semibold tracking-wide text-phi-text-muted">
-                        {repoName}
-                    </span>
-                    <span
-                        className="ml-auto min-w-0 max-w-[150px] shrink truncate text-right text-[10px] font-normal tracking-normal text-phi-text-faint/70"
-                        style={{ direction: "rtl" }}
-                        title={group.displayCwd}
-                    >
+                    <span className="shrink-0 truncate text-[12px] font-semibold tracking-wide text-phi-text-muted">
                         {group.displayCwd}
                     </span>
                 </span>
