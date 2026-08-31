@@ -2,35 +2,89 @@ import { useCallback, useRef, useState } from "react";
 import { abortPrompt, createSession, getMessages } from "../lib/api";
 import { streamPrompt, type SseEvent } from "../lib/sse";
 import type { SessionMessagesResponse } from "../types/session";
-
-type StreamingTool = {
-  toolCallId: string;
-  toolName: string;
-  args: Record<string, unknown>;
-  partial?: string;
-  result?: string;
-  isError?: boolean;
-  done?: boolean;
-};
+import type { WorkItem, WorkOrder } from "../types/work";
 
 type StreamingState = {
   text: string;
-  thinking: string;
-  tools: StreamingTool[];
+  workItems: WorkItem[];
   error?: string;
   startedAt?: number | null;
 };
 
+type PendingThinking = {
+  id: string;
+  order: WorkOrder;
+  text: string;
+};
+
 type PendingStream = {
   text: string;
-  thinking: string;
+  thinking: PendingThinking[];
   rafId: number | null;
+  assistantMessageIndex: number;
+  currentThinkingContentIndex: number | null;
+  fallbackContentIndex: number;
 };
+
+function asRecord(value: unknown): Record<string, unknown> {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : {};
+}
+
+function compareWorkOrder(a: WorkOrder, b: WorkOrder): number {
+  return a.message - b.message || a.content - b.content;
+}
+
+function insertWorkItem(items: WorkItem[], item: WorkItem): WorkItem[] {
+  const existingIndex = items.findIndex((current) => current.id === item.id);
+  const next = [...items];
+  if (existingIndex >= 0) {
+    next[existingIndex] = {
+      ...next[existingIndex],
+      ...item,
+      order: next[existingIndex].order,
+    } as WorkItem;
+  } else {
+    next.push(item);
+  }
+  next.sort((a, b) => compareWorkOrder(a.order, b.order));
+  return next;
+}
+
+function patchWorkItem(items: WorkItem[], id: string, patch: Record<string, unknown>): WorkItem[] {
+  const index = items.findIndex((item) => item.id === id);
+  if (index < 0) return items;
+  const next = [...items];
+  next[index] = { ...next[index], ...patch } as WorkItem;
+  return next;
+}
+
+function toolCallFromAssistantEvent(event: Record<string, unknown>): {
+  id: string;
+  name: string;
+  args: Record<string, unknown>;
+} | null {
+  const direct = asRecord(event.toolCall);
+  const partial = asRecord(event.partial);
+  const content = Array.isArray(partial.content) ? partial.content : [];
+  const contentIndex = typeof event.contentIndex === "number" ? event.contentIndex : -1;
+  const block = contentIndex >= 0 ? asRecord(content[contentIndex]) : {};
+  const call = Object.keys(direct).length > 0 ? direct : block;
+  const id = typeof call.id === "string" ? call.id : "";
+  const name = typeof call.name === "string" ? call.name : "";
+  if (!id || !name) return null;
+  return {
+    id,
+    name,
+    args: asRecord(call.arguments ?? call.args),
+  };
+}
 
 const MAX_CACHE = 20;
 
 function emptyStream(): StreamingState {
-  return { text: "", thinking: "", tools: [], startedAt: null };
+  return { text: "", workItems: [], startedAt: null };
 }
 
 /**
@@ -127,14 +181,35 @@ export function useChat() {
     if (!pending) return;
     pending.rafId = null;
     const { text, thinking } = pending;
-    if (!text && !thinking) return;
+    if (!text && thinking.length === 0) return;
     pending.text = "";
-    pending.thinking = "";
-    updateStream(file, (stream) => ({
-      ...stream,
-      text: stream.text + text,
-      thinking: stream.thinking + thinking,
-    }));
+    pending.thinking = [];
+    updateStream(file, (stream) => {
+      let workItems = stream.workItems;
+      for (const update of thinking) {
+        const index = workItems.findIndex((item) => item.id === update.id);
+        const item = index >= 0 ? workItems[index] : undefined;
+        if (item?.kind === "thinking") {
+          workItems = [...workItems];
+          workItems[index] = {
+            ...item,
+            text: item.text + update.text,
+          };
+        } else {
+          workItems = insertWorkItem(workItems, {
+            kind: "thinking",
+            id: update.id,
+            text: update.text,
+            order: update.order,
+          });
+        }
+      }
+      return {
+        ...stream,
+        text: stream.text + text,
+        workItems,
+      };
+    });
   }, [updateStream]);
 
   const scheduleFlush = useCallback((file: string) => {
@@ -361,7 +436,14 @@ export function useChat() {
 
     const controller = new AbortController();
     controllersRef.current.set(file, controller);
-    pendingStreamsRef.current.set(file, { text: "", thinking: "", rafId: null });
+    pendingStreamsRef.current.set(file, {
+      text: "",
+      thinking: [],
+      rafId: null,
+      assistantMessageIndex: -1,
+      currentThinkingContentIndex: null,
+      fallbackContentIndex: 1_000_000,
+    });
     noticesRef.current.set(file, []);
     seenAgentRef.current.delete(file);
     updateStream(file, () => ({ ...emptyStream(), startedAt: Date.now() }));
@@ -379,8 +461,17 @@ export function useChat() {
           if (type === "agent_start") {
             seenAgentRef.current.add(file!);
           } else if (type === "message_start" || type === "message_end") {
-            const message = event.message as Record<string, unknown> | undefined;
-            if (message?.role === "custom" && message.display !== false) {
+            const message = asRecord(event.message);
+            if (type === "message_start") {
+              flushStream(file!);
+              if (message.role === "assistant") {
+                pending.assistantMessageIndex += 1;
+                pending.currentThinkingContentIndex = null;
+                pending.fallbackContentIndex = 1_000_000;
+              }
+            }
+
+            if (message.role === "custom" && message.display !== false) {
               const messageContent = message.content;
               const notice = typeof messageContent === "string"
                 ? messageContent
@@ -398,24 +489,79 @@ export function useChat() {
                 scheduleFlush(file!);
               }
             }
+
+            if (type === "message_end") flushStream(file!);
           } else if (type === "message_update") {
-            const assistantEvent = (event.assistantMessageEvent ?? event.event ?? {}) as Record<string, unknown>;
-            if (assistantEvent.type === "text_delta" && typeof assistantEvent.delta === "string") {
+            const assistantEvent = asRecord(event.assistantMessageEvent ?? event.event);
+            const assistantEventType = String(assistantEvent.type ?? "");
+            if (assistantEventType === "text_delta" && typeof assistantEvent.delta === "string") {
               pending.text += assistantEvent.delta;
               scheduleFlush(file!);
-            } else if (assistantEvent.type === "thinking_delta" && typeof assistantEvent.delta === "string") {
-              pending.thinking += assistantEvent.delta;
-              scheduleFlush(file!);
+            } else if (assistantEventType === "thinking_start" || assistantEventType === "thinking_delta") {
+              if (pending.assistantMessageIndex < 0) pending.assistantMessageIndex = 0;
+              const contentIndex = typeof assistantEvent.contentIndex === "number"
+                ? assistantEvent.contentIndex
+                : (pending.currentThinkingContentIndex ??= pending.fallbackContentIndex++);
+              pending.currentThinkingContentIndex = contentIndex;
+
+              if (assistantEventType === "thinking_delta" && typeof assistantEvent.delta === "string") {
+                const id = `thinking:${pending.assistantMessageIndex}:${contentIndex}`;
+                const existing = pending.thinking.find((item) => item.id === id);
+                if (existing) existing.text += assistantEvent.delta;
+                else pending.thinking.push({
+                  id,
+                  order: { message: pending.assistantMessageIndex, content: contentIndex },
+                  text: assistantEvent.delta,
+                });
+                scheduleFlush(file!);
+              }
+            } else if (assistantEventType === "thinking_end") {
+              pending.currentThinkingContentIndex = null;
+            } else if (assistantEventType === "toolcall_start" || assistantEventType === "toolcall_end") {
+              const call = toolCallFromAssistantEvent(assistantEvent);
+              if (call) {
+                flushStream(file!);
+                if (pending.assistantMessageIndex < 0) pending.assistantMessageIndex = 0;
+                const contentIndex = typeof assistantEvent.contentIndex === "number"
+                  ? assistantEvent.contentIndex
+                  : pending.fallbackContentIndex++;
+                updateStream(file!, (stream) => ({
+                  ...stream,
+                  workItems: insertWorkItem(stream.workItems, {
+                    kind: "tool",
+                    id: call.id,
+                    name: call.name,
+                    args: call.args,
+                    order: { message: pending.assistantMessageIndex, content: contentIndex },
+                  }),
+                }));
+              }
             }
           } else if (type === "tool_execution_start") {
+            flushStream(file!);
+            if (pending.assistantMessageIndex < 0) pending.assistantMessageIndex = 0;
             const toolCallId = String(event.toolCallId ?? event.id ?? `${Date.now()}`);
             const toolName = String(event.toolName ?? event.name ?? "tool");
-            const args = (event.args ?? event.toolArgs ?? {}) as Record<string, unknown>;
-            updateStream(file!, (stream) => ({
-              ...stream,
-              tools: [...stream.tools, { toolCallId, toolName, args }],
-            }));
+            const args = asRecord(event.args ?? event.toolArgs);
+            const fallbackOrder = {
+              message: pending.assistantMessageIndex,
+              content: pending.fallbackContentIndex++,
+            };
+            updateStream(file!, (stream) => {
+              const existing = stream.workItems.find((item) => item.id === toolCallId);
+              return {
+                ...stream,
+                workItems: insertWorkItem(stream.workItems, {
+                  kind: "tool",
+                  id: toolCallId,
+                  name: toolName,
+                  args,
+                  order: existing?.order ?? fallbackOrder,
+                }),
+              };
+            });
           } else if (type === "tool_execution_update") {
+            flushStream(file!);
             const toolCallId = String(event.toolCallId ?? "");
             const partial = event.partialResult ?? event.output ?? "";
             const partialText = typeof partial === "string"
@@ -423,21 +569,27 @@ export function useChat() {
               : partial && typeof partial === "object" ? JSON.stringify(partial).slice(0, 500) : "";
             updateStream(file!, (stream) => ({
               ...stream,
-              tools: stream.tools.map((tool) => tool.toolCallId === toolCallId ? { ...tool, partial: partialText } : tool),
+              workItems: patchWorkItem(stream.workItems, toolCallId, { partial: partialText }),
             }));
           } else if (type === "tool_execution_end") {
+            flushStream(file!);
             const toolCallId = String(event.toolCallId ?? "");
-            const result = event.result as Record<string, unknown> | string | undefined;
+            const result = event.result;
+            const resultRecord = asRecord(result);
             let resultText = "";
             if (typeof result === "string") resultText = result;
-            else if (result && Array.isArray(result.content)) {
-              resultText = result.content.map((part: Record<string, unknown>) => String(part.text ?? "")).join("\n");
+            else if (Array.isArray(resultRecord.content)) {
+              resultText = resultRecord.content
+                .map((part) => String(asRecord(part).text ?? ""))
+                .join("\n");
             } else if (result) resultText = JSON.stringify(result).slice(0, 4000);
             updateStream(file!, (stream) => ({
               ...stream,
-              tools: stream.tools.map((tool) => tool.toolCallId === toolCallId
-                ? { ...tool, result: resultText, isError: Boolean(event.isError), done: true }
-                : tool),
+              workItems: patchWorkItem(stream.workItems, toolCallId, {
+                result: resultText,
+                isError: Boolean(event.isError),
+                done: true,
+              }),
             }));
           } else if (type === "error") {
             const message = String(event.error ?? "error");
