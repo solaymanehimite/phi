@@ -1,26 +1,29 @@
 # Pi SDK Usage — Research for Phi
 
 > Source: https://pi.dev/docs/latest/sdk (fetched 2026-08-28), extensions/session-format/rpc docs, plus local `@earendil-works/pi-coding-agent@0.84.3` source in `node_modules` and `examples/sdk/*.ts`.
-> Intended as build-reference for Phi (Tauri + Vite + React → SDK directly, no Rust HTTP hop).
+> Intended as a build reference for Phi's Node sidecar. Phi's Tauri WebView talks to the Express sidecar over localhost; the sidecar owns the Pi SDK and session files.
 
 ---
 
 ## 1. Mental Model
 
-Pi's SDK is **in-process**. React calls the SDK directly — no sidecar, no HTTP. The SDK owns:
+Pi's SDK runs in-process inside Phi's Node sidecar. The sidecar owns:
 - session files on disk (`~/.pi/agent/sessions/<encoded-cwd>/<timestamp>_<uuid>.jsonl`)
 - LLM interaction via `Agent` (`@earendil-works/pi-agent-core`)
 - resource discovery (extensions, skills, prompts, `AGENTS.md`, themes)
-- model/credential resolution via `ModelRuntime`
+- model and credential resolution via `ModelRuntime`
+
+The frontend communicates with the sidecar through the REST and SSE endpoints in `server/index.ts`. React does not import the SDK or access the filesystem directly.
 
 Two entry points:
 
 | Need | Use |
 |------|-----|
-| One session at a time, simple (Phi Alpha) | `createAgentSession()` |
-| Need to **replace** the active session (new / resume / fork / clone / import) | `createAgentSessionRuntime()` + `AgentSessionRuntime` — same layer the CLI interactive/print/rpc modes use |
+| One session at a time, simple | `createAgentSession()` |
+| A persisted session needs new / resume / fork / clone / import behavior | `createAgentSessionRuntime()` + `AgentSessionRuntime` |
+| Phi's concurrent session support | One runtime per persisted session file in the Node sidecar |
 
-Phi V1 needs resume + new + rename + delete (+ later fork/clone/tree), so **Alpha should start on `createAgentSession()` and migrate to `AgentSessionRuntime` before resume/switch lands** — the doc explicitly says session-replacement APIs live on the Runtime, not on `AgentSession`.
+Phi uses `createAgentSessionRuntime()` in the sidecar. Each persisted session file gets its own runtime entry so sessions can stream concurrently. `ModelRuntime` remains shared across entries.
 
 ---
 
@@ -404,10 +407,12 @@ Full inline example from `examples/sdk/12-full-control.ts` — build a minimal `
 
 ## 12. Phi-Specific Implementation Notes
 
-**Alpha (current scaffold) → SDK wiring:**
-- Keep Tauri thin (`tauri.conf.json` window config only). Don't add Rust session indexing or HTTP server — doc warns that "extra layers compound latency."
-- In React, call SDK directly. Store `runtime` (or `session`) in a singleton outside render, subscribe once, buffer deltas with `requestAnimationFrame`.
-- On `switchSession` / `newSession`: unsubscribe old, await runtime call, bind new session, re-subscribe. Never reuse old `session` object.
+**Current Phi wiring:**
+- Keep Tauri thin. Rust spawns the sidecar and exposes its selected port; it does not index sessions or serve agent requests.
+- The Node sidecar creates one `AgentSessionRuntime` per persisted session file and shares one `ModelRuntime` for model discovery and credentials.
+- React calls the sidecar over REST and SSE. It never imports the SDK or accesses `~/.pi` directly.
+- The frontend keeps transient stream state keyed by session file, so switching sessions does not stop background prompts.
+- When a runtime is evicted, the sidecar reloads it from the persisted session file when needed.
 - Render pipeline (§6.2): `User bubble` → `Thinking` (dimmed collapsible from `thinking_delta`) → `Assistant markdown` (stream `text_delta`, highlight code) → `Tool lines` (inline row: amber pulsing/green/red dot + icon + `tool arg` + duration/chevron; expand = indented scrollable output). Sequential tool calls are a flat list.
 - Composer (§6.3): textarea `Enter`→send, `Shift+Enter`→newline. Image paste → base64 → `prompt(...,{images})`. Model pill → `session.setModel()` / `setThinkingLevel()`. `Stop` → `session.abort()`.
 - Sidebar (§6.1): `SessionManager.listAll()` → decode cwd → group collapse + recency sort + search filter. Row: `name || firstUserMessage` + relative time + model dot.
@@ -439,7 +444,7 @@ CONFIG_DIR_NAME
 + types: CreateAgentSessionOptions, CreateAgentSessionResult, ExtensionFactory, InlineExtension, ExtensionAPI, ToolDefinition, Skill, PromptTemplate
 ```
 
-Extension event catalog lives in `docs/extensions.md` — lifecycle described there (`project_trust` → `session_start` → `input` → `before_agent_start` → `agent_start` → `turn_start` → `tool_call` → `tool_result` → `turn_end` → `agent_end` → `agent_settled`, plus `session_before_switch/fork/compact/tree`).
+The SDK's extension event lifecycle includes `project_trust`, `session_start`, `input`, `before_agent_start`, `agent_start`, `turn_start`, `tool_call`, `tool_result`, `turn_end`, `agent_end`, and `agent_settled`, plus session switch, fork, compact, and tree events.
 
 ---
 

@@ -33,5 +33,5 @@ See `docs/howtobundle.md`
 
 ## Docs
 
-- `docs/prd.md` — product spec
+- `docs/prd-milestone-1.md` — Milestone 1 product spec
 - `docs/sdk_usage.md` — Pi SDK reference for Phi

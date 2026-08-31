@@ -1,4 +1,4 @@
-# PRD — Pi GUI Client
+# Milestone 1 PRD — Phi
 
 ## 1. Overview
 Fast, clean desktop GUI for the Pi coding agent. Replaces terminal TUI for daily use. No bloat: no diff view, editor, or browser. Just a graphical translation of Pi's built-in features with a focus on browsing and resuming sessions.
