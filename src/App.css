@@ -467,6 +467,16 @@ html[data-theme="light"] {
   animation: phi-cursor-blink 1s step-end infinite;
 }
 
+html[data-theme="light"] .phi-tab-active {
+  background-color: var(--color-phi-bg-main);
+}
+
+@media (prefers-color-scheme: light) {
+  html[data-theme="system"] .phi-tab-active {
+    background-color: var(--color-phi-bg-main);
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   [style*="phi-dot-matrix"],
   .phi-tab-enter,
