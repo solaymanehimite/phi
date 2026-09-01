@@ -27,7 +27,7 @@ const TabItem = memo(function TabItem({ tab, active, canClose, onSelect, onClose
     const hasDraft = useHasDraft(tab.id);
     return (
         <div
-            className={`phi-tab-enter group flex h-8 max-w-[240px] min-w-[132px] shrink-0 items-center rounded-lg ${active ? "bg-phi-overlay-active text-phi-text-primary" : "text-phi-text-tertiary hover:bg-phi-overlay-hover hover:text-phi-text-primary"}`}
+            className={`phi-tab-enter group flex h-8 max-w-[240px] min-w-[132px] shrink-0 items-center rounded-lg ${active ? "phi-tab-active bg-phi-overlay-active text-phi-text-primary" : "text-phi-text-tertiary hover:bg-phi-overlay-hover hover:text-phi-text-primary"}`}
         >
             <button
                 type="button"

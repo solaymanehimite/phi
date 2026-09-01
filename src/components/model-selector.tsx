@@ -482,12 +482,13 @@ export const ModelSelector = memo(function ModelSelector({
                                         </span>
                                     </div>
 
-                                    <div className="relative flex items-center">
-                                        <div className="h-2.5 w-full overflow-hidden rounded-full bg-phi-overlay">
+                                    <div className="relative flex h-[18px] items-center">
+                                        <div className="h-[18px] w-full overflow-hidden rounded-full bg-phi-overlay">
                                             <div
                                                 className="h-full rounded-full transition-all duration-300 ease-out"
                                                 style={{
-                                                    width: `${pct}%`,
+                                                    // Keep a 2px wrap on every side, including at both endpoints.
+                                                    width: `calc(${pct}% + ${18 - pct * 0.18}px)`,
                                                     backgroundColor:
                                                         THINKING_COLORS[clampedEffort as ThinkingLevel] ??
                                                         "var(--color-phi-text-muted)",
@@ -506,8 +507,13 @@ export const ModelSelector = memo(function ModelSelector({
                                                 )
                                             }
                                             disabled={isDisabled || availableLevels.length <= 1}
-                                            className="absolute inset-0 h-2.5 w-full cursor-pointer appearance-none bg-transparent disabled:cursor-not-allowed disabled:opacity-30 [&::-webkit-slider-thumb]:h-3.5 [&::-webkit-slider-thumb]:w-3.5 [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-phi-white [&::-webkit-slider-thumb]:shadow-[0_1px_4px_var(--color-phi-shadow)] [&::-webkit-slider-thumb]:transition-transform [&::-webkit-slider-thumb]:active:scale-110 [&::-moz-range-thumb]:h-3.5 [&::-moz-range-thumb]:w-3.5 [&::-moz-range-thumb]:rounded-full [&::-moz-range-thumb]:border-0 [&::-moz-range-thumb]:bg-phi-white"
+                                            className="absolute inset-x-[2px] top-1/2 z-10 h-[18px] w-auto -translate-y-1/2 cursor-pointer appearance-none bg-transparent disabled:cursor-not-allowed disabled:opacity-30 [&::-webkit-slider-thumb]:h-3.5 [&::-webkit-slider-thumb]:w-3.5 [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-transparent [&::-moz-range-thumb]:h-3.5 [&::-moz-range-thumb]:w-3.5 [&::-moz-range-thumb]:rounded-full [&::-moz-range-thumb]:border-0 [&::-moz-range-thumb]:bg-transparent"
                                             aria-label="Thinking effort"
+                                        />
+                                        <span
+                                            aria-hidden="true"
+                                            className="pointer-events-none absolute top-1/2 z-0 size-3.5 -translate-x-1/2 -translate-y-1/2 rounded-full bg-phi-white shadow-[0_1px_4px_var(--color-phi-shadow)] transition-[left] duration-300 ease-out"
+                                            style={{ left: `calc(${pct}% + ${9 - pct * 0.18}px)` }}
                                         />
                                     </div>
                                     {availableLevels.length <= 1 && (
