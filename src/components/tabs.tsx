@@ -19,6 +19,8 @@ type TabsProps = {
     activeId: string | null;
     onSelect: (id: string | null) => void;
     onClose: (id: string | null) => void;
+    hideClose?: boolean;
+    tablistLabel?: string;
 };
 
 const TabItem = memo(function TabItem({ tab, active, canClose, onSelect, onClose }: { tab: ChatTab; active: boolean; canClose: boolean; onSelect: (id: string | null) => void; onClose: (id: string | null) => void }) {
@@ -60,6 +62,8 @@ export const Tabs = memo(function Tabs({
     activeId,
     onSelect,
     onClose,
+    hideClose = false,
+    tablistLabel = "Open chats",
 }: TabsProps) {
     return (
         <div
@@ -69,12 +73,12 @@ export const Tabs = memo(function Tabs({
             {leadingAction}
             <div
                 role="tablist"
-                aria-label="Open chats"
+                aria-label={tablistLabel}
                 className="flex min-w-0 flex-1 items-end gap-2 overflow-x-auto px-0 scrollbar-none"
             >
                 {tabs.map((tab) => {
                     const active = tab.id === activeId;
-                    const canClose = tab.id !== null || tabs.length > 1;
+                    const canClose = !hideClose && (tab.id !== null || tabs.length > 1);
                     return <TabItem key={tab.id ?? "new-chat"} tab={tab} active={active} canClose={canClose} onSelect={onSelect} onClose={onClose} />;
                 })}
             </div>

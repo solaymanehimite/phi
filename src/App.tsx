@@ -16,7 +16,7 @@ import { createSession, health, streamContinue } from "./lib/api";
 import { useTheme } from "./hooks/useTheme";
 import { useHealth } from "./hooks/useHealth";
 import { FatalState } from "./components/fatal";
-import { SettingsModal } from "./components/settings";
+import { SettingsPage } from "./components/settings";
 import { useShortcuts } from "./hooks/useShortcuts";
 import { clearDraftFor } from "./hooks/useDraft";
 import { InlineErrorBlock, type InlineError } from "./components/inline-error";
@@ -524,6 +524,10 @@ export default function App() {
         return <FatalState error={healthHook.health?.error ?? null} home={healthHook.health?.home} port={healthHook.health?.port} agentDir={healthHook.health?.agentDir} onRetry={async () => { await healthHook.retry(); }} />;
     }
 
+    if (settingsOpen) {
+        return <SettingsPage onClose={() => setSettingsOpen(false)} onProvidersChanged={() => models.refresh({ silent: true })} />;
+    }
+
     return (
         <SessionCommand groups={sessions.groups} loading={sessions.loading} error={sessions.error} onSelect={(file) => void handleSelect(file)}>
             {(openSearch) => {
@@ -622,7 +626,6 @@ export default function App() {
                                 </section>
                             </div>
                         </main>
-                        <SettingsModal open={settingsOpen} onClose={() => setSettingsOpen(false)} onProvidersChanged={() => models.refresh({ silent: true })} />
                     </div>
                 );
             }}
