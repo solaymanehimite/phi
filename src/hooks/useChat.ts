@@ -456,7 +456,7 @@ export function useChat() {
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
         setFileError("__new__", message);
-        return;
+        throw error;
       }
     }
 
@@ -469,7 +469,7 @@ export function useChat() {
         cwd = cached.cwd ?? cached.header?.cwd;
       } catch (error) {
         setFileError(file, error instanceof Error ? error.message : String(error));
-        return;
+        throw error;
       }
     }
     if (!cwd) {
