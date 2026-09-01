@@ -173,7 +173,8 @@ function ProvidersTab({ onChanged }: { onChanged?: () => void }) {
   const [providers, setProviders] = useState<ProviderRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [form, setForm] = useState({ id: "", label: "", baseUrl: "", apiKey: "" });
+  const [form, setForm] = useState({ label: "", baseUrl: "", apiKey: "" });
+  const [dialogOpen, setDialogOpen] = useState(false);
   const [showKey, setShowKey] = useState<Record<string, boolean>>({});
   const [testing, setTesting] = useState<string | null>(null);
   const [testResult, setTestResult] = useState<Record<string, string>>({});
@@ -186,18 +187,23 @@ function ProvidersTab({ onChanged }: { onChanged?: () => void }) {
   useEffect(() => { void refresh(); }, [refresh]);
 
   const handleSave = useCallback(async () => {
-    if (!form.id || !form.baseUrl || !form.apiKey) { setError("id, baseUrl and apiKey required"); return; }
+    if (!form.label || !form.baseUrl || !form.apiKey) { setError("label, baseUrl and apiKey required"); return; }
+    const baseId = form.label.toLowerCase().trim().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "provider";
+    let id = baseId;
+    let suffix = 2;
+    while (providers.some((provider) => provider.id === id)) id = `${baseId}-${suffix++}`;
+    const provider = { id, ...form };
     setSaving(true);
     setError(null);
     try {
-      // test first
-      await testProvider(form.id, { baseUrl: form.baseUrl, apiKey: form.apiKey });
-      await upsertProvider(form);
+      await testProvider(id, { baseUrl: form.baseUrl, apiKey: form.apiKey });
+      await upsertProvider(provider);
       await refresh();
       onChanged?.();
-      setForm({ id: "", label: "", baseUrl: "", apiKey: "" });
+      setForm({ label: "", baseUrl: "", apiKey: "" });
+      setDialogOpen(false);
     } catch (e) { setError(e instanceof Error ? e.message : String(e)); } finally { setSaving(false); }
-  }, [form, refresh, onChanged]);
+  }, [form, providers, refresh, onChanged]);
 
   const handleTest = useCallback(async (id: string) => {
     setTesting(id); setTestResult((p) => ({ ...p, [id]: "" }));
@@ -213,25 +219,31 @@ function ProvidersTab({ onChanged }: { onChanged?: () => void }) {
     <div className="space-y-4">
       {error && <div className="rounded-lg border border-phi-error-border bg-phi-error-bg px-3 py-2 text-[12px] text-phi-error-text">{error}</div>}
 
-      <div className="rounded-xl border border-phi-border bg-phi-bg-surface p-3 space-y-2">
-        <h4 className="text-[12px] font-semibold text-phi-text-primary">Add / Update provider</h4>
-        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-          <input placeholder="id (e.g. openai)" value={form.id} onChange={(e) => setForm((p) => ({ ...p, id: e.target.value }))} className="rounded-lg border border-phi-input-border bg-phi-input-bg px-2 py-1.5 text-[12px] text-phi-text-primary placeholder:text-phi-text-muted outline-none focus:border-phi-input-border-focus" />
-          <input placeholder="label (e.g. OpenAI)" value={form.label} onChange={(e) => setForm((p) => ({ ...p, label: e.target.value }))} className="rounded-lg border border-phi-input-border bg-phi-input-bg px-2 py-1.5 text-[12px] text-phi-text-primary placeholder:text-phi-text-muted outline-none focus:border-phi-input-border-focus" />
-          <input placeholder="baseUrl https://api.openai.com/v1" value={form.baseUrl} onChange={(e) => setForm((p) => ({ ...p, baseUrl: e.target.value }))} className="rounded-lg border border-phi-input-border bg-phi-input-bg px-2 py-1.5 text-[12px] text-phi-text-primary placeholder:text-phi-text-muted outline-none focus:border-phi-input-border-focus sm:col-span-2" />
-          <input placeholder="apiKey" type="password" value={form.apiKey} onChange={(e) => setForm((p) => ({ ...p, apiKey: e.target.value }))} className="rounded-lg border border-phi-input-border bg-phi-input-bg px-2 py-1.5 text-[12px] text-phi-text-primary placeholder:text-phi-text-muted outline-none focus:border-phi-input-border-focus sm:col-span-2" />
+      {dialogOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" role="presentation" onMouseDown={(e) => { if (e.target === e.currentTarget) setDialogOpen(false); }}>
+          <div className="w-full max-w-md rounded-xl border border-phi-border bg-phi-bg-surface p-4 shadow-xl" role="dialog" aria-modal="true" aria-labelledby="add-provider-title">
+            <div className="flex items-center justify-between">
+              <h4 id="add-provider-title" className="text-[14px] font-semibold text-phi-text-primary">Add provider</h4>
+              <button onClick={() => setDialogOpen(false)} className="text-[12px] text-phi-text-muted hover:text-phi-text-primary">Cancel</button>
+            </div>
+            <div className="mt-4 grid grid-cols-1 gap-2">
+              <input autoFocus placeholder="Label (e.g. OpenAI)" value={form.label} onChange={(e) => setForm((p) => ({ ...p, label: e.target.value }))} className="rounded-lg border border-phi-input-border bg-phi-input-bg px-2 py-1.5 text-[12px] text-phi-text-primary placeholder:text-phi-text-muted outline-none focus:border-phi-input-border-focus" />
+              <input placeholder="Base URL https://api.openai.com/v1" value={form.baseUrl} onChange={(e) => setForm((p) => ({ ...p, baseUrl: e.target.value }))} className="rounded-lg border border-phi-input-border bg-phi-input-bg px-2 py-1.5 text-[12px] text-phi-text-primary placeholder:text-phi-text-muted outline-none focus:border-phi-input-border-focus" />
+              <input placeholder="API key" type="password" value={form.apiKey} onChange={(e) => setForm((p) => ({ ...p, apiKey: e.target.value }))} className="rounded-lg border border-phi-input-border bg-phi-input-bg px-2 py-1.5 text-[12px] text-phi-text-primary placeholder:text-phi-text-muted outline-none focus:border-phi-input-border-focus" />
+            </div>
+            <button onClick={() => void handleSave()} disabled={saving} className="mt-4 rounded-lg bg-phi-bg-inverse px-3 py-1.5 text-[12px] font-medium text-phi-text-inverse hover:bg-phi-white disabled:opacity-50">{saving ? "Saving…" : "Save (tests connection)"}</button>
+          </div>
         </div>
-        <button onClick={handleSave} disabled={saving} className="rounded-lg bg-phi-bg-inverse px-3 py-1.5 text-[12px] font-medium text-phi-text-inverse hover:bg-phi-white disabled:opacity-50">{saving ? "Saving…" : "Save (tests connection)"}</button>
-      </div>
+      )}
 
       <div className="space-y-2">
-        <h4 className="text-[12px] font-semibold text-phi-text-primary">Configured providers</h4>
-        {loading ? <p className="text-[12px] text-phi-text-muted">Loading…</p> : providers.length === 0 ? <p className="text-[12px] text-phi-text-muted">No providers configured.</p> : (
+        <h4 className="text-[12px] font-semibold text-phi-text-primary">Providers</h4>
+        {loading ? <p className="text-[12px] text-phi-text-muted">Loading…</p> : (
           <div className="space-y-2">
             {providers.map((p) => (
               <div key={p.id} className="flex flex-wrap items-center gap-2 rounded-lg border border-phi-border bg-phi-bg-surface px-3 py-2">
                 <div className="min-w-0 flex-1">
-                  <div className="truncate text-[13px] font-medium text-phi-text-primary">{p.label || p.id} <span className="font-mono text-[11px] text-phi-text-muted">({p.id})</span></div>
+                  <div className="truncate text-[13px] font-medium text-phi-text-primary">{p.label || p.id}</div>
                   <div className="truncate font-mono text-[11px] text-phi-text-muted">{p.baseUrl}</div>
                   <div className="flex items-center gap-1 text-[11px]">
                     <span className="font-mono text-phi-text-muted">{showKey[p.id] ? (p.maskedKey ? p.maskedKey.replace(/•/g, "•") : "no key") : p.maskedKey || "••••"}</span>
@@ -245,6 +257,7 @@ function ProvidersTab({ onChanged }: { onChanged?: () => void }) {
                 </div>
               </div>
             ))}
+            <button onClick={() => { setError(null); setForm({ label: "", baseUrl: "", apiKey: "" }); setDialogOpen(true); }} className="w-full rounded-lg border border-dashed border-phi-border px-3 py-3 text-left text-[12px] font-medium text-phi-text-muted hover:border-phi-input-border-focus hover:text-phi-text-primary">+ Add provider</button>
           </div>
         )}
       </div>
