@@ -90,6 +90,18 @@ function DirectoryPanel({
         [newProjectPath, selectProject],
     );
 
+    const handleSearchKeyDown = useCallback(
+        (event: React.KeyboardEvent<HTMLInputElement>) => {
+            if (event.key === "Enter") {
+                event.preventDefault();
+                if (filteredProjects.length > 0) {
+                    selectProject(filteredProjects[0].cwd);
+                }
+            }
+        },
+        [filteredProjects, selectProject],
+    );
+
     return (
         <div className="w-full">
             <div className="-mx-2 flex items-center gap-2 border-b border-phi-border-faint px-3 pb-3 pt-1">
@@ -98,6 +110,7 @@ function DirectoryPanel({
                     autoFocus
                     value={query}
                     onChange={(event) => setQuery(event.target.value)}
+                    onKeyDown={handleSearchKeyDown}
                     placeholder="Search projects"
                     aria-label="Search projects"
                     spellCheck={false}
@@ -210,6 +223,7 @@ export function DirectoryPicker({
         <Popover className="relative min-w-0">
             <PopoverTrigger
                 disabled={disabled}
+                data-project-picker-trigger
                 className="group inline-flex max-w-full min-w-0 items-center gap-1.5 rounded-md px-1.5 py-1 text-left text-phi-text-secondary transition-colors hover:bg-phi-overlay-hover hover:text-phi-text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-phi-accent/40 disabled:pointer-events-none disabled:opacity-60"
                 aria-label={`Change project${cwd ? `, currently ${cwd}` : ", no project selected"}`}
             >

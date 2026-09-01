@@ -162,7 +162,7 @@ function colorToHex(color: string): string {
         }
         return v.slice(0, 7);
     }
-    // rgb(255 255 255 / 0.06) or rgb(255,255,255) or rgba
+    // color with alpha like 255 255 255 / 0.06 or comma separated
     const nums = v.match(/\d+/g);
     if (!nums || nums.length < 3) return "#000000";
     const [r, g, b] = nums.slice(0, 3).map(Number);
@@ -185,7 +185,7 @@ function hexToRgb(hex: string): [number, number, number] {
 }
 
 function getAlpha(original: string): string | null {
-    // extracts alpha from "rgb(255 255 255 / 0.06)" or "rgba(255,255,255,0.1)"
+    // extracts alpha from color with slash or comma syntax
     const m =
         original.match(/\/\s*([0-9.]+)\s*\)/) ||
         original.match(/,\s*([0-9.]+)\s*\)/);
@@ -226,7 +226,7 @@ export function ThemeEditor({ className = "", iconClassName = "" }: ThemeEditorP
         let cssValue = hex;
         if (alpha !== null) {
             const [r, g, b] = hexToRgb(hex);
-            // preserve original alpha syntax: rgb(r g b / alpha)
+            // preserve original alpha syntax: r g b / alpha
             cssValue = `rgb(${r} ${g} ${b} / ${alpha})`;
         }
         document.documentElement.style.setProperty(name, cssValue);
@@ -290,7 +290,7 @@ export function ThemeEditor({ className = "", iconClassName = "" }: ThemeEditorP
                                                 <button
                                                     onClick={() => setActive(isActive ? null : t.name)}
                                                     aria-label={`Pick color for ${t.label}`}
-                                                    className="size-7 shrink-0 rounded-md border border-phi-border shadow-[inset_0_0_0_1px_rgba(255,255,255,0.06)]"
+                                                    className="size-7 shrink-0 rounded-md border border-phi-border shadow-[inset_0_0_0_1px_var(--color-phi-border)]"
                                                     style={{ background: val || hex }}
                                                 />
                                                 <div className="min-w-0 flex-1">

@@ -2,7 +2,7 @@ import cors from "cors";
 import express from "express";
 import { existsSync, promises as fs } from "node:fs";
 import os from "node:os";
-import { resolve as resolvePath } from "node:path";
+import { resolve as resolvePath, join as joinPath, dirname } from "node:path";
 import {
   SessionManager,
   ModelRuntime,
@@ -584,6 +584,179 @@ app.get("/api/runtimes", (_req, res) => {
     lastUsedAt: entry.lastUsedAt,
   }));
   res.json({ runtimes });
+});
+
+// ---- Providers / Auth (M2) ----
+
+type StoredProvider = { id: string; label: string; baseUrl: string; apiKey: string };
+
+function authFilePath(): string {
+  const base = process.env.PHI_AUTH_PATH || joinPath(os.homedir(), ".config", "phi", "auth.json");
+  return base;
+}
+
+async function loadStoredProviders(): Promise<StoredProvider[]> {
+  try {
+    const raw = await fs.readFile(authFilePath(), "utf-8");
+    const data = JSON.parse(raw);
+    if (Array.isArray(data)) return data as StoredProvider[];
+    if (Array.isArray((data as any).providers)) return (data as any).providers as StoredProvider[];
+    return [];
+  } catch {
+    return [];
+  }
+}
+
+async function saveStoredProviders(providers: StoredProvider[]): Promise<void> {
+  const file = authFilePath();
+  const dir = dirname(file);
+  await fs.mkdir(dir, { recursive: true });
+  await fs.writeFile(file, JSON.stringify(providers, null, 2), { mode: 0o600 });
+  try { await fs.chmod(file, 0o600); } catch {}
+}
+
+function invalidateModelsCache() { modelsCache = null; }
+
+async function syncProvidersToRuntime() {
+  const providers = await loadStoredProviders();
+  const mr = await getModelRuntime();
+  for (const p of providers) {
+    if (!p.id || !p.baseUrl) continue;
+    try {
+      (mr as any).registerProvider?.(p.id, {
+        name: p.label || p.id,
+        baseUrl: p.baseUrl,
+        apiKey: p.apiKey,
+      });
+    } catch (e) { console.warn(`[phi] registerProvider ${p.id} failed`, e); }
+    try {
+      if (p.apiKey) await (mr as any).setRuntimeApiKey?.(p.id, p.apiKey);
+    } catch {}
+  }
+  invalidateModelsCache();
+}
+
+// initial sync (best effort)
+void syncProvidersToRuntime();
+
+app.get("/api/auth/providers", async (_req, res) => {
+  try {
+    const providers = await loadStoredProviders();
+    const masked = providers.map((p) => ({
+      id: p.id,
+      label: p.label,
+      baseUrl: p.baseUrl,
+      hasKey: Boolean(p.apiKey),
+      maskedKey: p.apiKey ? `${p.apiKey.slice(0, 4)}••••${p.apiKey.slice(-4)}` : "",
+    }));
+    res.json({ providers: masked });
+  } catch (error) { res.status(errorStatus(error)).json({ error: errorMessage(error) }); }
+});
+
+app.post("/api/auth/providers", async (req, res) => {
+  try {
+    const { id, label, baseUrl, apiKey } = req.body as { id?: string; label?: string; baseUrl?: string; apiKey?: string };
+    if (!id || !baseUrl || !apiKey) throw new ApiError("missing id/baseUrl/apiKey");
+    if (!/^https?:\/\//.test(baseUrl)) throw new ApiError("baseUrl must be http(s)://");
+    const providers = await loadStoredProviders();
+    const idx = providers.findIndex((p) => p.id === id);
+    const entry: StoredProvider = { id, label: label || id, baseUrl: baseUrl.replace(/\/+$/, ""), apiKey };
+    if (idx >= 0) providers[idx] = entry; else providers.push(entry);
+    await saveStoredProviders(providers);
+    const mr = await getModelRuntime();
+    try { (mr as any).registerProvider?.(id, { name: entry.label, baseUrl: entry.baseUrl, apiKey: entry.apiKey }); } catch {}
+    try { await (mr as any).setRuntimeApiKey?.(id, apiKey); } catch {}
+    invalidateModelsCache();
+    res.json({ ok: true });
+  } catch (error) { res.status(errorStatus(error)).json({ error: errorMessage(error) }); }
+});
+
+app.delete("/api/auth/providers/:id", async (req, res) => {
+  try {
+    const id = req.params.id;
+    const providers = await loadStoredProviders();
+    const next = providers.filter((p) => p.id !== id);
+    if (next.length === providers.length) throw new ApiError("provider not found", 404);
+    await saveStoredProviders(next);
+    const mr = await getModelRuntime();
+    try { (mr as any).unregisterProvider?.(id); } catch {}
+    try { await (mr as any).removeRuntimeApiKey?.(id); } catch {}
+    invalidateModelsCache();
+    res.json({ ok: true });
+  } catch (error) { res.status(errorStatus(error)).json({ error: errorMessage(error) }); }
+});
+
+app.post("/api/auth/providers/:id/test", async (req, res) => {
+  try {
+    const id = req.params.id;
+    const body = req.body as { baseUrl?: string; apiKey?: string };
+    let baseUrl = body.baseUrl;
+    let apiKey = body.apiKey;
+    if (!baseUrl || !apiKey) {
+      const providers = await loadStoredProviders();
+      const found = providers.find((p) => p.id === id);
+      if (!found) throw new ApiError("provider not found", 404);
+      baseUrl = baseUrl || found.baseUrl;
+      apiKey = apiKey || found.apiKey;
+    }
+    if (!baseUrl || !apiKey) throw new ApiError("missing baseUrl/apiKey");
+    const url = `${baseUrl.replace(/\/+$/, "")}/models`;
+    const controller = new AbortController();
+    const t = setTimeout(() => controller.abort(), 8000);
+    try {
+      const resp = await fetch(url, { headers: { Authorization: `Bearer ${apiKey}` }, signal: controller.signal });
+      const text = await resp.text();
+      if (!resp.ok) throw new ApiError(`test failed ${resp.status}: ${text.slice(0, 500)}`, 400);
+      res.json({ ok: true, status: resp.status });
+    } finally { clearTimeout(t); }
+  } catch (error) { res.status(errorStatus(error)).json({ error: errorMessage(error) }); }
+});
+
+// ---- Continue (M2) ----
+app.post("/api/continue", async (req, res) => {
+  const { sessionFile, cwd } = req.body as { sessionFile?: string; cwd?: string };
+  try {
+    if (!sessionFile) throw new ApiError("missing sessionFile");
+    const entry = await getSessionRuntime(sessionFile, cwd);
+    if (isPromptActive(entry)) throw new ApiError("a prompt is already running for this session", 409);
+    const session: any = entry.runtime.session;
+    touchRuntime(entry);
+    sseHeaders(res);
+    if (typeof (res as any).flushHeaders === "function") (res as any).flushHeaders();
+    let connectionClosed = false;
+    const heartbeat = setInterval(() => { if (!connectionClosed) res.write(": ping\n\n"); }, 15_000);
+    const off = session.subscribe((event: unknown) => sendSSE(res, event));
+    res.on("close", () => { connectionClosed = true; clearInterval(heartbeat); try { off(); } catch {} });
+    // Try agent-level continue first, fallback to prompt with empty continuer
+    const tryAgentContinue = async () => {
+      const agent: any = session.agent;
+      if (typeof agent?.continue === "function") return agent.continue();
+      if (typeof session.continue === "function") return session.continue();
+      // fallback: re-prompt with special continue flag if SDK exposes it via prompt options
+      // We attempt a no-op prompt that tells SDK to continue (some versions accept { continue: true })
+      // If not, throw.
+      throw new ApiError("continue not supported by this SDK version", 501);
+    };
+    const promptPromise = tryAgentContinue();
+    entry.activePrompt = promptPromise as Promise<void>;
+    try {
+      await promptPromise;
+      invalidateSessionsCache();
+      if (!connectionClosed) { sendSSE(res, { type: "done" }); res.end(); }
+    } catch (error) {
+      if (!connectionClosed) { sendSSE(res, { type: "error", error: errorMessage(error) }); res.end(); }
+    } finally {
+      clearInterval(heartbeat);
+      try { off(); } catch {}
+      if (entry.activePrompt === promptPromise) entry.activePrompt = undefined;
+      touchRuntime(entry);
+      void cleanupRuntimeRegistry();
+    }
+  } catch (error) {
+    if (!res.headersSent) return res.status(errorStatus(error)).json({ error: errorMessage(error) });
+    sendSSE(res, { type: "error", error: errorMessage(error) });
+    res.end();
+  }
 });
 
 // ---- Slash commands ----

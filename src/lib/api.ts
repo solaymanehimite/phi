@@ -153,6 +153,97 @@ export async function abortPrompt(sessionFile: string): Promise<{ ok: boolean; a
   return jsonOrThrow(res);
 }
 
+export async function continuePrompt(sessionFile: string, cwd?: string): Promise<void> {
+  const base = await getBase();
+  const res = await fetch(`${base}/continue`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ sessionFile, cwd }),
+  });
+  if (!res.ok || !res.body) {
+    const text = await res.text().catch(() => "");
+    let msg = `HTTP ${res.status}`;
+    try { const j = JSON.parse(text); if (j.error) msg = j.error; } catch {}
+    throw new Error(msg);
+  }
+  // Stream SSE similarly to prompt, but caller in useChat will handle SSE? For now we expose raw continue as SSE via fetch
+  // This helper is for non-streaming check; actual streaming is handled by streamContinue
+  return;
+}
+
+export async function streamContinue(
+  body: { sessionFile: string; cwd?: string },
+  onEvent: (ev: Record<string, unknown>) => void,
+  signal?: AbortSignal,
+): Promise<void> {
+  const base = await getBase();
+  const res = await fetch(`${base}/continue`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+    signal,
+  });
+  if (!res.ok || !res.body) {
+    const text = await res.text().catch(() => "");
+    let msg = `HTTP ${res.status}`;
+    try { const j = JSON.parse(text); if (j.error) msg = j.error; } catch {}
+    throw new Error(msg);
+  }
+  const reader = res.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+  while (true) {
+    const { value, done } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+    let idx: number;
+    while ((idx = buffer.indexOf("\n\n")) !== -1) {
+      const frame = buffer.slice(0, idx);
+      buffer = buffer.slice(idx + 2);
+      const lines = frame.split("\n");
+      for (const line of lines) {
+        if (line.startsWith(": ping") || line.startsWith(":") || line.trim() === "") continue;
+        if (line.startsWith("data: ")) {
+          try { onEvent(JSON.parse(line.slice(6))); } catch {}
+        }
+      }
+    }
+  }
+  if (buffer.trim()) {
+    for (const line of buffer.split("\n")) if (line.startsWith("data: ")) try { onEvent(JSON.parse(line.slice(6))); } catch {}
+  }
+}
+
+export type ProviderRow = { id: string; label: string; baseUrl: string; hasKey: boolean; maskedKey: string };
+
+export async function listProviders(): Promise<{ providers: ProviderRow[] }> {
+  const res = await apiFetch(`/auth/providers`);
+  return jsonOrThrow(res);
+}
+
+export async function upsertProvider(opts: { id: string; label: string; baseUrl: string; apiKey: string }): Promise<{ ok: boolean }> {
+  const res = await apiFetch(`/auth/providers`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(opts),
+  });
+  return jsonOrThrow(res);
+}
+
+export async function deleteProvider(id: string): Promise<{ ok: boolean }> {
+  const res = await apiFetch(`/auth/providers/${encodeURIComponent(id)}`, { method: "DELETE" });
+  return jsonOrThrow(res);
+}
+
+export async function testProvider(id: string, opts?: { baseUrl?: string; apiKey?: string }): Promise<{ ok: boolean }> {
+  const res = await apiFetch(`/auth/providers/${encodeURIComponent(id)}/test`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(opts ?? {}),
+  });
+  return jsonOrThrow(res);
+}
+
 export type SlashCommand = {
   name: string;
   description?: string;

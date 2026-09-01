@@ -52,10 +52,10 @@ function CopyButton({ text }: { text: string }) {
       type="button"
       onClick={onCopy}
       aria-label={copied ? "Copied" : "Copy code"}
-      className="absolute right-2 top-2 z-10 inline-flex items-center gap-1 rounded-md border border-phi-border bg-phi-bg-elevated px-2 py-1 text-[11px] font-medium leading-none tracking-wide text-phi-text-tertiary shadow-[0_1px_2px_rgba(0,0,0,0.3)] transition hover:border-phi-border-strong hover:bg-phi-overlay-hover hover:text-phi-text-secondary active:bg-phi-overlay-active"
+      className="absolute right-2 top-2 z-10 inline-flex items-center gap-1 rounded-md border border-phi-border bg-phi-bg-elevated px-2 py-1 text-[11px] font-medium leading-none tracking-wide text-phi-text-tertiary shadow-[0_1px_2px_var(--color-phi-shadow)] transition hover:border-phi-border-strong hover:bg-phi-overlay-hover hover:text-phi-text-secondary active:bg-phi-overlay-active"
     >
       {copied ? (
-        <CheckIcon className="size-3 text-emerald-400" />
+        <CheckIcon className="size-3 text-phi-thinking-low" />
       ) : (
         <Square2StackIcon className="size-3" />
       )}

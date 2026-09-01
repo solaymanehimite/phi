@@ -1,7 +1,6 @@
 import { useEffect, useState } from "react";
 import type { WorkItem } from "../../types/work";
 import { ChevronDownIcon } from "../ui/icons";
-import PhiLogo from "../../../public/logo_small.svg?react";
 
 function getToolDisplay(
     name: string,
@@ -88,7 +87,7 @@ export function WorkingBlock({ items, isStreaming, variant }: Props) {
                     }`}
             >
                 <div className="overflow-hidden">
-                    <div className="space-y-3 pb-2 pt-2">
+                    <div className={`${isStreaming && isStreamingVariant ? "phi-work-stagger " : ""}space-y-3 pb-2 pt-2`}>
                         {items.map((item) => {
                             if (item.kind === "thinking") {
                                 return (
