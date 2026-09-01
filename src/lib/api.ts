@@ -75,7 +75,7 @@ export async function getMessages(file: string): Promise<SessionMessagesResponse
   return jsonOrThrow(res);
 }
 
-export async function createSession(cwd?: string): Promise<{ ok: boolean; file: string }> {
+export async function createSession(cwd?: string): Promise<{ ok: boolean; file: string; cwd: string }> {
   const res = await apiFetch(`/sessions/new`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },

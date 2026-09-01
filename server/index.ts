@@ -39,7 +39,10 @@ function errorMessage(error: unknown): string {
 }
 
 function normalisePath(path: string): string {
-  return resolvePath(path);
+  const trimmed = path.trim();
+  if (trimmed === "~") return os.homedir();
+  if (trimmed.startsWith("~/")) return resolvePath(os.homedir(), trimmed.slice(2));
+  return resolvePath(trimmed);
 }
 
 function assertCwdMatches(actual: string, requested?: string) {
