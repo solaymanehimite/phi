@@ -64,17 +64,23 @@ function getAtQuery(text: string, cursor: number): string | null {
     return afterAt;
 }
 
-function getTrigger(text: string, cursor: number): { type: "slash" | "at"; query: string; pos: number } | null {
+function getTrigger(
+    text: string,
+    cursor: number,
+): { type: "slash" | "at"; query: string; pos: number } | null {
     const before = text.slice(0, cursor);
     const slashPos = before.lastIndexOf("/");
     const atPos = before.lastIndexOf("@");
     const slashQ = getSlashQuery(text, cursor);
     const atQ = getAtQuery(text, cursor);
     // pick the trigger closest to cursor (higher pos)
-    let candidate: { type: "slash" | "at"; query: string; pos: number } | null = null;
-    if (slashQ !== null) candidate = { type: "slash", query: slashQ, pos: slashPos };
+    let candidate: { type: "slash" | "at"; query: string; pos: number } | null =
+        null;
+    if (slashQ !== null)
+        candidate = { type: "slash", query: slashQ, pos: slashPos };
     if (atQ !== null) {
-        if (!candidate || atPos > candidate.pos) candidate = { type: "at", query: atQ, pos: atPos };
+        if (!candidate || atPos > candidate.pos)
+            candidate = { type: "at", query: atQ, pos: atPos };
     }
     return candidate;
 }
@@ -125,7 +131,9 @@ export const Composer = memo(function Composer({
             const EXPIRY = 14 * 24 * 60 * 60 * 1000;
             if (Date.now() - parsed.at > EXPIRY || !parsed.text?.trim()) return "";
             return parsed.text;
-        } catch { return ""; }
+        } catch {
+            return "";
+        }
     });
     const draftTimerRef = useRef<number | null>(null);
     // persist draft with debounce 350ms
@@ -134,21 +142,31 @@ export const Composer = memo(function Composer({
         draftTimerRef.current = window.setTimeout(() => {
             try {
                 if (!text.trim()) localStorage.removeItem(key);
-                else localStorage.setItem(key, JSON.stringify({ text, at: Date.now() }));
+                else
+                    localStorage.setItem(key, JSON.stringify({ text, at: Date.now() }));
                 window.dispatchEvent(new CustomEvent("phi:draft-change"));
-            } catch {}
+            } catch { }
         }, 350) as unknown as number;
     }, []);
     // when draftKey changes, load draft
     useEffect(() => {
         try {
             const raw = localStorage.getItem(draftStorageKey);
-            if (!raw) { setMessage(""); return; }
+            if (!raw) {
+                setMessage("");
+                return;
+            }
             const parsed = JSON.parse(raw) as { text: string; at: number };
             const EXPIRY = 14 * 24 * 60 * 60 * 1000;
-            if (Date.now() - parsed.at > EXPIRY || !parsed.text?.trim()) { setMessage(""); localStorage.removeItem(draftStorageKey); return; }
+            if (Date.now() - parsed.at > EXPIRY || !parsed.text?.trim()) {
+                setMessage("");
+                localStorage.removeItem(draftStorageKey);
+                return;
+            }
             setMessage(parsed.text);
-        } catch { setMessage(""); }
+        } catch {
+            setMessage("");
+        }
     }, [draftStorageKey]);
     const [images, setImages] = useState<AttachedImage[]>([]);
     const [isDragging, setIsDragging] = useState(false);
@@ -201,12 +219,17 @@ export const Composer = memo(function Composer({
             // show everything that startsWith prefix OR contains prefix recursively
             // For "@src/" we want all children under src (including nested) — prefix match
             // For "@src/compo" we want substring of path
-            const isPrefixMode = q.endsWith("/") || files.some((f) => f.path.toLowerCase().startsWith(q));
+            const isPrefixMode =
+                q.endsWith("/") ||
+                files.some((f) => f.path.toLowerCase().startsWith(q));
             let candidates: ProjectFile[];
             if (isPrefixMode) {
-                candidates = files.filter((f) => f.path.toLowerCase().startsWith(prefix));
+                candidates = files.filter((f) =>
+                    f.path.toLowerCase().startsWith(prefix),
+                );
                 // if no prefix hit, fallback to includes
-                if (candidates.length === 0) candidates = files.filter((f) => f.path.toLowerCase().includes(q));
+                if (candidates.length === 0)
+                    candidates = files.filter((f) => f.path.toLowerCase().includes(q));
             } else {
                 candidates = files.filter((f) => f.path.toLowerCase().includes(q));
             }
@@ -223,7 +246,8 @@ export const Composer = memo(function Composer({
         }
         // bare filename search -> substring on path or name
         const candidates = files.filter(
-            (f) => f.path.toLowerCase().includes(q) || f.name.toLowerCase().includes(q),
+            (f) =>
+                f.path.toLowerCase().includes(q) || f.name.toLowerCase().includes(q),
         );
         candidates.sort((a, b) => {
             const ap = a.path.toLowerCase().indexOf(q);
@@ -235,7 +259,8 @@ export const Composer = memo(function Composer({
         return candidates.slice(0, 50);
     }, [files, atQuery]);
 
-    const isAtOpen = atQuery !== null && (filteredAt.length > 0 || files.length === 0);
+    const isAtOpen =
+        atQuery !== null && (filteredAt.length > 0 || files.length === 0);
 
     const updateFromValue = useCallback((val: string, cursor: number) => {
         const trigger = getTrigger(val, cursor);
@@ -337,7 +362,8 @@ export const Composer = memo(function Composer({
 
     // clamp indices
     useEffect(() => {
-        if (slashQuery !== null && slashIndex >= filteredSlash.length) setSlashIndex(0);
+        if (slashQuery !== null && slashIndex >= filteredSlash.length)
+            setSlashIndex(0);
     }, [filteredSlash.length, slashIndex, slashQuery]);
     useEffect(() => {
         if (atQuery !== null && atIndex >= filteredAt.length) setAtIndex(0);
@@ -389,7 +415,10 @@ export const Composer = memo(function Composer({
             onSend(content, payload);
             setMessage("");
             setImages([]);
-            try { localStorage.removeItem(draftStorageKey); window.dispatchEvent(new CustomEvent("phi:draft-change")); } catch {}
+            try {
+                localStorage.removeItem(draftStorageKey);
+                window.dispatchEvent(new CustomEvent("phi:draft-change"));
+            } catch { }
             if (draftTimerRef.current) window.clearTimeout(draftTimerRef.current);
             closeSlash();
             closeAt();
@@ -421,7 +450,11 @@ export const Composer = memo(function Composer({
                 }
                 if (event.key === "ArrowUp") {
                     event.preventDefault();
-                    setAtIndex((i) => (i - 1 + Math.max(filteredAt.length, 1)) % Math.max(filteredAt.length, 1));
+                    setAtIndex(
+                        (i) =>
+                            (i - 1 + Math.max(filteredAt.length, 1)) %
+                            Math.max(filteredAt.length, 1),
+                    );
                     return;
                 }
                 if (event.key === "Enter" || event.key === "Tab") {
@@ -674,9 +707,7 @@ export const Composer = memo(function Composer({
                 placeholder={
                     isStreaming
                         ? "Streaming… press Stop or Enter to abort"
-                        : images.length > 0
-                            ? "Describe the images…"
-                            : "Message Pi… — type / for commands, @ for files"
+                        : "What do you want to build today?"
                 }
                 onChange={handleChange}
                 onKeyDown={handleKeyDown}
