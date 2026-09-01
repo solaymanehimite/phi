@@ -1,30 +1,63 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useTheme, type Theme } from "../hooks/useTheme";
+import { ChevronLeftIcon, Cog6ToothIcon, KeyIcon, PaintBrushIcon } from "@heroicons/react/24/solid";
+import { Tabs } from "./tabs";
 import { listProviders, upsertProvider, deleteProvider, testProvider, type ProviderRow } from "../lib/api";
 
 
-type Tab = "appearance" | "providers";
+type SettingsSection = "appearance" | "providers";
 
-export function SettingsModal({ open, onClose, onProvidersChanged }: { open: boolean; onClose: () => void; onProvidersChanged?: () => void }) {
-  const [tab, setTab] = useState<Tab>("appearance");
-  if (!open) return null;
+const sections: { id: SettingsSection; label: string; description: string; icon: typeof PaintBrushIcon }[] = [
+  { id: "appearance", label: "Appearance", description: "Theme and colors", icon: PaintBrushIcon },
+  { id: "providers", label: "Providers / Auth", description: "Models and API keys", icon: KeyIcon },
+];
+
+export function SettingsPage({ onClose, onProvidersChanged }: { onClose: () => void; onProvidersChanged?: () => void }) {
+  const [section, setSection] = useState<SettingsSection>("appearance");
+  const active = sections.find((item) => item.id === section)!;
+
   return (
-    <div className="fixed inset-0 z-40 flex items-center justify-center">
-      <button aria-label="Close settings" onClick={onClose} className="absolute inset-0 bg-phi-scrim backdrop-blur-[2px]" />
-      <div className="relative z-10 flex h-[min(640px,90vh)] w-[min(720px,92vw)] flex-col overflow-hidden rounded-2xl border border-phi-border-strong bg-phi-bg-elevated shadow-[0_24px_80px_var(--color-phi-shadow-strong)]">
-        <div className="flex items-center justify-between border-b border-phi-border px-4 py-3">
-          <h2 className="text-[14px] font-semibold text-phi-text-primary">Settings</h2>
-          <button onClick={onClose} className="grid size-8 place-items-center rounded-lg text-phi-text-muted hover:bg-phi-overlay hover:text-phi-text-primary">✕</button>
-        </div>
-        <div className="flex shrink-0 gap-1 border-b border-phi-border px-2 py-2">
-          <button onClick={() => setTab("appearance")} className={`rounded-lg px-3 py-1.5 text-[13px] font-medium ${tab === "appearance" ? "bg-phi-overlay-active text-phi-text-primary" : "text-phi-text-muted hover:bg-phi-overlay hover:text-phi-text-secondary"}`}>Appearance</button>
-          <button onClick={() => setTab("providers")} className={`rounded-lg px-3 py-1.5 text-[13px] font-medium ${tab === "providers" ? "bg-phi-overlay-active text-phi-text-primary" : "text-phi-text-muted hover:bg-phi-overlay hover:text-phi-text-secondary"}`}>Providers / Auth</button>
-        </div>
-        <div className="min-h-0 flex-1 overflow-y-auto p-4">
-          {tab === "appearance" ? <AppearanceTab /> : <ProvidersTab onChanged={onProvidersChanged} />}
-        </div>
-        <div className="border-t border-phi-border px-4 py-2 text-[11px] text-phi-text-muted">Shortcuts • Cmd+N new • Cmd+W close • Cmd+Shift+Backspace delete • Cmd+P project • Cmd+, settings • Esc abort</div>
+    <div className="phi-layout text-phi-text-primary antialiased selection:bg-phi-accent/25">
+      <div className="phi-sidebar-wrap" data-collapsed="false">
+        <aside className="flex h-full w-[268px] min-w-[268px] shrink-0 flex-col bg-phi-bg-sidebar">
+          <div data-tauri-drag-region className="mb-4 mt-2 flex shrink-0 items-center px-4 py-3">
+            <div className="flex items-center gap-2 text-[15px] font-semibold leading-none text-phi-text-primary">
+              <Cog6ToothIcon className="size-4 shrink-0" />
+              <span>Settings</span>
+            </div>
+          </div>
+          <nav aria-label="Settings sections" className="space-y-0.5 px-2">
+            <button onClick={onClose} className="flex h-8 w-full items-center gap-2.5 rounded-lg px-2 py-1 text-left text-[13px] text-phi-text-tertiary hover:bg-phi-overlay-hover hover:text-phi-text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-phi-accent/40">
+              <ChevronLeftIcon className="size-3.5 shrink-0" />
+              <span className="truncate">Return to home</span>
+            </button>
+            {sections.map((item) => {
+              const Icon = item.icon;
+              const selected = item.id === section;
+              return (
+                <button key={item.id} onClick={() => setSection(item.id)} aria-current={selected ? "page" : undefined} className={`flex h-8 w-full items-center gap-2.5 rounded-lg px-2 py-1 text-left text-[13px] ${selected ? "bg-phi-overlay-active text-phi-text-primary" : "text-phi-text-tertiary hover:bg-phi-overlay-hover hover:text-phi-text-primary"}`}>
+                  <Icon className="size-4 shrink-0" />
+                  <span className="truncate">{item.label}</span>
+                </button>
+              );
+            })}
+          </nav>
+        </aside>
       </div>
+
+      <main className="phi-main bg-phi-bg-sidebar px-2 pb-2">
+        <Tabs tabs={[{ id: section, title: active.label }]} activeId={section} onSelect={() => {}} onClose={() => {}} hideClose tablistLabel="Settings section" />
+        <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border border-phi-border-subtle bg-phi-bg-main shadow-[0_8px_30px_var(--color-phi-shadow)]">
+          <header className="shrink-0 border-b border-phi-border px-6 py-5">
+            <h1 className="text-[20px] font-semibold tracking-[-0.02em] text-phi-text-primary">{active.label}</h1>
+            <p className="mt-1 text-[12px] text-phi-text-muted">{active.description}</p>
+          </header>
+          <div className="min-h-0 flex-1 overflow-y-auto p-6">
+            {section === "appearance" ? <AppearanceTab /> : <ProvidersTab onChanged={onProvidersChanged} />}
+          </div>
+          <div className="border-t border-phi-border px-6 py-2 text-[11px] text-phi-text-muted">Shortcuts • Cmd+N new • Cmd+W close • Cmd+Shift+Backspace delete • Cmd+P project • Cmd+, settings • Esc abort</div>
+        </div>
+      </main>
     </div>
   );
 }
