@@ -1,12 +1,13 @@
 import {
     ArrowPathIcon,
+    Cog6ToothIcon,
     EllipsisHorizontalIcon,
+    PaperAirplaneIcon,
     PencilIcon,
     PlusIcon,
     TrashIcon,
 } from "@heroicons/react/24/solid";
 import { memo, useCallback, useMemo, useState } from "react";
-import { ThemeEditor } from "./dev/ThemeEditor";
 import { Button } from "./ui/button";
 import { PanelLeftIcon } from "./ui/icons";
 import { Input } from "./ui/input";
@@ -20,7 +21,9 @@ import {
 } from "./ui/dropdown-menu";
 import type { SessionGroup } from "../hooks/useSessions";
 import type { SessionInfo } from "../types/session";
+// @ts-ignore - svgr import
 import PhiLogo from "../../public/logo.svg?react";
+import { useHasDraft } from "../hooks/useHasDraft";
 
 type SidebarProps = {
     groups: SessionGroup[];
@@ -29,6 +32,7 @@ type SidebarProps = {
     onClose: () => void;
     onNewChat: () => void;
     onOpenSearch: () => void;
+    onOpenSettings?: () => void;
     collapsed: Set<string>;
     onToggleGroup: (cwd: string) => void;
     onRename: (file: string, name: string) => Promise<void>;
@@ -66,6 +70,7 @@ export const Sidebar = memo(function Sidebar({
     onClose,
     onNewChat,
     onOpenSearch,
+    onOpenSettings,
     collapsed,
     onToggleGroup,
     onRename,
@@ -76,7 +81,7 @@ export const Sidebar = memo(function Sidebar({
     onPrefetch,
 }: SidebarProps) {
     return (
-        <aside className="flex w-[268px] shrink-0 flex-col bg-phi-bg-sidebar max-sm:absolute max-sm:inset-y-0 max-sm:z-20 max-sm:shadow-[18px_0_50px_rgba(0,0,0,0.45)]">
+        <aside className="flex h-full w-[268px] min-w-[268px] shrink-0 flex-col bg-phi-bg-sidebar">
             <div
                 data-tauri-drag-region
                 className="flex shrink-0 mb-4 mt-2 items-center justify-between px-3"
@@ -141,19 +146,21 @@ export const Sidebar = memo(function Sidebar({
                 )}
             </div>
 
-            <div className="flex shrink-0 items-center px-3 pb-3 pt-2">
-                <ThemeEditor className="h-7 w-7" iconClassName="size-3" />
+            <div className="mt-auto flex shrink-0 items-center px-3 pb-4 pt-2">
+                <button
+                    onClick={onOpenSettings}
+                    title="Settings (Cmd+,)"
+                    aria-label="Open settings"
+                    className="inline-flex h-7 w-7 items-center justify-center rounded-lg text-phi-text-tertiary hover:bg-phi-overlay-hover hover:text-phi-text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-phi-accent/40"
+                >
+                    <Cog6ToothIcon className="size-4" />
+                </button>
             </div>
         </aside>
     );
 });
 
-function repoNameFor(cwd: string): string {
-    if (!cwd || cwd === "(unknown)" || cwd === "(no cwd)") return cwd;
-    const trimmed = cwd.endsWith("/") ? cwd.slice(0, -1) : cwd;
-    const seg = trimmed.split("/").pop();
-    return seg || trimmed;
-}
+
 
 const GroupSection = memo(function GroupSection({
     group,
@@ -179,10 +186,6 @@ const GroupSection = memo(function GroupSection({
     const handleToggle = useCallback(
         () => onToggleGroup(group.cwd),
         [onToggleGroup, group.cwd],
-    );
-    const repoName = useMemo(
-        () => repoNameFor(group.displayCwd),
-        [group.displayCwd],
     );
 
     return (
@@ -272,12 +275,14 @@ const SessionRowMemo = memo(function SessionRowMemo({
         () => onPrefetch?.(session.path),
         [onPrefetch, session.path],
     );
+    const hasDraft = useHasDraft(session.path);
 
     return (
         <SessionRow
             active={active}
             title={title}
             time={time}
+            hasDraft={hasDraft}
             onClick={handleSelect}
             onRename={handleRename}
             onDelete={handleDelete}
@@ -291,6 +296,7 @@ const SessionRow = memo(function SessionRow({
     active,
     title,
     time,
+    hasDraft,
     onClick,
     onRename,
     onDelete,
@@ -300,6 +306,7 @@ const SessionRow = memo(function SessionRow({
     active: boolean;
     title: string;
     time: string;
+    hasDraft?: boolean;
     onClick: () => void;
     onRename: (name: string) => Promise<void>;
     onDelete: () => Promise<void>;
@@ -370,6 +377,7 @@ const SessionRow = memo(function SessionRow({
                         <ArrowPathIcon className="size-4 shrink-0 animate-spin text-phi-text-secondary" />
                     ) : null}
                     <span className="min-w-0 flex-1 truncate text-left">{title}</span>
+                    {hasDraft && <PaperAirplaneIcon className="size-3 shrink-0 text-phi-text-muted" aria-label="Draft" title="Draft" />}
                 </button>
             )}
 

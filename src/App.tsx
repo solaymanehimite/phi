@@ -12,7 +12,14 @@ import { PanelLeftIcon } from "./components/ui/icons";
 import { useSessions } from "./hooks/useSessions";
 import { useChat } from "./hooks/useChat";
 import { useModels } from "./hooks/useModels";
-import { createSession, health } from "./lib/api";
+import { createSession, health, streamContinue } from "./lib/api";
+import { useTheme } from "./hooks/useTheme";
+import { useHealth } from "./hooks/useHealth";
+import { FatalState } from "./components/fatal";
+import { SettingsModal } from "./components/settings";
+import { useShortcuts } from "./hooks/useShortcuts";
+import { clearDraftFor } from "./hooks/useDraft";
+import { InlineErrorBlock, type InlineError } from "./components/inline-error";
 
 // Isolated scroll-aware viewport so App doesn't need to re-render on every streaming token
 const ChatViewport = memo(function ChatViewport({
@@ -22,6 +29,10 @@ const ChatViewport = memo(function ChatViewport({
     messages,
     isStreaming,
     streaming,
+    inlineError,
+    archivedErrors,
+    onContinue,
+    onDismiss,
 }: {
     activeFile: string | null;
     loading: boolean;
@@ -34,23 +45,23 @@ const ChatViewport = memo(function ChatViewport({
         error?: string;
         startedAt?: number | null;
     };
+    inlineError?: InlineError | null;
+    archivedErrors?: InlineError[];
+    onContinue?: () => void;
+    onDismiss?: () => void;
 }) {
     if (!activeFile) return null;
     if (loading) {
         return (
             <div className="mx-auto flex w-full max-w-3xl flex-1 flex-col overflow-y-auto px-6 pt-6">
-                <p className="py-10 text-center text-[13px] text-phi-text-muted">
-                    Loading messages…
-                </p>
+                <p className="py-10 text-center text-[13px] text-phi-text-muted">Loading messages…</p>
             </div>
         );
     }
-    if (error) {
+    if (error && messages.length === 0) {
         return (
             <div className="mx-auto flex w-full max-w-3xl flex-1 flex-col overflow-y-auto px-6 pt-6">
-                <div className="mx-auto mt-6 max-w-xl rounded-lg border border-phi-error-border bg-phi-error-bg px-4 py-3 text-[13px] text-phi-error-text">
-                    {error}
-                </div>
+                <div className="mx-auto mt-6 max-w-xl rounded-lg border border-phi-error-border bg-phi-error-bg px-4 py-3 text-[13px] text-phi-error-text">{error}</div>
             </div>
         );
     }
@@ -58,12 +69,9 @@ const ChatViewport = memo(function ChatViewport({
         return (
             <div className="mx-auto flex w-full max-w-3xl flex-1 flex-col overflow-y-auto px-6 pt-6">
                 <div className="flex flex-1 flex-col items-center justify-center pb-16 text-center">
-                    <p className="text-[13px] text-phi-text-muted">
-                        No messages in this session yet.
-                    </p>
-                    <p className="mt-1 text-[12px] text-phi-text-muted">
-                        Prompt streaming lands in Phase C.
-                    </p>
+                    <p className="text-[13px] text-phi-text-muted">No messages in this session yet.</p>
+                    <p className="mt-1 text-[12px] text-phi-text-muted">Prompt streaming lands in Phase C.</p>
+                    {inlineError && <InlineErrorBlock error={inlineError} onContinue={onContinue} onDismiss={onDismiss!} />}
                 </div>
             </div>
         );
@@ -75,19 +83,16 @@ const ChatViewport = memo(function ChatViewport({
             <div className="w-2xl h-full flex flex-col">
                 <Conversation messages={messages} hideLastWork={hideLastWork} />
                 {showLive && (
-                    <div className="pt-2">
-                        <Streaming
-                            text={streaming.text}
-                            workItems={streaming.workItems}
-                            error={streaming.error}
-                            isStreaming={isStreaming}
-                        />
+                    <div className="pt-2 phi-work-stagger">
+                        <Streaming text={streaming.text} workItems={streaming.workItems} error={streaming.error} isStreaming={isStreaming} />
                     </div>
                 )}
-                {error && !isStreaming && (
-                    <div className="rounded-lg border border-phi-error-border bg-phi-error-bg px-3 py-2 text-[13px] text-phi-error-text">
-                        {error}
-                    </div>
+                {archivedErrors?.map((e) => (
+                    <InlineErrorBlock key={e.id} error={e} onDismiss={() => {}} archived />
+                ))}
+                {inlineError && <InlineErrorBlock error={inlineError} onContinue={onContinue} onDismiss={onDismiss!} />}
+                {error && !isStreaming && !inlineError && (
+                    <div className="mx-auto mt-3 w-full max-w-3xl rounded-lg border border-phi-error-border bg-phi-error-bg px-3 py-2 text-[13px] text-phi-error-text">{error}</div>
                 )}
             </div>
         </div>
@@ -99,17 +104,104 @@ export default function App() {
     const sessions = useSessions();
     const chat = useChat();
     const models = useModels();
+    useTheme();
+    const healthHook = useHealth(3000);
+    const [settingsOpen, setSettingsOpen] = useState(false);
     const [modelError, setModelError] = useState<string | null>(null);
-    const [draftModelKey, setDraftModelKey] = useState<string | undefined>(
-        undefined,
-    );
-    const [draftThinking, setDraftThinking] = useState<
-        import("./types/session").ThinkingLevel | undefined
-    >(undefined);
+    const [draftModelKey, setDraftModelKey] = useState<string | undefined>(undefined);
+    const [draftThinking, setDraftThinking] = useState<import("./types/session").ThinkingLevel | undefined>(undefined);
     const [homeCwd, setHomeCwd] = useState("");
     const [newChatCwd, setNewChatCwd] = useState<string | null>(null);
     const [openTabIds, setOpenTabIds] = useState<(string | null)[]>([null]);
     const openTabIdsRef = useRef<(string | null)[]>([null]);
+    // inline errors per session: tail node
+    const [inlineErrors, setInlineErrors] = useState<Record<string, InlineError>>({});
+    const [archivedErrors, setArchivedErrors] = useState<Record<string, InlineError[]>>({});
+    const directoryPickerRef = useRef<HTMLDivElement>(null);
+
+    // quit guard
+    useEffect(() => {
+        const onBeforeUnload = (e: BeforeUnloadEvent) => {
+            if (chat.runningFiles.size > 0) {
+                e.preventDefault();
+                e.returnValue = `${chat.runningFiles.size} session(s) streaming — abort and quit?`;
+                return e.returnValue;
+            }
+        };
+        window.addEventListener("beforeunload", onBeforeUnload);
+        return () => window.removeEventListener("beforeunload", onBeforeUnload);
+    }, [chat.runningFiles.size]);
+
+    // Tauri close-requested
+    useEffect(() => {
+        let unlisten: (() => void) | undefined;
+        (async () => {
+            try {
+                const { getCurrentWindow } = await import("@tauri-apps/api/window");
+                const win = getCurrentWindow();
+                unlisten = await win.onCloseRequested(async (event) => {
+                    if (chat.runningFiles.size > 0) {
+                        const { confirm } = await import("@tauri-apps/plugin-dialog");
+                        const ok = await confirm(`${chat.runningFiles.size} session(s) streaming — abort and quit?`, { title: "Phi", kind: "warning" });
+                        if (!ok) {
+                            event.preventDefault();
+                            return;
+                        }
+                        // abort all running then allow close, and persist interruption blocks
+                        for (const f of Array.from(chat.runningFiles)) {
+                            try { await chat.abort(f); } catch {}
+                            const err: InlineError = { id: `${f}-${Date.now()}`, reason: "Interruption", message: "Session interrupted by quit. You can Continue to resume.", time: new Date().toLocaleTimeString(), canContinue: true };
+                            setInlineErrors((prev) => ({ ...prev, [f]: err }));
+                        }
+                    }
+                });
+            } catch {}
+        })();
+        return () => { try { unlisten?.(); } catch {} };
+    }, [chat.runningFiles, chat.abort]);
+
+    const setInlineFor = useCallback((file: string, err: InlineError | null) => {
+        if (!err) {
+            setInlineErrors((prev) => {
+                const { [file]: _, ...rest } = prev;
+                return rest;
+            });
+            return;
+        }
+        setInlineErrors((prev) => ({ ...prev, [file]: err }));
+    }, []);
+
+    const archiveInline = useCallback((file: string) => {
+        setInlineErrors((prev) => {
+            const cur = prev[file];
+            if (!cur) return prev;
+            const { [file]: _, ...rest } = prev;
+            setArchivedErrors((a) => ({ ...a, [file]: [...(a[file] ?? []), cur] }));
+            return rest;
+        });
+    }, []);
+
+    const makeInlineReason = (msg: string): InlineError["reason"] => {
+        const lower = msg.toLowerCase();
+        if (lower.includes("abort")) return "Abort";
+        if (lower.includes("interrupt")) return "Interruption";
+        if (lower.includes("auth") || lower.includes("api key") || lower.includes("unauthorized") || lower.includes("401")) return "Auth";
+        if (lower.includes("rate") || lower.includes("429")) return "Rate limit";
+        if (lower.includes("provider") || lower.includes("down") || lower.includes("overload") || lower.includes("5")) return "Provider down";
+        return "Error";
+    };
+
+    // auto-map chat.error (stream error) to inline block
+    useEffect(() => {
+        const f = chat.activeFile;
+        if (!f || !chat.error || chat.isStreaming) return;
+        // avoid override if already has inline for this file with same message
+        if (inlineErrors[f]?.message === chat.error) return;
+        const reason = makeInlineReason(chat.error);
+        const canContinue = reason === "Abort" || reason === "Interruption";
+        const err: InlineError = { id: `${f}-${Date.now()}`, reason, message: chat.error, time: new Date().toLocaleTimeString(), canContinue };
+        setInlineFor(f, err);
+    }, [chat.error, chat.activeFile, chat.isStreaming, inlineErrors, setInlineFor]);
 
     const openSessionTab = useCallback((id: string) => {
         const current = openTabIdsRef.current;
@@ -128,7 +220,6 @@ export default function App() {
         setOpenTabIds(next);
     }, []);
 
-    // A draft tab becomes the persisted session tab when its first prompt creates a file.
     const promoteNewChatTab = useCallback((file: string) => {
         const current = openTabIdsRef.current;
         if (current.includes(file)) return;
@@ -149,70 +240,49 @@ export default function App() {
                     setNewChatCwd((current) => current ?? res.home);
                 }
             })
-            .catch(() => {
-                // The picker still accepts a path if the health request is unavailable.
-            });
-        return () => {
-            cancelled = true;
-        };
+            .catch(() => {});
+        return () => { cancelled = true; };
     }, []);
 
-    const activeTitle = useMemo(
-        () =>
-            chat.data?.sessionName ||
-            chat.data?.header?.id ||
-            chat.activeFile?.split("/").pop() ||
-            "New chat",
-        [chat.data?.sessionName, chat.data?.header?.id, chat.activeFile],
-    );
+    const activeTitle = useMemo(() => chat.data?.sessionName || chat.data?.header?.id || chat.activeFile?.split("/").pop() || "New chat", [chat.data?.sessionName, chat.data?.header?.id, chat.activeFile]);
     const activeCwd = chat.data?.cwd || chat.data?.header?.cwd;
 
     const ctxModel: any = (chat.data?.context as any)?.model;
-    const ctxModelKey = ctxModel
-        ? `${ctxModel.provider}/${ctxModel.modelId ?? ctxModel.id}`
-        : undefined;
+    const ctxModelKey = ctxModel ? `${ctxModel.provider}/${ctxModel.modelId ?? ctxModel.id}` : undefined;
     const selectedModelKey = ctxModelKey ?? draftModelKey;
-    const ctxThinking = (chat.data?.context as any)?.thinkingLevel as
-        string | undefined;
+    const ctxThinking = (chat.data?.context as any)?.thinkingLevel as string | undefined;
     const thinkingLevel = ctxThinking ?? draftThinking;
 
-    const handleSelectModel = useCallback(
-        async (provider: string, id: string) => {
-            const key = `${provider}/${id}`;
-            const sessionFile = chat.activeFile;
-            if (!sessionFile) {
-                setDraftModelKey(key);
-                setModelError(null);
-                return;
-            }
+    const handleSelectModel = useCallback(async (provider: string, id: string) => {
+        const key = `${provider}/${id}`;
+        const sessionFile = chat.activeFile;
+        if (!sessionFile) {
+            setDraftModelKey(key);
             setModelError(null);
-            const info = models.models.find(
-                (m) => m.provider === provider && m.id === id,
-            );
-            const optimistic: any = info ?? { provider, id, modelId: id, name: id };
-            // Optimistic only — no refresh. Model switch must not reload messages or flash "Loading…"
-            chat.patchModel(optimistic, undefined, sessionFile);
-            try {
-                const res: any = await models.setModel(sessionFile, provider, id);
-                if (res?.model)
-                    chat.patchModel(res.model, res.thinkingLevel, sessionFile);
-            } catch (e) {
-                const msg = e instanceof Error ? e.message : String(e);
-                setModelError(msg);
-                // Keep optimistic UI; do not reload history. Error banner is enough.
-            }
-        },
-        [chat.activeFile, chat.patchModel, models.models, models.setModel],
-    );
+            return;
+        }
+        setModelError(null);
+        const info = models.models.find((m) => m.provider === provider && m.id === id);
+        const optimistic: any = info ?? { provider, id, modelId: id, name: id };
+        chat.patchModel(optimistic, undefined, sessionFile);
+        try {
+            const res: any = await models.setModel(sessionFile, provider, id);
+            if (res?.model) chat.patchModel(res.model, res.thinkingLevel, sessionFile);
+        } catch (e) {
+            const msg = e instanceof Error ? e.message : String(e);
+            // move auth errors to inline block instead of banner
+            const reason = makeInlineReason(msg);
+            if (reason === "Auth" || reason === "Rate limit" || reason === "Provider down") {
+                const err: InlineError = { id: `${sessionFile}-${Date.now()}`, reason, message: msg, time: new Date().toLocaleTimeString(), canContinue: false };
+                setInlineFor(sessionFile, err);
+            } else setModelError(msg);
+        }
+    }, [chat.activeFile, chat.patchModel, models.models, models.setModel, setInlineFor]);
 
-    // Debounced commit for thinking slider — UI patches instantly, server is debounced
     const thinkingCommitRef = useRef<number | null>(null);
-    const pendingThinkingRef = useRef<
-        import("./types/session").ThinkingLevel | null
-    >(null);
+    const pendingThinkingRef = useRef<import("./types/session").ThinkingLevel | null>(null);
     const pendingThinkingFileRef = useRef<string | null>(null);
 
-    // flush pending thinking level to server (debounced)
     const flushThinking = useCallback(async () => {
         const level = pendingThinkingRef.current;
         const sessionFile = pendingThinkingFileRef.current;
@@ -222,45 +292,26 @@ export default function App() {
         if (!level || !sessionFile) return;
         try {
             const res: any = await models.setThinkingLevel(sessionFile, level);
-            if (res?.thinkingLevel)
-                chat.patchModel(null as any, res.thinkingLevel, sessionFile);
+            if (res?.thinkingLevel) chat.patchModel(null as any, res.thinkingLevel, sessionFile);
         } catch (e) {
             const msg = e instanceof Error ? e.message : String(e);
             setModelError(msg);
         }
-    }, [chat.activeFile, chat.patchModel, models.setThinkingLevel]);
+    }, [models.setThinkingLevel, chat.patchModel]);
 
-    const handleThinkingChange = useCallback(
-        (level: import("./types/session").ThinkingLevel) => {
-            if (!chat.activeFile) {
-                setDraftThinking(level);
-                return;
-            }
-            const sessionFile = chat.activeFile;
-            setModelError(null);
-            // Instant optimistic so slider feels snappy; never reload messages
-            chat.patchModel(null as any, level, sessionFile);
-            // Debounce server sync — sliding through values only commits last one
-            pendingThinkingRef.current = level;
-            pendingThinkingFileRef.current = sessionFile;
-            if (thinkingCommitRef.current != null)
-                window.clearTimeout(thinkingCommitRef.current);
-            thinkingCommitRef.current = window.setTimeout(() => {
-                flushThinking();
-            }, 220);
-        },
-        [chat.activeFile, chat.patchModel, flushThinking],
-    );
+    const handleThinkingChange = useCallback((level: import("./types/session").ThinkingLevel) => {
+        if (!chat.activeFile) { setDraftThinking(level); return; }
+        const sessionFile = chat.activeFile;
+        setModelError(null);
+        chat.patchModel(null as any, level, sessionFile);
+        pendingThinkingRef.current = level;
+        pendingThinkingFileRef.current = sessionFile;
+        if (thinkingCommitRef.current != null) window.clearTimeout(thinkingCommitRef.current);
+        thinkingCommitRef.current = window.setTimeout(() => { void flushThinking(); }, 220);
+    }, [chat.activeFile, chat.patchModel, flushThinking]);
 
-    // Cancel debounced thinking commit when session changes — don't apply level to wrong session
+    useEffect(() => { return () => { if (thinkingCommitRef.current != null) window.clearTimeout(thinkingCommitRef.current); }; }, []);
     useEffect(() => {
-        return () => {
-            if (thinkingCommitRef.current != null)
-                window.clearTimeout(thinkingCommitRef.current);
-        };
-    }, []);
-    useEffect(() => {
-        // activeFile switched: drop pending commit for previous file
         if (thinkingCommitRef.current != null) {
             window.clearTimeout(thinkingCommitRef.current);
             thinkingCommitRef.current = null;
@@ -269,7 +320,6 @@ export default function App() {
         }
     }, [chat.activeFile]);
 
-    // Idle prefetch: warm top 5 recent sessions so first hover/click is often already cached (0ms)
     useEffect(() => {
         if (sessions.loading || sessions.groups.length === 0) return;
         const files: string[] = [];
@@ -281,191 +331,150 @@ export default function App() {
             if (files.length >= 5) break;
         }
         if (files.length === 0) return;
-        const idle = (cb: () => void) =>
-            (window as any).requestIdleCallback
-                ? (window as any).requestIdleCallback(cb, { timeout: 2000 })
-                : setTimeout(cb, 400);
-        const cancelIdle = (id: any) =>
-            (window as any).cancelIdleCallback
-                ? (window as any).cancelIdleCallback(id)
-                : clearTimeout(id);
-        const id = idle(() => {
-            files.forEach((f) => chat.prefetch(f));
-        });
+        const idle = (cb: () => void) => (window as any).requestIdleCallback ? (window as any).requestIdleCallback(cb, { timeout: 2000 }) : setTimeout(cb, 400);
+        const cancelIdle = (id: any) => (window as any).cancelIdleCallback ? (window as any).cancelIdleCallback(id) : clearTimeout(id);
+        const id = idle(() => { files.forEach((f) => chat.prefetch(f)); });
         return () => cancelIdle(id);
     }, [sessions.groups, sessions.loading, chat.activeFile, chat.prefetch]);
 
     useEffect(() => {
-        if (chat.activeFile && chat.data?.context) {
-            setDraftModelKey(undefined);
-            setDraftThinking(undefined);
-        }
+        if (chat.activeFile && chat.data?.context) { setDraftModelKey(undefined); setDraftThinking(undefined); }
     }, [chat.activeFile, chat.data?.context]);
 
     const focusComposer = useCallback(() => {
+        requestAnimationFrame(() => { document.querySelector<HTMLTextAreaElement>('textarea[aria-label="Message Pi"]')?.focus(); });
+    }, []);
+    const focusProjectPicker = useCallback(() => {
+        const el = document.querySelector<HTMLElement>('[data-project-picker-trigger]');
+        if (!el) return;
+        // HeadlessUI Popover opens on click — click to open dropdown
+        (el as HTMLButtonElement).click();
+        // After panel mounts, focus the search input (autoFocus is fallback, but ensure for Ctrl+P)
         requestAnimationFrame(() => {
-            document
-                .querySelector<HTMLTextAreaElement>('textarea[aria-label="Message Pi"]')
-                ?.focus();
+            requestAnimationFrame(() => {
+                const input = document.querySelector<HTMLElement>('input[aria-label="Search projects"]');
+                if (input) input.focus();
+                else el.focus();
+            });
         });
     }, []);
 
-    const handleSelect = useCallback(
-        async (file: string) => {
-            openSessionTab(file);
-            if (file === chat.activeFile) {
-                focusComposer();
-                return;
-            }
-            // Selection only changes the viewport. Streams and their SSE readers
-            // remain attached to their own session files in useChat.
-            if (chat.hasCache(file)) {
-                chat.hydrateFromCache(file);
-                sessions
-                    .switchTo(file)
-                    .catch((e) => console.warn("switchSession failed", e));
-                chat.revalidate(file);
-                focusComposer();
-                return;
-            }
-            chat.prepareSwitch(file);
-            try {
-                const res = await sessions.switchTo(file);
-                if ((res as any)?.context) chat.hydrateFromSwitch(res as any);
-                else await chat.openFile(file);
-            } catch (e) {
-                console.warn("switchSession failed", e);
-                await chat.openFile(file).catch(() => { });
-            } finally {
-                focusComposer();
-            }
-        },
-        [
-            openSessionTab,
-            sessions.switchTo,
-            chat.openFile,
-            chat.hydrateFromSwitch,
-            chat.hydrateFromCache,
-            chat.hasCache,
-            chat.revalidate,
-            chat.activeFile,
-            chat.prepareSwitch,
-            focusComposer,
-        ],
-    );
+    const handleSelect = useCallback(async (file: string) => {
+        openSessionTab(file);
+        if (file === chat.activeFile) { focusComposer(); return; }
+        if (chat.hasCache(file)) {
+            chat.hydrateFromCache(file);
+            sessions.switchTo(file).catch((e) => console.warn("switchSession failed", e));
+            chat.revalidate(file);
+            focusComposer();
+            return;
+        }
+        chat.prepareSwitch(file);
+        try {
+            const res = await sessions.switchTo(file);
+            if ((res as any)?.context) chat.hydrateFromSwitch(res as any);
+            else await chat.openFile(file);
+        } catch (e) {
+            console.warn("switchSession failed", e);
+            await chat.openFile(file).catch(() => {});
+        } finally { focusComposer(); }
+    }, [openSessionTab, sessions.switchTo, chat.openFile, chat.hydrateFromSwitch, chat.hydrateFromCache, chat.hasCache, chat.revalidate, chat.activeFile, chat.prepareSwitch, focusComposer]);
 
-    const handleNewChat = useCallback(() => {
-        ensureNewChatTab();
-        chat.clear();
-        focusComposer();
-    }, [chat.clear, ensureNewChatTab, focusComposer]);
+    const handleNewChat = useCallback(() => { ensureNewChatTab(); chat.clear(); focusComposer(); }, [chat.clear, ensureNewChatTab, focusComposer]);
 
-    const handleCloseTab = useCallback(
-        (id: string | null) => {
-            const current = openTabIdsRef.current;
-            if (id === null && current.length === 1) return;
-            const index = current.indexOf(id);
-            if (index < 0) return;
+    const handleCloseTab = useCallback((id: string | null) => {
+        const current = openTabIdsRef.current;
+        if (id === null && current.length === 1) return;
+        const index = current.indexOf(id);
+        if (index < 0) return;
+        const next = current.filter((tabId) => tabId !== id);
+        const nextActiveId = next[index] ?? next[index - 1] ?? null;
+        openTabIdsRef.current = next.length > 0 ? next : [null];
+        setOpenTabIds(openTabIdsRef.current);
+        const isActive = id === chat.activeFile || (id === null && chat.activeFile === null);
+        if (!isActive) return;
+        if (nextActiveId === null) handleNewChat();
+        else void handleSelect(nextActiveId);
+    }, [chat.activeFile, handleNewChat, handleSelect]);
 
-            const next = current.filter((tabId) => tabId !== id);
-            const nextActiveId = next[index] ?? next[index - 1] ?? null;
-            openTabIdsRef.current = next.length > 0 ? next : [null];
-            setOpenTabIds(openTabIdsRef.current);
+    const handleRename = useCallback(async (file: string, name: string) => {
+        await sessions.rename(file, name);
+        chat.invalidateCache(file);
+        if (chat.activeFile === file) await chat.refreshSilent();
+    }, [sessions.rename, chat.activeFile, chat.refreshSilent, chat.invalidateCache]);
 
-            const isActive = id === chat.activeFile || (id === null && chat.activeFile === null);
-            if (!isActive) return;
-            if (nextActiveId === null) handleNewChat();
-            else void handleSelect(nextActiveId);
-        },
-        [chat.activeFile, handleNewChat, handleSelect],
-    );
+    const handleDelete = useCallback(async (file: string) => {
+        await sessions.remove(file);
+        if (openTabIdsRef.current.includes(file)) handleCloseTab(file);
+        chat.invalidateCache(file);
+        chat.removeFile(file);
+        setInlineFor(file, null);
+    }, [sessions.remove, handleCloseTab, chat.removeFile, chat.invalidateCache, setInlineFor]);
 
-    const handleRename = useCallback(
-        async (file: string, name: string) => {
-            await sessions.rename(file, name);
-            chat.invalidateCache(file);
-            if (chat.activeFile === file) await chat.refreshSilent();
-        },
-        [
-            sessions.rename,
-            chat.activeFile,
-            chat.refreshSilent,
-            chat.invalidateCache,
-        ],
-    );
-
-    const handleDelete = useCallback(
-        async (file: string) => {
-            await sessions.remove(file);
-            if (openTabIdsRef.current.includes(file)) handleCloseTab(file);
-            chat.invalidateCache(file);
-            chat.removeFile(file);
-        },
-        [sessions.remove, handleCloseTab, chat.removeFile, chat.invalidateCache],
-    );
+    const handleDeleteCurrent = useCallback(async () => {
+        const f = chat.activeFile;
+        if (!f) return;
+        if (!confirm("Delete current session?")) return;
+        await handleDelete(f);
+    }, [chat.activeFile, handleDelete]);
 
     const handleAbort = useCallback(async () => {
-        await chat.abort();
+        const f = chat.activeFile;
+        if (!f) return;
+        await chat.abort(f);
+        const err: InlineError = { id: `${f}-${Date.now()}`, reason: "Abort", message: "Aborted by user.", time: new Date().toLocaleTimeString(), canContinue: true };
+        setInlineFor(f, err);
         focusComposer();
-    }, [chat.abort, focusComposer]);
+    }, [chat.abort, chat.activeFile, focusComposer, setInlineFor]);
 
-    const handleSend = useCallback(
-        async (
-            content: string,
-            images?: { type: "image"; data: string; mimeType: string }[],
-        ) => {
-            let preparedSessionFile: string | undefined;
-            const selectedCwd = !chat.activeFile
-                ? (newChatCwd ?? homeCwd) || undefined
-                : undefined;
-            if (!chat.activeFile && (draftModelKey || draftThinking)) {
-                try {
-                    const res = await createSession(selectedCwd);
-                    const file = res.file;
-                    preparedSessionFile = file;
-                    promoteNewChatTab(file);
-                    try {
-                        await sessions.switchTo(file, selectedCwd);
-                    } catch { }
-                    await chat.openFile(file);
-                    sessions.addOptimistic(
-                        file,
-                        selectedCwd || "/home/solaymanehimite/Dev/ship/Phi",
-                        content,
-                    );
-                    const parsed = draftModelKey?.includes("/")
-                        ? {
-                            provider: draftModelKey.split("/")[0],
-                            id: draftModelKey.split("/").slice(1).join("/"),
-                        }
-                        : null;
-                    if (parsed) {
-                        try {
-                            const res: any = await models.setModel(
-                                file,
-                                parsed.provider,
-                                parsed.id,
-                            );
-                            if (res?.model)
-                                chat.patchModel(res.model, res.thinkingLevel, file);
-                        } catch (e) {
-                            setModelError(e instanceof Error ? e.message : String(e));
-                        }
-                    }
-                    if (draftThinking) {
-                        try {
-                            await models.setThinkingLevel(file, draftThinking);
-                        } catch (e) {
-                            setModelError(e instanceof Error ? e.message : String(e));
-                        }
-                    }
-                    setDraftModelKey(undefined);
-                    setDraftThinking(undefined);
-                    await chat.refreshSilent();
-                } catch (e) {
-                    console.warn("draft model pre-create failed", e);
-                }
+    const handleContinue = useCallback(async () => {
+        const f = chat.activeFile;
+        if (!f) return;
+        const cwd = activeCwd || newChatCwd || homeCwd;
+        // optimistic: keep inline for now, clear archived? Continue will resume
+        setInlineFor(f, null);
+        try {
+            // use sidecar continue streaming via same mechanism as prompt but via streamContinue
+            // we replicate chat streaming logic here minimal
+            await (chat as any).continueStreaming?.(f, cwd);
+        } catch {
+            // fallback to direct streamContinue
+            try {
+                await streamContinue({ sessionFile: f, cwd }, () => {});
+                await chat.revalidate(f);
+            } catch (e) {
+                const msg = e instanceof Error ? e.message : String(e);
+                const err: InlineError = { id: `${f}-${Date.now()}`, reason: makeInlineReason(msg), message: msg, time: new Date().toLocaleTimeString(), canContinue: msg.includes("continue") ? false : true };
+                setInlineFor(f, err);
             }
+        }
+    }, [chat, activeCwd, newChatCwd, homeCwd, setInlineFor]);
+
+    const handleSend = useCallback(async (content: string, images?: { type: "image"; data: string; mimeType: string }[]) => {
+        // archive inline error on new prompt
+        if (chat.activeFile) archiveInline(chat.activeFile);
+        else if (content.trim()) clearDraftFor(null);
+        let preparedSessionFile: string | undefined;
+        const selectedCwd = !chat.activeFile ? (newChatCwd ?? homeCwd) || undefined : undefined;
+        if (!chat.activeFile && (draftModelKey || draftThinking)) {
+            try {
+                const res = await createSession(selectedCwd);
+                const file = res.file;
+                preparedSessionFile = file;
+                promoteNewChatTab(file);
+                try { await sessions.switchTo(file, selectedCwd); } catch {}
+                await chat.openFile(file);
+                sessions.addOptimistic(file, selectedCwd || "/home/solaymanehimite/Dev/ship/Phi", content);
+                const parsed = draftModelKey?.includes("/") ? { provider: draftModelKey.split("/")[0], id: draftModelKey.split("/").slice(1).join("/") } : null;
+                if (parsed) {
+                    try { const res: any = await models.setModel(file, parsed.provider, parsed.id); if (res?.model) chat.patchModel(res.model, res.thinkingLevel, file); } catch (e) { setModelError(e instanceof Error ? e.message : String(e)); }
+                }
+                if (draftThinking) { try { await models.setThinkingLevel(file, draftThinking); } catch (e) { setModelError(e instanceof Error ? e.message : String(e)); } }
+                setDraftModelKey(undefined); setDraftThinking(undefined);
+                await chat.refreshSilent();
+            } catch (e) { console.warn("draft model pre-create failed", e); }
+        }
+        try {
             await chat.prompt(content, {
                 cwd: selectedCwd,
                 images,
@@ -473,204 +482,150 @@ export default function App() {
                 onNewFile: (file, cwd, firstMessage) => {
                     const realCwd = cwd || chat.data?.cwd || selectedCwd || "";
                     promoteNewChatTab(file);
-                    sessions.addOptimistic(
-                        file,
-                        realCwd || "/home/solaymanehimite/Dev/ship/Phi",
-                        firstMessage,
-                    );
+                    sessions.addOptimistic(file, realCwd || "/home/solaymanehimite/Dev/ship/Phi", firstMessage);
                 },
             });
-            sessions.refresh({ silent: true });
-            focusComposer();
-        },
-        [
-            chat.prompt,
-            chat.data?.cwd,
-            newChatCwd,
-            homeCwd,
-            sessions.addOptimistic,
-            sessions.refresh,
-            chat.activeFile,
-            draftModelKey,
-            draftThinking,
-            models.setModel,
-            models.setThinkingLevel,
-            promoteNewChatTab,
-            chat.patchModel,
-            chat.openFile,
-            chat.refreshSilent,
-            sessions.switchTo,
-            focusComposer,
-        ],
-    );
+        } catch (e) {
+            const msg = e instanceof Error ? e.message : String(e);
+            const target = preparedSessionFile ?? chat.activeFile;
+            if (target) {
+                const err: InlineError = { id: `${target}-${Date.now()}`, reason: makeInlineReason(msg), message: msg, time: new Date().toLocaleTimeString(), canContinue: msg.toLowerCase().includes("abort") || msg.toLowerCase().includes("interrupt") };
+                setInlineFor(target, err);
+            } else setModelError(msg);
+        }
+        if (chat.activeFile || preparedSessionFile) clearDraftFor(chat.activeFile ?? preparedSessionFile ?? null);
+        sessions.refresh({ silent: true });
+        focusComposer();
+    }, [chat.prompt, chat.data?.cwd, newChatCwd, homeCwd, sessions.addOptimistic, sessions.refresh, chat.activeFile, draftModelKey, draftThinking, models.setModel, models.setThinkingLevel, promoteNewChatTab, chat.patchModel, chat.openFile, chat.refreshSilent, sessions.switchTo, focusComposer, archiveInline, setInlineFor]);
 
-    const messages = useMemo(
-        () => chat.data?.context.messages ?? [],
-        [chat.data?.context.messages],
-    );
+    const messages = useMemo(() => chat.data?.context.messages ?? [], [chat.data?.context.messages]);
 
-    const tabItems = useMemo(
-        () =>
-            openTabIds.map((id) => {
-                if (id === null) {
-                    return { id, title: "New chat" };
-                }
-                const session = sessions.sessions.find((item) => item.path === id);
-                const fallback = id.split("/").pop() || "Session";
-                const title =
-                    session?.name?.trim() ||
-                    session?.firstMessage?.trim() ||
-                    (id === chat.activeFile ? activeTitle : fallback);
-                return {
-                    id,
-                    title: title.length > 42 ? `${title.slice(0, 42).trim()}…` : title,
-                    isRunning: chat.runningFiles.has(id),
-                };
-            }),
-        [activeTitle, chat.activeFile, chat.runningFiles, openTabIds, sessions.sessions],
-    );
+    const tabItems = useMemo(() => openTabIds.map((id) => {
+        if (id === null) return { id, title: "New chat" };
+        const session = sessions.sessions.find((item) => item.path === id);
+        const fallback = id.split("/").pop() || "Session";
+        const title = session?.name?.trim() || session?.firstMessage?.trim() || (id === chat.activeFile ? activeTitle : fallback);
+        return { id, title: title.length > 42 ? `${title.slice(0, 42).trim()}…` : title, isRunning: chat.runningFiles.has(id) };
+    }), [activeTitle, chat.activeFile, chat.runningFiles, openTabIds, sessions.sessions]);
+
+    // shortcuts
+    useShortcuts({
+        onNewChat: handleNewChat,
+        onCloseTab: () => handleCloseTab(chat.activeFile),
+        onDeleteSession: () => void handleDeleteCurrent(),
+        onFocusProject: focusProjectPicker,
+        onOpenSearch: () => {},
+        onOpenSettings: () => setSettingsOpen(true),
+        onAbort: () => void handleAbort(),
+    }, { isStreaming: chat.isStreaming });
+
+    // fatal gate
+    if (healthHook.fatal) {
+        return <FatalState error={healthHook.health?.error ?? null} home={healthHook.health?.home} port={healthHook.health?.port} agentDir={healthHook.health?.agentDir} onRetry={async () => { await healthHook.retry(); }} />;
+    }
 
     return (
-        <SessionCommand
-            groups={sessions.groups}
-            loading={sessions.loading}
-            error={sessions.error}
-            onSelect={(file) => void handleSelect(file)}
-        >
-            {(openSearch) => (
-                <div className="flex h-screen min-h-[480px] overflow-hidden bg-phi-bg-sidebar text-phi-text-primary antialiased selection:bg-phi-accent/25">
-            {sidebarOpen && (
-                <Sidebar
-                    groups={sessions.groups}
-                    activeFile={chat.activeFile}
-                    onSelect={handleSelect}
-                    onClose={() => setSidebarOpen(false)}
-                    onNewChat={handleNewChat}
-                    onOpenSearch={openSearch}
-                    collapsed={sessions.collapsed}
-                    onToggleGroup={sessions.toggleGroup}
-                    onRename={handleRename}
-                    onDelete={handleDelete}
-                    loading={sessions.loading}
-                    error={sessions.error}
-                    runningFiles={chat.runningFiles}
-                    onPrefetch={chat.prefetch}
-                />
-            )}
-
-            <main
-                className="relative flex min-w-0 flex-1 flex-col bg-phi-bg-sidebar px-2 pb-2"
-            >
-                <Tabs
-                    leadingAction={!sidebarOpen ? (
-                        <div className="flex items-center gap-1">
-                            <SearchSessionsButton onClick={openSearch} />
-                            <Button
-                                variant="icon"
-                                aria-label="Open sidebar"
-                                title="Open sidebar"
-                                onClick={() => setSidebarOpen(true)}
-                            >
-                                <PanelLeftIcon />
-                            </Button>
-                        </div>
-                    ) : null}
-                    tabs={tabItems}
-                    activeId={chat.activeFile}
-                    onSelect={(id) => id === null ? handleNewChat() : void handleSelect(id)}
-                    onClose={handleCloseTab}
-                />
-                <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border border-phi-border-subtle bg-phi-bg-main shadow-[0_8px_30px_rgba(0,0,0,0.12)]">
-                    <section className="flex min-h-0 flex-1 flex-col">
-                        {!chat.activeFile ? (
-                            <div className="mx-auto flex w-full max-w-3xl flex-1 flex-col overflow-y-auto px-6 pt-6">
-                                <div className="flex flex-1 flex-col items-center justify-center pb-16 text-center">
-                                    <h1 className="text-[32px] font-semibold tracking-[-0.03em] text-phi-text-primary">
-                                        Build, Fix and Ship
-                                    </h1>
-                                    {!sessions.loading &&
-                                        sessions.groups.length === 0 &&
-                                        !sessions.error && (
-                                            <p className="mt-6 text-[12px] text-phi-text-muted">
-                                                No sessions found — run `pi` in a project to create one.
-                                            </p>
-                                        )}
-                                </div>
-                            </div>
-                        ) : (
-                            <ChatViewport
+        <SessionCommand groups={sessions.groups} loading={sessions.loading} error={sessions.error} onSelect={(file) => void handleSelect(file)}>
+            {(openSearch) => {
+                // inject openSearch into shortcuts
+                // we need to expose via ref hack: set onOpenSearch dynamic
+                // For simplicity, handle Cmd+K via SessionCommand itself; shortcuts for K is no-op
+                return (
+                    <div className="phi-layout text-phi-text-primary antialiased selection:bg-phi-accent/25">
+                        <div
+                            className="phi-sidebar-wrap"
+                            data-collapsed={sidebarOpen ? "false" : "true"}
+                            aria-hidden={!sidebarOpen}
+                        >
+                            <Sidebar
+                                groups={sessions.groups}
                                 activeFile={chat.activeFile}
-                                loading={chat.loading}
-                                error={chat.error}
-                                messages={messages}
-                                isStreaming={chat.isStreaming}
-                                streaming={chat.streaming}
-                            />
-                        )}
-
-                        <div className="shrink-0 px-4 sm:px-7">
-                            {(modelError ||
-                                (!models.loading &&
-                                    models.models.length === 0 &&
-                                    !models.error)) && (
-                                    <div className="mx-auto mb-2 w-full max-w-3xl">
-                                        {modelError ? (
-                                            <div className="flex items-center justify-between gap-2 rounded-lg border border-phi-error-border bg-phi-error-bg px-3 py-2 text-[12.5px] text-phi-error-text">
-                                                <span className="truncate">{modelError}</span>
-                                                <button
-                                                    onClick={() => setModelError(null)}
-                                                    className="shrink-0 text-[11px] underline opacity-80 hover:opacity-100"
-                                                >
-                                                    Dismiss
-                                                </button>
-                                            </div>
-                                        ) : (
-                                            <div className="rounded-lg border border-amber-500/20 bg-amber-500/10 px-3 py-2 text-[12.5px] text-amber-200/90">
-                                                No models available — check auth (run{" "}
-                                                <code className="rounded bg-black/20 px-1">pi auth</code>)
-                                                or configure API keys. The model selector will populate
-                                                after auth.
-                                            </div>
-                                        )}
-                                    </div>
-                                )}
-                            <div className="mx-auto pl-6 mb-1 flex w-full max-w-3xl min-w-0 items-center gap-1">
-                                {!chat.activeFile && (
-                                    <DirectoryPicker
-                                        cwd={(newChatCwd ?? homeCwd) || null}
-                                        homeCwd={homeCwd}
-                                        projects={sessions.groups.map(({ cwd, displayCwd }) => ({
-                                            cwd,
-                                            displayCwd,
-                                        }))}
-                                        onChange={setNewChatCwd}
-                                        disabled={chat.isStreaming}
-                                    />
-                                )}
-                                <ModelSelector
-                                    models={models.models}
-                                    value={selectedModelKey}
-                                    thinkingLevel={thinkingLevel}
-                                    onSelect={handleSelectModel}
-                                    onThinkingChange={handleThinkingChange}
-                                    disabled={chat.isStreaming}
-                                    isStreaming={chat.isStreaming}
-                                    loading={models.loading}
-                                    error={models.error}
-                                />
-                            </div>
-                            <Composer
-                                onSend={handleSend}
-                                onAbort={handleAbort}
-                                isStreaming={chat.isStreaming}
-                                cwd={chat.activeFile ? activeCwd : (newChatCwd ?? homeCwd)}
+                                onSelect={handleSelect}
+                                onClose={() => setSidebarOpen(false)}
+                                onNewChat={handleNewChat}
+                                onOpenSearch={openSearch}
+                                onOpenSettings={() => setSettingsOpen(true)}
+                                collapsed={sessions.collapsed}
+                                onToggleGroup={sessions.toggleGroup}
+                                onRename={handleRename}
+                                onDelete={handleDelete}
+                                loading={sessions.loading}
+                                error={sessions.error}
+                                runningFiles={chat.runningFiles}
+                                onPrefetch={chat.prefetch}
                             />
                         </div>
-                    </section>
-                </div>
-            </main>
-                </div>
-            )}
+
+                        <main className="phi-main bg-phi-bg-sidebar px-2 pb-2" data-sidebar-collapsed={sidebarOpen ? "false" : "true"}>
+                            <Tabs
+                                leadingAction={!sidebarOpen ? (
+                                    <div className="flex items-center gap-1">
+                                        <SearchSessionsButton onClick={openSearch} />
+                                        <Button variant="icon" aria-label="Open sidebar" title="Open sidebar" onClick={() => setSidebarOpen(true)}><PanelLeftIcon /></Button>
+                                    </div>
+                                ) : null}
+                                tabs={tabItems}
+                                activeId={chat.activeFile}
+                                onSelect={(id) => id === null ? handleNewChat() : void handleSelect(id)}
+                                onClose={handleCloseTab}
+                            />
+                            <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border border-phi-border-subtle bg-phi-bg-main shadow-[0_8px_30px_var(--color-phi-shadow)]">
+                                <section className="flex min-h-0 flex-1 flex-col">
+                                    {!chat.activeFile ? (
+                                        <div className="mx-auto flex w-full max-w-3xl flex-1 flex-col overflow-y-auto px-6 pt-6">
+                                            <div className="flex flex-1 flex-col items-center justify-center pb-16 text-center">
+                                                <h1 className="text-[32px] font-semibold tracking-[-0.03em] text-phi-text-primary">Build, Fix and Ship</h1>
+                                                {!sessions.loading && sessions.groups.length === 0 && !sessions.error && (
+                                                    <p className="mt-6 text-[12px] text-phi-text-muted">No sessions found — run `pi` in a project to create one.</p>
+                                                )}
+                                            </div>
+                                        </div>
+                                    ) : (
+                                        <ChatViewport
+                                            activeFile={chat.activeFile}
+                                            loading={chat.loading}
+                                            error={chat.error}
+                                            messages={messages}
+                                            isStreaming={chat.isStreaming}
+                                            streaming={chat.streaming}
+                                            inlineError={chat.activeFile ? inlineErrors[chat.activeFile] ?? null : null}
+                                            archivedErrors={chat.activeFile ? archivedErrors[chat.activeFile] ?? [] : []}
+                                            onContinue={handleContinue}
+                                            onDismiss={() => chat.activeFile && setInlineFor(chat.activeFile, null)}
+                                        />
+                                    )}
+
+                                    <div className="shrink-0 px-4 sm:px-7">
+                                        {(modelError) && (
+                                            <div className="mx-auto mb-2 w-full max-w-3xl">
+                                                <div className="flex items-center justify-between gap-2 rounded-lg border border-phi-error-border bg-phi-error-bg px-3 py-2 text-[12.5px] text-phi-error-text">
+                                                    <span className="truncate">{modelError}</span>
+                                                    <button onClick={() => setModelError(null)} className="shrink-0 text-[11px] underline opacity-80 hover:opacity-100">Dismiss</button>
+                                                </div>
+                                            </div>
+                                        )}
+                                        {!modelError && !models.loading && models.models.length === 0 && !models.error && (
+                                            <div className="mx-auto mb-2 w-full max-w-3xl">
+                                                <div className="rounded-lg border border-phi-warning-border bg-phi-warning-bg px-3 py-2 text-[12.5px] text-phi-warning-text">
+                                                    No models available — check auth (run <code className="rounded bg-phi-overlay px-1">pi auth</code>) or configure API keys. The model selector will populate after auth.
+                                                </div>
+                                            </div>
+                                        )}
+                                        <div className="mx-auto pl-6 mb-1 flex w-full max-w-3xl min-w-0 items-center gap-1" ref={directoryPickerRef}>
+                                            {!chat.activeFile && (
+                                                <DirectoryPicker cwd={(newChatCwd ?? homeCwd) || null} homeCwd={homeCwd} projects={sessions.groups.map(({ cwd, displayCwd }) => ({ cwd, displayCwd }))} onChange={setNewChatCwd} disabled={chat.isStreaming} />
+                                            )}
+                                            <ModelSelector models={models.models} value={selectedModelKey} thinkingLevel={thinkingLevel} onSelect={handleSelectModel} onThinkingChange={handleThinkingChange} disabled={chat.isStreaming} isStreaming={chat.isStreaming} loading={models.loading} error={models.error} />
+                                        </div>
+                                        <Composer onSend={handleSend} onAbort={handleAbort} isStreaming={chat.isStreaming} cwd={chat.activeFile ? activeCwd : (newChatCwd ?? homeCwd)} draftKey={chat.activeFile} />
+                                    </div>
+                                </section>
+                            </div>
+                        </main>
+                        <SettingsModal open={settingsOpen} onClose={() => setSettingsOpen(false)} onProvidersChanged={() => models.refresh({ silent: true })} />
+                    </div>
+                );
+            }}
         </SessionCommand>
     );
 }

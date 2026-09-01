@@ -20,7 +20,7 @@ export function PopoverContent({ className = "", children, ...props }: PopoverCo
     return (
         <PopoverPanel
             transition
-            className={`z-20 origin-bottom rounded-2xl border border-phi-border-faint bg-phi-bg-elevated shadow-[0_16px_48px_rgba(0,0,0,0.5),0_0_0_1px_rgba(255,255,255,0.04)] transition duration-100 ease-out [--anchor-gap:8px] focus:outline-none data-closed:scale-95 data-closed:opacity-0 ${className}`}
+            className={`z-20 origin-bottom rounded-2xl border border-phi-border-faint bg-phi-bg-elevated shadow-[0_16px_48px_var(--color-phi-shadow),0_0_0_1px_var(--color-phi-border)] transition duration-100 ease-out [--anchor-gap:8px] focus:outline-none data-closed:scale-95 data-closed:opacity-0 ${className}`}
             {...props}
         >
             {children}

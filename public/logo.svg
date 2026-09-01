@@ -24,9 +24,9 @@
      inkscape:deskcolor="#d1d1d1"
      inkscape:document-units="mm"
      showgrid="true"
-     inkscape:zoom="0.68417508"
-     inkscape:cx="157.85433"
-     inkscape:cy="258.70571"
+     inkscape:zoom="1.3683502"
+     inkscape:cx="223.62697"
+     inkscape:cy="74.542323"
      inkscape:window-width="1745"
      inkscape:window-height="982"
      inkscape:window-x="0"
@@ -72,114 +72,21 @@
      inkscape:label="Layer 1"
      inkscape:groupmode="layer"
      id="layer1">
-    <rect
-       style="fill:#000000;stroke-width:0.264583;fill-opacity:1"
-       id="rect1"
-       width="120"
-       height="48"
-       x="0"
-       y="0" />
-    <rect
-       style="fill:#ffffff;fill-opacity:1;stroke-width:0.264583"
-       id="rect2"
-       width="7.9999995"
-       height="16"
-       x="0"
-       y="8" />
-    <rect
-       style="fill:#ffffff;fill-opacity:1;stroke-width:0.264583"
-       id="rect3"
-       width="7.9999995"
-       height="48"
-       x="15.999999"
-       y="0" />
-    <rect
-       style="fill:#ffffff;fill-opacity:1;stroke-width:0.264583"
-       id="rect4"
-       width="8"
-       height="8.000001"
-       x="7.9999995"
-       y="24" />
-    <rect
-       style="fill:#ffffff;fill-opacity:1;stroke-width:0.264583"
-       id="rect5"
-       width="16.000002"
-       height="8"
-       x="23.999998"
-       y="0" />
-    <rect
-       style="fill:#ffffff;fill-opacity:1;stroke-width:0.264583"
-       id="rect6"
-       width="7.9999995"
-       height="16"
-       x="40"
-       y="8" />
-    <rect
-       style="fill:#ffffff;fill-opacity:1;stroke-width:0.264583"
-       id="rect7"
-       width="15.999999"
-       height="8"
-       x="24"
-       y="24" />
-    <rect
-       style="fill:#ffffff;fill-opacity:1;stroke-width:0.264583"
-       id="rect8"
-       width="7.9999995"
-       height="48"
-       x="56"
-       y="0" />
-    <rect
-       style="fill:#ffffff;fill-opacity:1;stroke-width:0.264583"
-       id="rect9"
-       width="8"
-       height="24.000004"
-       x="80"
-       y="24" />
-    <g
-       id="g14">
-      <path
-         id="rect10"
-         style="fill:#ffffff;stroke-width:0.264583"
-         d="M 96,21.291666 112,16 v 8 l -16,5.291666 z"
-         sodipodi:nodetypes="ccccc" />
-      <rect
-         style="fill:#ffffff;fill-opacity:1;stroke-width:0.264583"
-         id="rect11"
-         width="15.999999"
-         height="8"
-         x="104"
-         y="40" />
-      <rect
-         style="fill:#ffffff;fill-opacity:1;stroke-width:0.264583"
-         id="rect12"
-         width="7.9999995"
-         height="16"
-         x="104"
-         y="24" />
-    </g>
     <path
-       style="fill:#ffffff;fill-opacity:1;stroke-width:0.264583"
-       d="m 87.999999,16 -24.000001,8 v 8.000002 l 24.000001,-8.000001 z"
-       id="path12"
-       sodipodi:nodetypes="ccccc" />
-    <rect
-       style="fill:#ffffff;fill-opacity:1;stroke-width:0.264583"
-       id="rect13"
-       width="8"
-       height="8"
-       x="65.644341"
-       y="78.993546"
-       transform="rotate(-45.733739)" />
+       d="M 16.000057,0 V 24.000085 H 8.0000285 v 8.000029 h 8.0000285 v 16.000057 h 8.000028 V 32.000114 h 16.000057 a 7.9999995,7.9999995 0 0 0 8.000029,-8.000029 V 8.0000285 H 40.000142 V 24.000085 H 24.000085 V 8.0000285 H 40.000142 V 0 H 24.000085 Z M 8.0000285,24.000085 V 8.0000285 H 0 V 24.000085 Z"
+       style="fill:#ffffff;stroke-width:0.264583"
+       id="path1" />
     <path
-       style="fill:#ffffff;fill-opacity:1;stroke-width:0.264583"
-       id="rect14"
-       width="7.9999995"
-       height="8"
-       x="40"
-       y="24"
-       ry="0"
-       inkscape:path-effect="#path-effect14"
-       sodipodi:type="rect"
-       d="m 40,24 h 8 v 0 a 7.9999995,7.9999995 135 0 1 -8,8 h 0 z" />
+       d="m 56.000199,0 v 48.000171 h 8.000029 V 32.000114 l 15.99954,-5.333525 v 21.333582 h 8.000029 V 24.000085 16.000057 L 64.000228,24.000085 V 0 Z"
+       style="fill:#ffffff;stroke-width:0.264583"
+       id="path2" />
+    <path
+       d="m 111.99988,16.000057 -16.000055,5.291667 v 8.000028 l 8.000025,-2.645833 v 13.354223 8.000029 h 16.00006 v -8.000029 h -8.00003 V 24.000085 Z"
+       style="fill:#ffffff;stroke-width:0.264583"
+       id="path3" />
+    <path
+       d="m 107.97067,2.3998535 -5.58364,5.7288493 5.72885,5.5841552 5.58364,-5.7288492 z"
+       style="fill:#ffffff;stroke-width:0.264583"
+       id="path4" />
   </g>
 </svg>

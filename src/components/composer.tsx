@@ -29,6 +29,7 @@ type ComposerProps = {
     isStreaming?: boolean;
     disabled?: boolean;
     cwd?: string;
+    draftKey?: string | null;
 };
 
 /** Find slash query at cursor. Returns query after "/" or null if not in slash context. */
@@ -81,8 +82,42 @@ export const Composer = memo(function Composer({
     isStreaming,
     disabled,
     cwd,
+    draftKey,
 }: ComposerProps) {
-    const [message, setMessage] = useState("");
+    const draftStorageKey = draftKey ? `phi:draft:${draftKey}` : "phi:draft:new";
+    const [message, setMessage] = useState(() => {
+        try {
+            const raw = localStorage.getItem(draftStorageKey);
+            if (!raw) return "";
+            const parsed = JSON.parse(raw) as { text: string; at: number };
+            const EXPIRY = 14 * 24 * 60 * 60 * 1000;
+            if (Date.now() - parsed.at > EXPIRY || !parsed.text?.trim()) return "";
+            return parsed.text;
+        } catch { return ""; }
+    });
+    const draftTimerRef = useRef<number | null>(null);
+    // persist draft with debounce 350ms
+    const persistDraft = useCallback((text: string, key: string) => {
+        if (draftTimerRef.current) window.clearTimeout(draftTimerRef.current);
+        draftTimerRef.current = window.setTimeout(() => {
+            try {
+                if (!text.trim()) localStorage.removeItem(key);
+                else localStorage.setItem(key, JSON.stringify({ text, at: Date.now() }));
+                window.dispatchEvent(new CustomEvent("phi:draft-change"));
+            } catch {}
+        }, 350) as unknown as number;
+    }, []);
+    // when draftKey changes, load draft
+    useEffect(() => {
+        try {
+            const raw = localStorage.getItem(draftStorageKey);
+            if (!raw) { setMessage(""); return; }
+            const parsed = JSON.parse(raw) as { text: string; at: number };
+            const EXPIRY = 14 * 24 * 60 * 60 * 1000;
+            if (Date.now() - parsed.at > EXPIRY || !parsed.text?.trim()) { setMessage(""); localStorage.removeItem(draftStorageKey); return; }
+            setMessage(parsed.text);
+        } catch { setMessage(""); }
+    }, [draftStorageKey]);
     const [images, setImages] = useState<AttachedImage[]>([]);
     const [isDragging, setIsDragging] = useState(false);
     const dragCounter = useRef(0);
@@ -131,6 +166,7 @@ export const Composer = memo(function Composer({
             if (slashPos === -1) return;
             const next = `${before.slice(0, slashPos)}/${cmd.name} ${after}`;
             setMessage(next);
+            persistDraft(next, draftStorageKey);
             closeSlash();
             requestAnimationFrame(() => {
                 if (!el) return;
@@ -194,11 +230,11 @@ export const Composer = memo(function Composer({
                     mimeType,
                 }))
                 : undefined;
-            // allow image-only: send a single space if text empty so server/history has a marker
-            // but keep original trimmed text; if empty and has images, send "" and let server handle
             onSend(content, payload);
             setMessage("");
             setImages([]);
+            try { localStorage.removeItem(draftStorageKey); window.dispatchEvent(new CustomEvent("phi:draft-change")); } catch {}
+            if (draftTimerRef.current) window.clearTimeout(draftTimerRef.current);
             closeSlash();
             if (textareaRef.current) textareaRef.current.style.height = "auto";
             focusTextarea();
@@ -276,10 +312,11 @@ export const Composer = memo(function Composer({
         (event: React.ChangeEvent<HTMLTextAreaElement>) => {
             const val = event.target.value;
             setMessage(val);
+            persistDraft(val, draftStorageKey);
             const cursor = event.target.selectionStart ?? val.length;
             updateSlashFromValue(val, cursor);
         },
-        [updateSlashFromValue],
+        [updateSlashFromValue, persistDraft, draftStorageKey],
     );
     const handleInput = useCallback(
         (event: React.FormEvent<HTMLTextAreaElement>) => {
@@ -374,7 +411,7 @@ export const Composer = memo(function Composer({
             onDragOver={handleDragOver}
             onDragLeave={handleDragLeave}
             onDrop={handleDrop}
-            className="relative mx-auto w-full max-w-3xl border-b-0 rounded-[17px] rounded-b-none border border-phi-border-strong bg-phi-bg-surface p-2 shadow-[0_14px_45px_rgba(0,0,0,0.3),inset_0_1px_0_rgba(255,255,255,0.025)] transition-[border-color,box-shadow] focus-within:border-phi-border-strong focus-within:shadow-[0_16px_50px_rgba(0,0,0,0.36),0_0_0_1px_rgba(255,255,255,0.018)]"
+            className="phi-composer-focus relative mx-auto w-full max-w-3xl border-b-0 rounded-[17px] rounded-b-none border border-phi-border-strong bg-phi-bg-surface p-2 shadow-[0_14px_45px_var(--color-phi-shadow),inset_0_1px_0_var(--color-phi-border)] transition-[border-color,box-shadow] focus-within:border-phi-border-strong focus-within:shadow-[0_16px_50px_var(--color-phi-shadow-strong),0_0_0_1px_var(--color-phi-border)]"
         >
             {/* drag overlay */}
             {isDragging && (
@@ -416,7 +453,7 @@ export const Composer = memo(function Composer({
                                 type="button"
                                 aria-label={`Remove ${img.name}`}
                                 onClick={() => removeImage(img.id)}
-                                className="absolute right-1 top-1 inline-grid size-5 place-items-center rounded-full bg-black/70 text-white opacity-0 backdrop-blur transition-opacity hover:bg-black/85 group-hover:opacity-100 focus-visible:opacity-100 focus-visible:outline-none"
+                                className="absolute right-1 top-1 inline-grid size-5 place-items-center rounded-full bg-phi-scrim text-phi-white opacity-0 backdrop-blur transition-opacity hover:bg-phi-scrim-strong group-hover:opacity-100 focus-visible:opacity-100 focus-visible:outline-none"
                             >
                                 <XMarkIcon className="size-3" />
                             </button>

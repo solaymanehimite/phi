@@ -354,9 +354,9 @@ export const ModelSelector = memo(function ModelSelector({
                             </div>
                         )}
                         {!loading && !error && list.length === 0 && (
-                            <div className="mx-3 mb-2 rounded-md border border-amber-500/20 bg-amber-500/10 px-2.5 py-2 text-[11.5px] leading-snug text-amber-200/90">
+                            <div className="mx-3 mb-2 rounded-md border border-phi-warning-border bg-phi-warning-bg px-2.5 py-2 text-[11.5px] leading-snug text-phi-warning-text">
                                 No models available — check auth (run{" "}
-                                <code className="rounded bg-black/20 px-1 py-0.5">pi auth</code>
+                                <code className="rounded bg-phi-overlay px-1 py-0.5">pi auth</code>
                                 ) or add an API key for your provider. The selector will
                                 populate after auth.
                             </div>
@@ -506,7 +506,7 @@ export const ModelSelector = memo(function ModelSelector({
                                                 )
                                             }
                                             disabled={isDisabled || availableLevels.length <= 1}
-                                            className="absolute inset-0 h-2.5 w-full cursor-pointer appearance-none bg-transparent disabled:cursor-not-allowed disabled:opacity-30 [&::-webkit-slider-thumb]:h-3.5 [&::-webkit-slider-thumb]:w-3.5 [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-phi-white [&::-webkit-slider-thumb]:shadow-[0_1px_4px_rgba(0,0,0,0.4)] [&::-webkit-slider-thumb]:transition-transform [&::-webkit-slider-thumb]:active:scale-110 [&::-moz-range-thumb]:h-3.5 [&::-moz-range-thumb]:w-3.5 [&::-moz-range-thumb]:rounded-full [&::-moz-range-thumb]:border-0 [&::-moz-range-thumb]:bg-phi-white"
+                                            className="absolute inset-0 h-2.5 w-full cursor-pointer appearance-none bg-transparent disabled:cursor-not-allowed disabled:opacity-30 [&::-webkit-slider-thumb]:h-3.5 [&::-webkit-slider-thumb]:w-3.5 [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-phi-white [&::-webkit-slider-thumb]:shadow-[0_1px_4px_var(--color-phi-shadow)] [&::-webkit-slider-thumb]:transition-transform [&::-webkit-slider-thumb]:active:scale-110 [&::-moz-range-thumb]:h-3.5 [&::-moz-range-thumb]:w-3.5 [&::-moz-range-thumb]:rounded-full [&::-moz-range-thumb]:border-0 [&::-moz-range-thumb]:bg-phi-white"
                                             aria-label="Thinking effort"
                                         />
                                     </div>
