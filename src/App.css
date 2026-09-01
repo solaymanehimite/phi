@@ -226,7 +226,7 @@ html[data-theme="light"] {
 :root {
   --phi-sidebar-width: 268px;
   /* Two 32px buttons, their 4px gap, and a 20px inset into the sidebar. */
-  --phi-tabs-sidebar-extension: 88px;
+  --phi-tabs-sidebar-extension: 85px;
   --phi-tabs-action-width: 68px;
   --phi-motion-sidebar: 380ms;
   --phi-motion-tab: 180ms;
