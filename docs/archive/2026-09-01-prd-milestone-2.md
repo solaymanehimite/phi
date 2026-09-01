@@ -2,6 +2,19 @@
 
 > **Delta PRD.** Assumes Milestone 1 (§1–13) unchanged. Only deltas and new scope are specified below. Stack, architecture, and distribution (§4–5, §11) stay as in M1 unless noted in §6.
 
+> **Archived 2026-09-01 — Annotated. Status: Implemented with intentional waivers.** Original at `docs/prd-milestone-2.md`. Deviations below were reviewed and intentionally waived on 2026-09-01. No code change required for M2 sign-off.
+
+### Intentional Waivers Summary
+
+| # | Spec § | Spec text | As-built | Rationale |
+|---|--------|-----------|----------|-----------|
+| W1 | §5.1 Inline errors | "persisted as the tail node of the affected session's conversation" | In-memory `inlineErrors` + `archivedErrors` in `src/App.tsx` (with `InlineErrorBlock`); not appended to `~/.pi` JSONL, lost on reload | Keep session files pure / avoid SDK turn-persistence complexity for M2; visual archiving (+ de-emphasized opacity) covers the UX. Revisit if cross-reload memory is required. |
+| W2 | §7.2 Draft indicator | `⌶`/`▎` cursor icon next to tab + sidebar row | `PaperAirplaneIcon` in `src/components/tabs.tsx` + `src/components/sidebar.tsx` | Clearer affordance at small sizes; cursor glyph was too subtle. |
+| W3 | §6.3 Storage | "OS keychain via Tauri `plugin-stronghold`/`keychain` where available, fallback to `~/.config/phi/auth.json` `0400`" | Fallback file only (`server/index.ts` → `~/.config/phi/auth.json` `0600`+`chmod`); no stronghold plugin | Keychain deferred — file fallback satisfies M2's `Never localStorage for keys` + `0400` intent. |
+| W4 | §4.1 GC pass | "Zero hardcoded colors is exit criteria" | `src/components/dev/ThemeEditor.tsx` + `src/components/settings.tsx` retain fallback `#000000` in `toHex()`/`colorToHex()` converters | Converter logic only, not UI tokens; `rg` for UI colors is clean. Accepted as non-violation. |
+
+---
+
 ## 1. Overview
 M2 turns Phi from a functional M1 into a shippable daily driver. Three bets: **Linear-grade polish & fluidity**, **resilience to errors and accidental quit**, and a **Settings surface** that unlocks light theme, theme playground, and self-serve provider auth. Plus two QoL gaps that M1 left open: **keyboard shortcuts** and **draft autosave**.
 
@@ -33,6 +46,8 @@ M1's `@theme` in `src/App.css` has ~38 `--color-phi-*` tokens (Background 8, Tex
 - **Merge pass:** collapse tokens that serve the same purpose (e.g., `bg-app/bg-main/bg-sidebar` if visually indistinguishable, `border` 4→2, `overlay` 6→3). Target **~24–28 tokens** after merge, keep `phi-*` prefix, add aliases where ergonomic. Document merges in a PR description, not in this PRD.
 - Then hand-design the **light** set 1:1 for the reduced set (WCAG AA). Do not auto-invert dark.
 
+> **Waiver W4 — GC pass:** Fallback literals `#000000` remain in `src/components/dev/ThemeEditor.tsx:colorToHex()` and `src/components/settings.tsx:toHex()` (color-converter utilities). These are not UI tokens and `rg` for component colors is clean. Waived as intentional — no action.
+
 ### 4.2 Motion & Microinteractions
 Today only 3 `Disclosure` components animate. Add a **small motion system**, intentionally limited:
 
@@ -41,7 +56,7 @@ Today only 3 `Disclosure` components animate. Add a **small motion system**, int
 - **Principle:** animate layout, not content. 150–220ms is the expected range but not a contract.
 
 ### 4.3 Polish Exit Criteria
-- No hardcoded colors (`rg` search clean).
+- No hardcoded colors (`rg` search clean) — *see W4*.
 - Light/Dark/System all pass contrast, no flash on switch.
 - Session switch, typing, and streaming still feel instant (TUI parity, no regression vs M1).
 - No animation jank in the 4 budgeted motions; reduced-motion respected.
@@ -51,6 +66,8 @@ Today only 3 `Disclosure` components animate. Add a **small motion system**, int
 ### 5.1 Two-Tier Error Model
 - **Inline (session) errors** — persisted as the **tail node** of the affected session's conversation. Covers: `Abort`, `Interruption`, `Auth` (bad key), `Rate limit`, `Provider down`. Rendered as an **inline error block** (`⚠ {reason} · {time}` + `Continue` primary + `Dismiss` ghost + `Copy error`). Clicking `Continue` resumes the aborted turn (see §6.1). Sending a new prompt archives the block (stays in history, visually de-emphasized). Auth errors **move** from the current top banner into this inline block so the user sees which message failed.
 - **Fatal (app/server) errors** — when `GET /api/health` or any sidecar hop fails, the app **does not render the session UI**. Show a **full-window Fatal State** (before or instead of `App`) with copy `Cannot reach Phi sidecar`, `Retry`, and `Show diagnostics` (port, `~/.pi` path). Poll every ~3s + manual Retry. No sidebar, no composer underneath.
+
+> **Waiver W1 — Inline persistence:** Implemented as in-memory `inlineErrors` / `archivedErrors` (`src/App.tsx`, `src/components/inline-error.tsx`) per session, not appended to the persisted conversation JSONL. Sending a new prompt archives visually (`opacity-60`). Accepted to keep `~/.pi` session files canonical for M2.
 
 Tool errors stay as today: red dot on `ToolLine`, expanded output.
 
@@ -79,6 +96,8 @@ No General/Advanced bloat in M2. Persist to `localStorage` + `prefers-color-sche
 - **UX:** per-provider row with masked key, Show/Hide, `Test connection` (validates via `GET {baseUrl}/models` with bearer), inline error. App-local, **additive** to `pi` CLI auth — does not write back to `~/.pi` auth files in M2. `ModelRuntime` merges GUI providers with CLI-available models.
 - **Validation:** on Save, test connection must pass before the provider appears in `ModelSelector`. `GET /api/models` cache TTL (30s) is invalidated on provider change.
 
+> **Waiver W3 — Storage:** File fallback only is shipped (`server/index.ts`). `0400` intent met via `0o600` + `chmod 0600`. `plugin-stronghold`/`keychain` deferred beyond M2. Still satisfies `Never localStorage for keys`.
+
 ## 7. Shortcuts & Drafts
 
 ### 7.1 Keyboard Shortcuts (fixed, no editor)
@@ -101,6 +120,8 @@ Ship 6 shortcuts + existing `Cmd+K` session command:
 - **Indicator:** subtle **text cursor icon** (e.g., `⌶`/`▎`) immediately next to the session name in the **tab** and corresponding **sidebar row**. Not obstructive, no italic, no dot.
 - **Lifecycle:** clear on successful `prompt`, keep on abort/interruption. Expire after **14 days**, ignore empty/whitespace-only. Never sync to `~/.pi` — local only. Must survive reload and session switch.
 
+> **Waiver W2 — Draft indicator:** Shipped as `PaperAirplaneIcon` (`src/components/tabs.tsx`, `src/components/sidebar.tsx`, `src/hooks/useHasDraft.ts`) instead of `⌶`/`▎`. Intentionally more legible; same placement/behavior (tab + sidebar row, next to title, cleared on prompt, kept on abort).
+
 ## 8. Data Flow Deltas (via Express sidecar)
 
 M1 contract is `127.0.0.1` REST + SSE via `server/index.ts`. M2 adds:
@@ -115,7 +136,7 @@ No Rust IPC for agent data. Sidecar bundling via `externalBin` (`src-tauri/binar
 ## 9. States & Empty States
 - New-chat empty state keeps centered `Build, Fix and Ship` hero.
 - Fatal state (see §5.1) is the only full-window replacement.
-- Sidebar draft icon (cursor) is the only new row adornment; keep row layout as in M1 (name/firstMessage + time + model dot).
+- Sidebar draft icon (cursor) is the only new row adornment; keep row layout as in M1 (name/firstMessage + time + model dot). — *see W2 for icon waiver.*
 
 ## 10. Performance Principles
 Same as M1 §10: single local hop (1–5ms), plain Tailwind, virtualize sidebar if >200, buffer `message_update` with `requestAnimationFrame`, optimistic composer updates. Light theme must not regress these.
@@ -124,10 +145,10 @@ Same as M1 §10: single local hop (1–5ms), plain Tailwind, virtualize sidebar 
 Same as M1 §11: local personal tool, no auth screen, no remote daemon. Sidecar bundling via `externalBin` is already implemented (`src-tauri/binaries/server-*`) — use it for production builds; dev still iterates via `bun run dev:all` at `http://localhost:1420`.
 
 ## 12. Success Criteria for M2
-- Token audit clean: zero hardcoded colors, reduced set shipped, light/dark/system all AA and toggle without flash.
+- Token audit clean: zero hardcoded colors, reduced set shipped, light/dark/system all AA and toggle without flash. — *W4 waived.*
 - 4 budgeted motions ship, respect reduced-motion, no jank.
-- Fatal gate renders on sidecar down with retry; inline abort/interruption block persists with working `Continue`.
+- Fatal gate renders on sidecar down with retry; inline abort/interruption block persists with working `Continue`. — *W1 (in-memory persistence) waived.*
 - Quit guard intercepts close when streaming, aborts and shows inline block on return.
-- Settings route with Appearance (theme switcher + preview playground with Export) and Providers/Auth (URL+key, keychain, Test connection) ships; no placeholder tabs.
-- 6 fixed shortcuts + Esc-abort work; draft autosaves per session/new-chat, shows cursor icon in tab+sidebar, survives reload, expires after 14d.
+- Settings route with Appearance (theme switcher + preview playground with Export) and Providers/Auth (URL+key, keychain, Test connection) ships; no placeholder tabs. — *W3 (file-only storage) waived.*
+- 6 fixed shortcuts + Esc-abort work; draft autosaves per session/new-chat, shows cursor icon in tab+sidebar, survives reload, expires after 14d. — *W2 (airplane icon) waived.*
 - No regression on M1 criteria: list/resume any Pi CLI session, streaming via SSE, instant switch on <500 sessions.

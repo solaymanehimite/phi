@@ -55,7 +55,6 @@ export function SettingsPage({ onClose, onProvidersChanged }: { onClose: () => v
           <div className="min-h-0 flex-1 overflow-y-auto p-6">
             {section === "appearance" ? <AppearanceTab /> : <ProvidersTab onChanged={onProvidersChanged} />}
           </div>
-          <div className="border-t border-phi-border px-6 py-2 text-[11px] text-phi-text-muted">Shortcuts • Cmd+N new • Cmd+W close • Cmd+Shift+Backspace delete • Cmd+P project • Cmd+, settings • Esc abort</div>
         </div>
       </main>
     </div>
@@ -103,7 +102,6 @@ function AppearanceTab() {
             </button>
           ))}
         </div>
-        <p className="mt-2 text-[11px] text-phi-text-muted">System follows your OS preference. No flash on switch.</p>
       </div>
 
       <div className="rounded-xl border border-phi-border bg-phi-bg-surface p-3">
@@ -213,8 +211,6 @@ function ProvidersTab({ onChanged }: { onChanged?: () => void }) {
 
   return (
     <div className="space-y-4">
-      <p className="text-[12px] leading-5 text-phi-text-tertiary">OpenAI-compatible providers defined as <code className="rounded bg-phi-overlay px-1 font-mono text-[11px]">{`{ id, label, baseUrl, apiKey }`}</code>. Stored in OS keychain when available, fallback to <code className="rounded bg-phi-overlay px-1">~/.config/phi/auth.json</code> with 0400. Additive to <code className="rounded bg-phi-overlay px-1">pi</code> CLI auth.</p>
-
       {error && <div className="rounded-lg border border-phi-error-border bg-phi-error-bg px-3 py-2 text-[12px] text-phi-error-text">{error}</div>}
 
       <div className="rounded-xl border border-phi-border bg-phi-bg-surface p-3 space-y-2">
@@ -226,7 +222,6 @@ function ProvidersTab({ onChanged }: { onChanged?: () => void }) {
           <input placeholder="apiKey" type="password" value={form.apiKey} onChange={(e) => setForm((p) => ({ ...p, apiKey: e.target.value }))} className="rounded-lg border border-phi-input-border bg-phi-input-bg px-2 py-1.5 text-[12px] text-phi-text-primary placeholder:text-phi-text-muted outline-none focus:border-phi-input-border-focus sm:col-span-2" />
         </div>
         <button onClick={handleSave} disabled={saving} className="rounded-lg bg-phi-bg-inverse px-3 py-1.5 text-[12px] font-medium text-phi-text-inverse hover:bg-phi-white disabled:opacity-50">{saving ? "Saving…" : "Save (tests connection)"}</button>
-        <p className="text-[11px] text-phi-text-muted">Test uses <code className="rounded bg-phi-overlay px-1">GET {"{baseUrl}"}/models</code> with Bearer.</p>
       </div>
 
       <div className="space-y-2">
