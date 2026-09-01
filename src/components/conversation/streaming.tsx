@@ -36,7 +36,7 @@ export const Streaming = memo(function Streaming({
                     variant="streaming"
                 />
             )}
-            {text && isStreaming && <div className="phi-streaming-cursor"><Markdown text={text} /></div>}
+            {text && isStreaming && <Markdown text={text} />}
             {error && (
                 <div className="rounded-lg border border-phi-error-border bg-phi-error-bg px-3 py-2 text-[13px] text-phi-error-text">
                     {error}
