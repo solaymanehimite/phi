@@ -110,7 +110,7 @@ export const Sidebar = memo(function Sidebar({
                         No sessions yet
                     </p>
                 ) : (
-                    <div className="space-y-2">
+                    <div className="space-y-0.5">
                         {groups.map((group) => (
                             <GroupSection
                                 key={group.cwd}
@@ -142,8 +142,6 @@ export const Sidebar = memo(function Sidebar({
         </aside>
     );
 });
-
-
 
 const GroupSection = memo(function GroupSection({
     group,
@@ -180,10 +178,8 @@ const GroupSection = memo(function GroupSection({
                 aria-expanded={!collapsed}
                 title={group.displayCwd}
             >
-                <span className="flex min-w-0 flex-1 items-center gap-2">
-                    <span className="shrink-0 truncate text-[12px] font-semibold tracking-wide text-phi-text-muted">
-                        {group.displayCwd}
-                    </span>
+                <span className="shrink-0 truncate text-[12px] font-semibold tracking-wide text-phi-text-muted">
+                    {group.displayCwd}
                 </span>
             </GroupCollapsibleTrigger>
 
@@ -360,7 +356,13 @@ const SessionRow = memo(function SessionRow({
                         <ArrowPathIcon className="size-4 shrink-0 animate-spin text-phi-text-secondary" />
                     ) : null}
                     <span className="min-w-0 flex-1 truncate text-left">{title}</span>
-                    {hasDraft && <PaperAirplaneIcon className="size-3 shrink-0 text-phi-text-muted" aria-label="Draft" title="Draft" />}
+                    {hasDraft && (
+                        <PaperAirplaneIcon
+                            className="size-3 shrink-0 text-phi-text-muted"
+                            aria-label="Draft"
+                            title="Draft"
+                        />
+                    )}
                 </button>
             )}
 
