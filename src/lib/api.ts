@@ -263,3 +263,12 @@ export async function getCommands(cwd?: string): Promise<CommandsResponse> {
   const res = await apiFetch(`/commands${qs}`);
   return jsonOrThrow(res);
 }
+
+export type ProjectFile = { path: string; name: string; isDirectory: boolean };
+export type FilesResponse = { files: ProjectFile[] };
+export async function listFiles(cwd?: string): Promise<ProjectFile[]> {
+  const qs = cwd ? `?cwd=${encodeURIComponent(cwd)}` : "";
+  const res = await apiFetch(`/files${qs}`);
+  const data = (await jsonOrThrow(res)) as FilesResponse;
+  return data.files ?? [];
+}

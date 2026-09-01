@@ -14,8 +14,10 @@ import { Button } from "./ui/button";
 import { ArrowUpIcon, StopIcon } from "./ui/icons";
 import { PaperClipIcon, XMarkIcon } from "@heroicons/react/24/solid";
 import { SlashMenu } from "./composer/slash-menu";
+import { AtMenu } from "./composer/at-menu";
 import { useSlashCommands } from "../hooks/useSlashCommands";
-import type { SlashCommand } from "../lib/api";
+import { useProjectFiles } from "../hooks/useProjectFiles";
+import type { ProjectFile, SlashCommand } from "../lib/api";
 
 export type ComposerImagePayload = {
     type: "image";
@@ -45,6 +47,36 @@ function getSlashQuery(text: string, cursor: number): string | null {
     // any whitespace (space, tab, newline) means the slash token ended -> close palette
     if (/\s/.test(afterSlash)) return null;
     return afterSlash;
+}
+
+/** Find @ query at cursor. Returns query after "@" or null if not in @ context. */
+function getAtQuery(text: string, cursor: number): string | null {
+    const before = text.slice(0, cursor);
+    const lastAt = before.lastIndexOf("@");
+    if (lastAt === -1) return null;
+    // @ must be at start or after whitespace/newline (avoid emails)
+    if (lastAt !== 0 && !/\s/.test(before[lastAt - 1])) return null;
+    const afterAt = before.slice(lastAt + 1);
+    // whitespace closes the token
+    if (/\s/.test(afterAt)) return null;
+    // allow a-z, 0-9, _, -, ., /
+    // empty "@" -> show all
+    return afterAt;
+}
+
+function getTrigger(text: string, cursor: number): { type: "slash" | "at"; query: string; pos: number } | null {
+    const before = text.slice(0, cursor);
+    const slashPos = before.lastIndexOf("/");
+    const atPos = before.lastIndexOf("@");
+    const slashQ = getSlashQuery(text, cursor);
+    const atQ = getAtQuery(text, cursor);
+    // pick the trigger closest to cursor (higher pos)
+    let candidate: { type: "slash" | "at"; query: string; pos: number } | null = null;
+    if (slashQ !== null) candidate = { type: "slash", query: slashQ, pos: slashPos };
+    if (atQ !== null) {
+        if (!candidate || atPos > candidate.pos) candidate = { type: "at", query: atQ, pos: atPos };
+    }
+    return candidate;
 }
 
 type AttachedImage = {
@@ -145,15 +177,96 @@ export const Composer = memo(function Composer({
 
     const isSlashOpen = slashQuery !== null && filteredSlash.length > 0;
 
-    const updateSlashFromValue = useCallback((val: string, cursor: number) => {
-        const q = getSlashQuery(val, cursor);
-        setSlashQuery(q);
-        setSlashIndex(0);
+    // --- @ file palette state ---
+    const { files } = useProjectFiles(cwd);
+    const [atQuery, setAtQuery] = useState<string | null>(null);
+    const [atIndex, setAtIndex] = useState(0);
+
+    const filteredAt = useMemo(() => {
+        if (atQuery === null) return [];
+        const q = atQuery.toLowerCase();
+        // empty "@" -> show all (up to 40)
+        if (!q) {
+            const all = [...files];
+            all.sort((a, b) => {
+                if (a.isDirectory !== b.isDirectory) return a.isDirectory ? -1 : 1;
+                return a.path.localeCompare(b.path);
+            });
+            return all.slice(0, 50);
+        }
+        // folder-qualified: "folder/" or "folder/sub" -> prefix + recursive children
+        if (q.includes("/")) {
+            // strip trailing slash for matching but keep prefix semantics
+            const prefix = q;
+            // show everything that startsWith prefix OR contains prefix recursively
+            // For "@src/" we want all children under src (including nested) — prefix match
+            // For "@src/compo" we want substring of path
+            const isPrefixMode = q.endsWith("/") || files.some((f) => f.path.toLowerCase().startsWith(q));
+            let candidates: ProjectFile[];
+            if (isPrefixMode) {
+                candidates = files.filter((f) => f.path.toLowerCase().startsWith(prefix));
+                // if no prefix hit, fallback to includes
+                if (candidates.length === 0) candidates = files.filter((f) => f.path.toLowerCase().includes(q));
+            } else {
+                candidates = files.filter((f) => f.path.toLowerCase().includes(q));
+            }
+            candidates.sort((a, b) => {
+                const al = a.path.toLowerCase();
+                const bl = b.path.toLowerCase();
+                const ap = al.startsWith(prefix) ? 0 : 1;
+                const bp = bl.startsWith(prefix) ? 0 : 1;
+                if (ap !== bp) return ap - bp;
+                if (a.isDirectory !== b.isDirectory) return a.isDirectory ? -1 : 1;
+                return a.path.localeCompare(b.path);
+            });
+            return candidates.slice(0, 50);
+        }
+        // bare filename search -> substring on path or name
+        const candidates = files.filter(
+            (f) => f.path.toLowerCase().includes(q) || f.name.toLowerCase().includes(q),
+        );
+        candidates.sort((a, b) => {
+            const ap = a.path.toLowerCase().indexOf(q);
+            const bp = b.path.toLowerCase().indexOf(q);
+            if (ap !== bp) return ap - bp;
+            if (a.isDirectory !== b.isDirectory) return a.isDirectory ? -1 : 1;
+            return a.path.localeCompare(b.path);
+        });
+        return candidates.slice(0, 50);
+    }, [files, atQuery]);
+
+    const isAtOpen = atQuery !== null && (filteredAt.length > 0 || files.length === 0);
+
+    const updateFromValue = useCallback((val: string, cursor: number) => {
+        const trigger = getTrigger(val, cursor);
+        if (!trigger) {
+            setSlashQuery(null);
+            setSlashIndex(0);
+            setAtQuery(null);
+            setAtIndex(0);
+            return;
+        }
+        if (trigger.type === "slash") {
+            setSlashQuery(trigger.query);
+            setSlashIndex(0);
+            setAtQuery(null);
+            setAtIndex(0);
+        } else {
+            setAtQuery(trigger.query);
+            setAtIndex(0);
+            setSlashQuery(null);
+            setSlashIndex(0);
+        }
     }, []);
 
     const closeSlash = useCallback(() => {
         setSlashQuery(null);
         setSlashIndex(0);
+    }, []);
+
+    const closeAt = useCallback(() => {
+        setAtQuery(null);
+        setAtIndex(0);
     }, []);
 
     const acceptSlash = useCallback(
@@ -177,22 +290,65 @@ export const Composer = memo(function Composer({
                 el.style.height = `${Math.min(el.scrollHeight, 180)}px`;
             });
         },
-        [message, closeSlash],
+        [message, closeSlash, persistDraft, draftStorageKey],
     );
 
-    // close slash on blur outside? keep open until query null
+    const acceptAt = useCallback(
+        (file: ProjectFile) => {
+            const el = textareaRef.current;
+            const cursor = el?.selectionStart ?? message.length;
+            const before = message.slice(0, cursor);
+            const after = message.slice(cursor);
+            const atPos = before.lastIndexOf("@");
+            if (atPos === -1) return;
+            const insertPath = file.isDirectory ? `${file.path}/` : file.path;
+            const suffix = file.isDirectory ? "" : " ";
+            const next = `${before.slice(0, atPos)}@${insertPath}${suffix}${after}`;
+            setMessage(next);
+            persistDraft(next, draftStorageKey);
+            if (file.isDirectory) {
+                // keep palette open filtered to this folder's children
+                setAtQuery(`${insertPath}`);
+                setAtIndex(0);
+                setSlashQuery(null);
+                requestAnimationFrame(() => {
+                    if (!el) return;
+                    const pos = atPos + 1 + insertPath.length;
+                    el.focus();
+                    el.setSelectionRange(pos, pos);
+                    el.style.height = "auto";
+                    el.style.height = `${Math.min(el.scrollHeight, 180)}px`;
+                });
+            } else {
+                closeAt();
+                setSlashQuery(null);
+                requestAnimationFrame(() => {
+                    if (!el) return;
+                    const pos = atPos + 1 + insertPath.length + 1;
+                    el.focus();
+                    el.setSelectionRange(pos, pos);
+                    el.style.height = "auto";
+                    el.style.height = `${Math.min(el.scrollHeight, 180)}px`;
+                });
+            }
+        },
+        [message, closeAt, persistDraft, draftStorageKey],
+    );
+
+    // clamp indices
     useEffect(() => {
-        if (slashQuery === null) return;
-        // clamp index
-        if (slashIndex >= filteredSlash.length) setSlashIndex(0);
+        if (slashQuery !== null && slashIndex >= filteredSlash.length) setSlashIndex(0);
     }, [filteredSlash.length, slashIndex, slashQuery]);
+    useEffect(() => {
+        if (atQuery !== null && atIndex >= filteredAt.length) setAtIndex(0);
+    }, [filteredAt.length, atIndex, atQuery]);
 
     const hasContent = message.trim().length > 0 || images.length > 0;
 
     const addFiles = useCallback(
         async (fileList: FileList | File[]) => {
-            const files = Array.from(fileList);
-            const imageFiles = files.filter((f) => f.type.startsWith("image/"));
+            const filesArr = Array.from(fileList);
+            const imageFiles = filesArr.filter((f) => f.type.startsWith("image/"));
             if (imageFiles.length === 0) return;
             // cap at 8 images to avoid payload blowup
             const remaining = 8 - images.length;
@@ -236,6 +392,7 @@ export const Composer = memo(function Composer({
             try { localStorage.removeItem(draftStorageKey); window.dispatchEvent(new CustomEvent("phi:draft-change")); } catch {}
             if (draftTimerRef.current) window.clearTimeout(draftTimerRef.current);
             closeSlash();
+            closeAt();
             if (textareaRef.current) textareaRef.current.style.height = "auto";
             focusTextarea();
         },
@@ -248,12 +405,44 @@ export const Composer = memo(function Composer({
             images,
             focusTextarea,
             closeSlash,
+            closeAt,
+            draftStorageKey,
         ],
     );
 
     const handleKeyDown = useCallback(
         (event: KeyboardEvent<HTMLTextAreaElement>) => {
-            // Slash palette takes priority
+            // At palette takes priority when open
+            if (isAtOpen) {
+                if (event.key === "ArrowDown") {
+                    event.preventDefault();
+                    setAtIndex((i) => (i + 1) % Math.max(filteredAt.length, 1));
+                    return;
+                }
+                if (event.key === "ArrowUp") {
+                    event.preventDefault();
+                    setAtIndex((i) => (i - 1 + Math.max(filteredAt.length, 1)) % Math.max(filteredAt.length, 1));
+                    return;
+                }
+                if (event.key === "Enter" || event.key === "Tab") {
+                    if (filteredAt[atIndex]) {
+                        event.preventDefault();
+                        acceptAt(filteredAt[atIndex]);
+                        return;
+                    }
+                    if (filteredAt.length === 0) {
+                        event.preventDefault();
+                        closeAt();
+                        return;
+                    }
+                }
+                if (event.key === "Escape") {
+                    event.preventDefault();
+                    closeAt();
+                    return;
+                }
+            }
+            // Slash palette
             if (isSlashOpen) {
                 if (event.key === "ArrowDown") {
                     event.preventDefault();
@@ -268,7 +457,6 @@ export const Composer = memo(function Composer({
                     return;
                 }
                 if (event.key === "Enter" || event.key === "Tab") {
-                    // Tab/Enter accepts selected
                     if (filteredSlash[slashIndex]) {
                         event.preventDefault();
                         acceptSlash(filteredSlash[slashIndex]);
@@ -282,29 +470,33 @@ export const Composer = memo(function Composer({
                 }
             }
             if (event.key === "Enter" && !event.shiftKey) {
-                // if slash open but no selection, let Enter submit normal message (which may be a slash command)
-                // To avoid ambiguity, if slash open and there's a valid filter, Enter already handled above.
                 event.preventDefault();
                 if (isStreaming) {
                     onAbort?.();
                     focusTextarea();
                 } else submit();
             }
-            if (event.key === "Escape" && isSlashOpen) {
+            if (event.key === "Escape" && (isSlashOpen || isAtOpen)) {
                 event.preventDefault();
                 closeSlash();
+                closeAt();
             }
         },
         [
+            isAtOpen,
             isSlashOpen,
+            filteredAt,
             filteredSlash,
+            atIndex,
             slashIndex,
+            acceptAt,
             acceptSlash,
             isStreaming,
             onAbort,
             submit,
             focusTextarea,
             closeSlash,
+            closeAt,
         ],
     );
 
@@ -314,37 +506,35 @@ export const Composer = memo(function Composer({
             setMessage(val);
             persistDraft(val, draftStorageKey);
             const cursor = event.target.selectionStart ?? val.length;
-            updateSlashFromValue(val, cursor);
+            updateFromValue(val, cursor);
         },
-        [updateSlashFromValue, persistDraft, draftStorageKey],
+        [updateFromValue, persistDraft, draftStorageKey],
     );
     const handleInput = useCallback(
         (event: React.FormEvent<HTMLTextAreaElement>) => {
             const el = event.currentTarget as HTMLTextAreaElement;
             el.style.height = "auto";
             el.style.height = `${Math.min(el.scrollHeight, 180)}px`;
-            // also update slash on input (covers paste/immediate)
             const cursor = el.selectionStart ?? message.length;
-            updateSlashFromValue(el.value, cursor);
+            updateFromValue(el.value, cursor);
         },
-        [message.length, updateSlashFromValue],
+        [message.length, updateFromValue],
     );
     const handleSelect = useCallback(
         (e: React.SyntheticEvent<HTMLTextAreaElement>) => {
             const el = e.currentTarget as HTMLTextAreaElement;
-            updateSlashFromValue(el.value, el.selectionStart ?? el.value.length);
+            updateFromValue(el.value, el.selectionStart ?? el.value.length);
         },
-        [updateSlashFromValue],
+        [updateFromValue],
     );
     const handleKeyUp = useCallback(
         (e: KeyboardEvent<HTMLTextAreaElement>) => {
-            // keep slash query in sync with cursor moves (arrow keys without palette)
             if (["ArrowLeft", "ArrowRight", "Home", "End"].includes(e.key)) {
                 const el = e.currentTarget as HTMLTextAreaElement;
-                updateSlashFromValue(el.value, el.selectionStart ?? el.value.length);
+                updateFromValue(el.value, el.selectionStart ?? el.value.length);
             }
         },
-        [updateSlashFromValue],
+        [updateFromValue],
     );
 
     const handlePaste = useCallback(
@@ -359,7 +549,6 @@ export const Composer = memo(function Composer({
                 }
             }
             if (imageFiles.length > 0) {
-                // prevent default paste of image as broken text? don't prevent, just add
                 void addFiles(imageFiles);
             }
         },
@@ -398,11 +587,12 @@ export const Composer = memo(function Composer({
         (e: React.ChangeEvent<HTMLInputElement>) => {
             const files = e.target.files;
             if (files && files.length > 0) void addFiles(files);
-            // reset so same file can be picked again
             e.target.value = "";
         },
         [addFiles],
     );
+
+    const isMenuOpen = isSlashOpen || isAtOpen;
 
     return (
         <form
@@ -423,7 +613,7 @@ export const Composer = memo(function Composer({
                 </div>
             )}
 
-            {/* slash palette — above textarea, inside composer */}
+            {/* slash palette */}
             {isSlashOpen && (
                 <div className="absolute bottom-full left-2 right-2 z-20 mb-2">
                     <SlashMenu
@@ -431,6 +621,18 @@ export const Composer = memo(function Composer({
                         selectedIndex={slashIndex}
                         onSelect={acceptSlash}
                         onHover={setSlashIndex}
+                    />
+                </div>
+            )}
+
+            {/* at file palette */}
+            {isAtOpen && (
+                <div className="absolute bottom-full left-2 right-2 z-20 mb-2">
+                    <AtMenu
+                        files={filteredAt}
+                        selectedIndex={atIndex}
+                        onSelect={acceptAt}
+                        onHover={setAtIndex}
                     />
                 </div>
             )}
@@ -467,14 +669,14 @@ export const Composer = memo(function Composer({
                 value={message}
                 rows={2}
                 aria-label="Message Pi"
-                aria-autocomplete={isSlashOpen ? "list" : undefined}
-                aria-expanded={isSlashOpen ? true : undefined}
+                aria-autocomplete={isMenuOpen ? "list" : undefined}
+                aria-expanded={isMenuOpen ? true : undefined}
                 placeholder={
                     isStreaming
                         ? "Streaming… press Stop or Enter to abort"
                         : images.length > 0
                             ? "Describe the images…"
-                            : "Message Pi… — type / for commands"
+                            : "Message Pi… — type / for commands, @ for files"
                 }
                 onChange={handleChange}
                 onKeyDown={handleKeyDown}
@@ -485,11 +687,9 @@ export const Composer = memo(function Composer({
                 disabled={!!disabled}
                 onInput={handleInput}
                 onBlur={() => {
-                    // delay close to allow menu mousedown
                     setTimeout(() => {
                         const el = document.activeElement;
-                        if (el && el.closest('[role="listbox"]')) return;
-                        // don't auto-close on blur — keep until query changes
+                        if (el && el.closest('[role=\"listbox\"]')) return;
                     }, 150);
                 }}
                 className="block max-h-[180px] min-h-16 w-full resize-none bg-transparent px-2.5 py-2 text-[14px] leading-6 text-phi-text-primary outline-none placeholder:text-phi-text-muted disabled:opacity-60"
