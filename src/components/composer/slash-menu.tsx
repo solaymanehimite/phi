@@ -26,6 +26,7 @@ export const SlashMenu = memo(function SlashMenu({ commands, selectedIndex, onSe
     >
       {commands.map((cmd, idx) => {
         const active = idx === selectedIndex;
+        const label = cmd.source === "skill" ? cmd.name.replace(/^skill:/, "") : cmd.name;
         return (
           <button
             key={`${cmd.source}:${cmd.name}`}
@@ -37,13 +38,13 @@ export const SlashMenu = memo(function SlashMenu({ commands, selectedIndex, onSe
               e.preventDefault();
               onSelect(cmd);
             }}
-            className={`group flex w-full items-center gap-3 rounded-lg px-3 py-1 text-left text-[13px] transition-colors focus:outline-none ${
+            className={`group flex w-full items-center gap-3 rounded-lg px-3 py-1.5 text-left text-[13px] focus:outline-none ${
               active
                 ? "bg-phi-overlay-strong text-phi-text-primary"
                 : "text-phi-text-secondary hover:bg-phi-overlay-strong"
             }`}
           >
-            <span className="shrink-0 text-[13px] font-medium tracking-tight">/{cmd.name}</span>
+            <span className="shrink-0 text-[13px] font-medium tracking-tight">{label}</span>
             {cmd.argumentHint ? (
               <span className="shrink-0 text-[11px] text-phi-text-faint">{cmd.argumentHint}</span>
             ) : null}

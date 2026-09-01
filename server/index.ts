@@ -884,6 +884,104 @@ app.get("/api/commands", async (req, res) => {
   }
 });
 
+// ---- File listing for @-mentions ----
+const FILE_LIST_CACHE_TTL_MS = 5000;
+const fileListCache = new Map<string, { at: number; payload: unknown }>();
+const FILE_LIST_IGNORE = new Set([
+  "node_modules",
+  ".git",
+  ".hg",
+  ".svn",
+  ".next",
+  ".turbo",
+  ".parcel-cache",
+  "dist",
+  "build",
+  "out",
+  ".output",
+  "coverage",
+  ".cache",
+  "__pycache__",
+  ".mypy_cache",
+  ".pytest_cache",
+  ".venv",
+  "venv",
+  ".idea",
+  "target",
+  ".cargo",
+]);
+const FILE_LIST_MAX = 4000;
+const FILE_LIST_MAX_DEPTH = 10;
+
+type FileEntry = { path: string; name: string; isDirectory: boolean };
+
+async function walkFiles(root: string): Promise<FileEntry[]> {
+  const results: FileEntry[] = [];
+  type QueueItem = { abs: string; rel: string; depth: number };
+  const queue: QueueItem[] = [{ abs: root, rel: "", depth: 0 }];
+  let head = 0;
+  while (head < queue.length && results.length < FILE_LIST_MAX) {
+    const cur = queue[head++];
+    if (cur.depth > FILE_LIST_MAX_DEPTH) continue;
+    let entries: import("node:fs").Dirent[];
+    try {
+      entries = await fs.readdir(cur.abs, { withFileTypes: true });
+    } catch {
+      continue;
+    }
+    entries.sort((a, b) => a.name.localeCompare(b.name));
+    for (const ent of entries) {
+      if (results.length >= FILE_LIST_MAX) break;
+      if (ent.name.startsWith(".") && cur.depth === 0 && FILE_LIST_IGNORE.has(ent.name)) continue;
+      if (FILE_LIST_IGNORE.has(ent.name)) continue;
+      const rel = cur.rel ? `${cur.rel}/${ent.name}` : ent.name;
+      if (ent.isDirectory()) {
+        // skip ignored dirs even when nested
+        results.push({ path: rel, name: ent.name, isDirectory: true });
+        if (cur.depth + 1 <= FILE_LIST_MAX_DEPTH) {
+          try {
+            const stat = await fs.lstat(joinPath(cur.abs, ent.name));
+            if (!stat.isSymbolicLink()) queue.push({ abs: joinPath(cur.abs, ent.name), rel, depth: cur.depth + 1 });
+          } catch {}
+        }
+      } else if (ent.isFile()) {
+        results.push({ path: rel, name: ent.name, isDirectory: false });
+      }
+    }
+  }
+  return results;
+}
+
+app.get("/api/files", async (req, res) => {
+  try {
+    const rawCwd = (req.query.cwd as string) || process.cwd();
+    const cwd = normalisePath(rawCwd);
+    const now = Date.now();
+    const cached = fileListCache.get(cwd);
+    if (cached && now - cached.at < FILE_LIST_CACHE_TTL_MS) {
+      res.setHeader("Cache-Control", "public, max-age=5");
+      return res.json(cached.payload);
+    }
+    try {
+      await fs.access(cwd);
+    } catch {
+      return res.json({ files: [] });
+    }
+    const files = await walkFiles(cwd);
+    const payload = { files };
+    fileListCache.set(cwd, { at: now, payload });
+    // simple LRU cap 20 entries
+    if (fileListCache.size > 20) {
+      const oldest = [...fileListCache.entries()].sort((a, b) => a[1].at - b[1].at)[0]?.[0];
+      if (oldest) fileListCache.delete(oldest);
+    }
+    res.setHeader("Cache-Control", "public, max-age=5");
+    res.json(payload);
+  } catch (error) {
+    res.status(errorStatus(error)).json({ error: errorMessage(error) });
+  }
+});
+
 app.use("/api", (_req, res) => {
   res.status(404).json({ error: "not found" });
 });
