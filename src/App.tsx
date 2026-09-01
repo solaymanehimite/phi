@@ -545,9 +545,7 @@ export default function App() {
                                 groups={sessions.groups}
                                 activeFile={chat.activeFile}
                                 onSelect={handleSelect}
-                                onClose={() => setSidebarOpen(false)}
                                 onNewChat={handleNewChat}
-                                onOpenSearch={openSearch}
                                 onOpenSettings={() => setSettingsOpen(true)}
                                 collapsed={sessions.collapsed}
                                 onToggleGroup={sessions.toggleGroup}
@@ -562,12 +560,20 @@ export default function App() {
 
                         <main className="phi-main bg-phi-bg-sidebar px-2 pb-2" data-sidebar-collapsed={sidebarOpen ? "false" : "true"}>
                             <Tabs
-                                leadingAction={!sidebarOpen ? (
+                                sidebarActions={
                                     <div className="flex items-center gap-1">
                                         <SearchSessionsButton onClick={openSearch} />
-                                        <Button variant="icon" aria-label="Open sidebar" title="Open sidebar" onClick={() => setSidebarOpen(true)}><PanelLeftIcon /></Button>
+                                        <Button
+                                            variant="icon"
+                                            aria-label={sidebarOpen ? "Close sidebar" : "Open sidebar"}
+                                            title={sidebarOpen ? "Close sidebar" : "Open sidebar"}
+                                            onClick={() => setSidebarOpen((open) => !open)}
+                                        >
+                                            <PanelLeftIcon />
+                                        </Button>
                                     </div>
-                                ) : null}
+                                }
+                                sidebarCollapsed={!sidebarOpen}
                                 tabs={tabItems}
                                 activeId={chat.activeFile}
                                 onSelect={(id) => id === null ? handleNewChat() : void handleSelect(id)}

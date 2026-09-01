@@ -14,7 +14,8 @@ export type ChatTab = {
 };
 
 type TabsProps = {
-    leadingAction?: ReactNode;
+    sidebarActions?: ReactNode;
+    sidebarCollapsed?: boolean;
     tabs: ChatTab[];
     activeId: string | null;
     onSelect: (id: string | null) => void;
@@ -57,7 +58,8 @@ const TabItem = memo(function TabItem({ tab, active, canClose, onSelect, onClose
 });
 
 export const Tabs = memo(function Tabs({
-    leadingAction,
+    sidebarActions,
+    sidebarCollapsed = false,
     tabs,
     activeId,
     onSelect,
@@ -68,9 +70,14 @@ export const Tabs = memo(function Tabs({
     return (
         <div
             data-tauri-drag-region
-            className="mb-2 flex h-10 shrink-0 items-end gap-2"
+            data-sidebar-collapsed={sidebarActions ? (sidebarCollapsed ? "true" : "false") : undefined}
+            className={`phi-tabs-bar mb-2 flex h-10 shrink-0 items-end ${sidebarActions ? "phi-tabs-bar-extended" : "gap-2"}`}
         >
-            {leadingAction}
+            {sidebarActions && (
+                <div className="phi-tabs-sidebar-slot">
+                    {sidebarActions}
+                </div>
+            )}
             <div
                 role="tablist"
                 aria-label={tablistLabel}

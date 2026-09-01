@@ -221,9 +221,13 @@ html[data-theme="light"] {
   }
 }
 
-/* Motion system — budgeted motions (150–220ms), tuned against Linear */
+/* Motion system */
 
 :root {
+  --phi-sidebar-width: 268px;
+  /* Two 32px buttons, their 4px gap, and a 20px inset into the sidebar. */
+  --phi-tabs-sidebar-extension: 88px;
+  --phi-tabs-action-width: 68px;
   --phi-motion-sidebar: 380ms;
   --phi-motion-tab: 180ms;
   --phi-motion-stream: 160ms;
@@ -341,18 +345,6 @@ html[data-theme="light"] {
   }
 }
 
-/* Streaming cursor blink */
-@keyframes phi-cursor-blink {
-  0%,
-  50% {
-    opacity: 1;
-  }
-  51%,
-  100% {
-    opacity: 0;
-  }
-}
-
 .phi-tab-enter {
   animation: phi-tab-in var(--phi-motion-tab) var(--phi-ease-out);
 }
@@ -394,7 +386,7 @@ html[data-theme="light"] {
 .phi-sidebar-wrap {
   position: absolute;
   inset: 0 auto 0 0;
-  width: 268px;
+  width: var(--phi-sidebar-width);
   z-index: 0;
   overflow: hidden;
   transform-origin: left center;
@@ -420,7 +412,7 @@ html[data-theme="light"] {
   z-index: 1;
   display: flex;
   flex-direction: column;
-  margin-left: 268px;
+  margin-left: var(--phi-sidebar-width);
   will-change: margin-left;
   transition: margin-left var(--phi-motion-sidebar) var(--phi-ease-sidebar);
   background: var(--color-phi-bg-sidebar);
@@ -428,8 +420,43 @@ html[data-theme="light"] {
 .phi-main[data-sidebar-collapsed="true"] {
   margin-left: 0;
 }
+
+/* Keep just enough of the tab rail in the sidebar for its two actions. The
+   whole rail still tracks the sidebar, so the same controls glide into the
+   first tab position when it closes. */
+.phi-tabs-bar-extended {
+  margin-left: calc(-1 * var(--phi-tabs-sidebar-extension));
+  gap: calc(var(--spacing) * 4);
+  min-width: 0;
+  transition: margin-left var(--phi-motion-sidebar) var(--phi-ease-sidebar);
+}
+.phi-tabs-bar-extended[data-sidebar-collapsed="true"] {
+  margin-left: 0;
+}
+.phi-tab-sidebar-slot {
+  display: flex;
+  flex: 0 0 var(--phi-tabs-sidebar-extension);
+  width: var(--phi-tabs-sidebar-extension);
+  height: 2rem;
+  align-items: center;
+  justify-content: flex-end;
+  overflow: hidden;
+  padding-right: calc(var(--spacing) * 5);
+  box-sizing: border-box;
+  transition:
+    flex-basis var(--phi-motion-sidebar) var(--phi-ease-sidebar),
+    width var(--phi-motion-sidebar) var(--phi-ease-sidebar),
+    padding-right var(--phi-motion-sidebar) var(--phi-ease-sidebar);
+}
+.phi-tabs-bar-extended[data-sidebar-collapsed="true"] .phi-tab-sidebar-slot {
+  flex-basis: var(--phi-tabs-action-width);
+  width: var(--phi-tabs-action-width);
+  padding-right: 0;
+}
+
 @media (max-width: 640px) {
   .phi-sidebar-wrap {
+    top: 40px;
     z-index: 20;
     box-shadow: 18px 0 50px var(--color-phi-shadow-strong);
   }
@@ -447,6 +474,14 @@ html[data-theme="light"] {
   .phi-main[data-sidebar-collapsed="false"] {
     margin-left: 0;
   }
+  .phi-tabs-bar-extended {
+    margin-left: 0;
+  }
+  .phi-tabs-bar-extended[data-sidebar-collapsed="false"] .phi-tab-sidebar-slot {
+    flex-basis: var(--phi-tabs-action-width);
+    width: var(--phi-tabs-action-width);
+    padding-right: 0;
+  }
 }
 @media (prefers-reduced-motion: reduce) {
   .phi-sidebar-wrap,
@@ -457,14 +492,6 @@ html[data-theme="light"] {
 
 .phi-composer-focus:focus-within {
   animation: phi-composer-focus var(--phi-motion-composer) var(--phi-ease-default);
-}
-
-.phi-streaming-cursor::after {
-  content: "▎";
-  display: inline;
-  margin-left: 1px;
-  color: var(--color-phi-accent);
-  animation: phi-cursor-blink 1s step-end infinite;
 }
 
 html[data-theme="light"] .phi-tab-active {
@@ -483,8 +510,7 @@ html[data-theme="light"] .phi-tab-active {
   .phi-tab-exit,
   .phi-work-stagger > *,
   .phi-sidebar-enter,
-  .phi-composer-focus,
-  .phi-streaming-cursor::after {
+  .phi-composer-focus {
     animation: none !important;
     opacity: 1 !important;
     transform: none !important;

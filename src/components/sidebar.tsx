@@ -9,10 +9,8 @@ import {
 } from "@heroicons/react/24/solid";
 import { memo, useCallback, useMemo, useState } from "react";
 import { Button } from "./ui/button";
-import { PanelLeftIcon } from "./ui/icons";
 import { Input } from "./ui/input";
 import { GroupCollapsibleTrigger } from "./ui/collapsible";
-import { SearchSessionsButton } from "./session-command";
 import {
     DropdownMenu,
     DropdownMenuContent,
@@ -29,9 +27,7 @@ type SidebarProps = {
     groups: SessionGroup[];
     activeFile: string | null;
     onSelect: (file: string) => void;
-    onClose: () => void;
     onNewChat: () => void;
-    onOpenSearch: () => void;
     onOpenSettings?: () => void;
     collapsed: Set<string>;
     onToggleGroup: (cwd: string) => void;
@@ -67,9 +63,7 @@ export const Sidebar = memo(function Sidebar({
     groups,
     activeFile,
     onSelect,
-    onClose,
     onNewChat,
-    onOpenSearch,
     onOpenSettings,
     collapsed,
     onToggleGroup,
@@ -84,26 +78,15 @@ export const Sidebar = memo(function Sidebar({
         <aside className="flex h-full w-[268px] min-w-[268px] shrink-0 flex-col bg-phi-bg-sidebar">
             <div
                 data-tauri-drag-region
-                className="flex shrink-0 mb-4 mt-2 items-center justify-between px-3"
+                className="mb-4 mt-2 flex shrink-0 items-center px-3"
             >
                 <button
                     type="button"
                     onClick={onNewChat}
-                    className="flex items-center mt-2 ml-2 focus-visible:outline-none"
+                    className="ml-2 mt-2 flex items-center focus-visible:outline-none"
                 >
                     <PhiLogo className="h-5 w-auto" />
                 </button>
-                <div className="flex items-center gap-1">
-                    <SearchSessionsButton onClick={onOpenSearch} />
-                    <Button
-                        variant="icon"
-                        aria-label="Close sidebar"
-                        title="Close sidebar"
-                        onClick={onClose}
-                    >
-                        <PanelLeftIcon />
-                    </Button>
-                </div>
             </div>
 
             <div className="px-2 pt-2">
