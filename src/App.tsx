@@ -11,8 +11,10 @@ import { Button } from "./components/ui/button";
 import { PanelLeftIcon } from "./components/ui/icons";
 import { useSessions } from "./hooks/useSessions";
 import { useChat } from "./hooks/useChat";
+import { useCompaction } from "./hooks/useCompaction";
 import { useModels } from "./hooks/useModels";
 import { createSession, health, streamContinue } from "./lib/api";
+import { CompactionIndicator } from "./components/compaction-indicator";
 import { useTheme } from "./hooks/useTheme";
 import { useHealth } from "./hooks/useHealth";
 import { FatalState } from "./components/fatal";
@@ -103,6 +105,8 @@ export default function App() {
     const [sidebarOpen, setSidebarOpen] = useState(true);
     const sessions = useSessions();
     const chat = useChat();
+    const compaction = useCompaction({ revalidate: chat.revalidate });
+    const lastCompactInstructionsRef = useRef<Record<string, string | undefined>>({});
     const models = useModels();
     useTheme();
     const healthHook = useHealth(3000);
@@ -421,11 +425,35 @@ export default function App() {
     const handleAbort = useCallback(async () => {
         const f = chat.activeFile;
         if (!f) return;
+        if (compaction.isCompacting(f)) {
+            await compaction.abort(f);
+            focusComposer();
+            return;
+        }
         await chat.abort(f);
         const err: InlineError = { id: `${f}-${Date.now()}`, reason: "Abort", message: "Aborted by user.", time: new Date().toLocaleTimeString(), canContinue: true };
         setInlineFor(f, err);
         focusComposer();
-    }, [chat.abort, chat.activeFile, focusComposer, setInlineFor]);
+    }, [chat.abort, chat.activeFile, compaction, focusComposer, setInlineFor]);
+
+    const handleAbortCompaction = useCallback(async () => {
+        const f = chat.activeFile;
+        if (!f) return;
+        await compaction.abort(f);
+        focusComposer();
+    }, [chat.activeFile, compaction, focusComposer]);
+
+    const handleRetryCompaction = useCallback(async () => {
+        const f = chat.activeFile;
+        if (!f) return;
+        const instr = lastCompactInstructionsRef.current[f];
+        const cwd = (chat.data as unknown as { cwd?: string })?.cwd || (chat.data as unknown as { header?: { cwd?: string } })?.header?.cwd;
+        try {
+            await compaction.retry(f, instr, cwd);
+            sessions.refresh({ silent: true });
+        } catch {}
+        focusComposer();
+    }, [chat.activeFile, chat.data, compaction, sessions, focusComposer]);
 
     const handleContinue = useCallback(async () => {
         const f = chat.activeFile;
@@ -451,6 +479,36 @@ export default function App() {
     }, [chat, activeCwd, newChatCwd, homeCwd, setInlineFor]);
 
     const handleSend = useCallback(async (content: string, images?: { type: "image"; data: string; mimeType: string }[]) => {
+        const trimmed = content.trim();
+        // /compact with optional instructions — keep verbatim routing even while streaming (compact will abort streaming)
+        if (trimmed.startsWith("/compact")) {
+            const after = trimmed.slice("/compact".length).trim();
+            // allow "/compact" alone or with instructions; treat whitespace-only after as no instructions
+            const isCompactCommand = trimmed === "/compact" || trimmed.startsWith("/compact ") || trimmed.startsWith("/compact\t") || trimmed.startsWith("/compact\n") || after.length >= 0 && trimmed.startsWith("/compact");
+            if (isCompactCommand) {
+                const instructions = after || undefined;
+                const targetFile = chat.activeFile;
+                if (!targetFile) {
+                    setModelError("Open a session to compact.");
+                    return;
+                }
+                if (chat.isStreaming) {
+                    // compact will abort internally, but surface a hint
+                    try { await chat.abort(targetFile); } catch {}
+                }
+                lastCompactInstructionsRef.current[targetFile] = instructions;
+                // archive inline error before compact
+                archiveInline(targetFile);
+                try {
+                    const cwd = activeCwd || undefined;
+                    await compaction.compact(targetFile, instructions, cwd);
+                    sessions.refresh({ silent: true });
+                } catch {}
+                clearDraftFor(targetFile);
+                focusComposer();
+                return;
+            }
+        }
         // archive inline error on new prompt
         if (chat.activeFile) archiveInline(chat.activeFile);
         else if (content.trim()) clearDraftFor(null);
@@ -496,7 +554,7 @@ export default function App() {
         if (chat.activeFile || preparedSessionFile) clearDraftFor(chat.activeFile ?? preparedSessionFile ?? null);
         sessions.refresh({ silent: true });
         focusComposer();
-    }, [chat.prompt, chat.data?.cwd, newChatCwd, homeCwd, sessions.addOptimistic, sessions.refresh, chat.activeFile, draftModelKey, draftThinking, models.setModel, models.setThinkingLevel, promoteNewChatTab, chat.patchModel, chat.openFile, chat.refreshSilent, sessions.switchTo, focusComposer, archiveInline, setInlineFor]);
+    }, [chat.prompt, chat.data?.cwd, activeCwd, newChatCwd, homeCwd, sessions.addOptimistic, sessions.refresh, chat.activeFile, chat.isStreaming, chat.abort, draftModelKey, draftThinking, models.setModel, models.setThinkingLevel, promoteNewChatTab, chat.patchModel, chat.openFile, chat.refreshSilent, sessions.switchTo, focusComposer, archiveInline, setInlineFor, compaction]);
 
     const messages = useMemo(() => chat.data?.context.messages ?? [], [chat.data?.context.messages]);
 
@@ -628,11 +686,34 @@ export default function App() {
                                         )}
                                         <div className="mx-auto pl-6 mb-1 flex w-full max-w-3xl min-w-0 items-center gap-1" ref={directoryPickerRef}>
                                             {!chat.activeFile && (
-                                                <DirectoryPicker cwd={(newChatCwd ?? homeCwd) || null} homeCwd={homeCwd} projects={sessions.groups.map(({ cwd, displayCwd }) => ({ cwd, displayCwd }))} onChange={setNewChatCwd} disabled={chat.isStreaming} />
+                                                <DirectoryPicker cwd={(newChatCwd ?? homeCwd) || null} homeCwd={homeCwd} projects={sessions.groups.map(({ cwd, displayCwd }) => ({ cwd, displayCwd }))} onChange={setNewChatCwd} disabled={chat.isStreaming || (chat.activeFile ? compaction.isCompacting(chat.activeFile) : false)} />
                                             )}
-                                            <ModelSelector models={models.models} value={selectedModelKey} thinkingLevel={thinkingLevel} onSelect={handleSelectModel} onThinkingChange={handleThinkingChange} disabled={chat.isStreaming} isStreaming={chat.isStreaming} loading={models.loading} error={models.error} />
+                                            <ModelSelector models={models.models} value={selectedModelKey} thinkingLevel={thinkingLevel} onSelect={handleSelectModel} onThinkingChange={handleThinkingChange} disabled={chat.isStreaming || (chat.activeFile ? compaction.isCompacting(chat.activeFile) : false)} isStreaming={chat.isStreaming} loading={models.loading} error={models.error} />
                                         </div>
-                                        <Composer onSend={handleSend} onAbort={handleAbort} isStreaming={chat.isStreaming} cwd={chat.activeFile ? activeCwd : (newChatCwd ?? homeCwd)} draftKey={chat.activeFile} />
+                                        {(() => {
+                                            const cFile = chat.activeFile;
+                                            const isCompacting = cFile ? compaction.isCompacting(cFile) : false;
+                                            const cErr = cFile ? compaction.errors[cFile] : null;
+                                            const instr = cFile ? lastCompactInstructionsRef.current[cFile] : undefined;
+                                            const showIndicator = Boolean(isCompacting || cErr);
+                                            return (
+                                                <div className="mx-auto flex w-full max-w-3xl flex-col gap-0">
+                                                    <div
+                                                        className={`grid overflow-hidden transition-[grid-template-rows,opacity] duration-300 ease-[cubic-bezier(0.4,0,0.2,1)] ${showIndicator ? "grid-rows-[1fr] opacity-100" : "grid-rows-[0fr] opacity-0"}`}
+                                                    >
+                                                        <div className="min-h-0 overflow-hidden">
+                                                            {isCompacting && (
+                                                                <CompactionIndicator customInstructions={instr ?? null} onAbort={handleAbortCompaction} />
+                                                            )}
+                                                            {cErr && !isCompacting && (
+                                                                <CompactionIndicator error={cErr.message} canRetry={cErr.canRetry} onAbort={handleAbortCompaction} onRetry={handleRetryCompaction} onDismissError={() => cFile && compaction.clearError(cFile)} />
+                                                            )}
+                                                        </div>
+                                                    </div>
+                                                    <Composer onSend={handleSend} onAbort={handleAbort} isStreaming={chat.isStreaming} isCompacting={isCompacting} compactAttached={showIndicator} cwd={chat.activeFile ? activeCwd : (newChatCwd ?? homeCwd)} draftKey={chat.activeFile} />
+                                                </div>
+                                            );
+                                        })()}
                                     </div>
                                 </section>
                             </div>

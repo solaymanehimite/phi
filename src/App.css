@@ -286,6 +286,22 @@ html[data-theme="light"] .phi-empty-logo {
   }
 }
 
+@keyframes phi-shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+.phi-shimmer {
+  background: linear-gradient(90deg, var(--color-phi-text-secondary) 30%, var(--color-phi-text-muted) 50%, var(--color-phi-text-secondary) 70%);
+  background-size: 200% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  animation: phi-shimmer 1.8s ease-in-out infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .phi-shimmer { animation: none; background: none; color: var(--color-phi-text-secondary); }
+}
+
 @keyframes phi-dot-matrix {
   0%,
   100% {
@@ -340,6 +356,27 @@ html[data-theme="light"] .phi-empty-logo {
     opacity: 0;
     transform: scale(0.96);
   }
+}
+
+/* Compaction surfaces enter through a collapsed grid row so their natural
+   height can be revealed without measuring it in JavaScript. */
+@keyframes phi-compaction-appear {
+  from {
+    grid-template-rows: 0fr;
+    opacity: 0;
+  }
+  to {
+    grid-template-rows: 1fr;
+    opacity: 1;
+  }
+}
+.phi-compaction-appear {
+  display: grid;
+  grid-template-rows: 1fr;
+  animation: phi-compaction-appear 300ms var(--phi-ease-out) both;
+}
+.phi-compaction-appear > * {
+  min-height: 0;
 }
 
 /* Streaming work-item stagger */
@@ -528,6 +565,7 @@ html[data-theme="light"] .phi-tab-active {
   .phi-tab-enter,
   .phi-tab-exit,
   .phi-work-stagger > *,
+  .phi-compaction-appear,
   .phi-sidebar-enter,
   .phi-composer-focus {
     animation: none !important;
