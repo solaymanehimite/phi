@@ -144,6 +144,97 @@ export async function setThinkingLevel(sessionFile: string, thinkingLevel: Think
   return jsonOrThrow(res);
 }
 
+export async function compactSession(opts: { sessionFile: string; customInstructions?: string; cwd?: string }): Promise<{ summary: string; tokensBefore: number; estimatedTokensAfter?: number }> {
+  const base = await getBase();
+  const res = await fetch(`${base}/compact`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(opts),
+  });
+  // If SSE stream, caller should use streamCompact; this non-stream variant expects JSON when server returns non-SSE (fallback)
+  if (res.headers.get("content-type")?.includes("text/event-stream")) {
+    // consume SSE to completion and extract result
+    const reader = res.body!.getReader();
+    const decoder = new TextDecoder();
+    let buffer = "";
+    let result: any = null;
+    let error: string | null = null;
+    while (true) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      let idx: number;
+      while ((idx = buffer.indexOf("\n\n")) !== -1) {
+        const frame = buffer.slice(0, idx);
+        buffer = buffer.slice(idx + 2);
+        for (const line of frame.split("\n")) {
+          if (line.startsWith("data: ")) {
+            try {
+              const ev = JSON.parse(line.slice(6));
+              if (ev.type === "done" && ev.result) result = ev.result;
+              if (ev.type === "error" && ev.error) error = ev.error;
+            } catch {}
+          }
+        }
+      }
+    }
+    if (error) throw new Error(error);
+    return result ?? { summary: "", tokensBefore: 0 };
+  }
+  return jsonOrThrow(res);
+}
+
+export async function streamCompact(
+  opts: { sessionFile: string; customInstructions?: string; cwd?: string },
+  onEvent: (ev: Record<string, unknown>) => void,
+  signal?: AbortSignal,
+): Promise<void> {
+  const base = await getBase();
+  const res = await fetch(`${base}/compact`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(opts),
+    signal,
+  });
+  if (!res.ok || !res.body) {
+    const text = await res.text().catch(() => "");
+    let msg = `HTTP ${res.status}`;
+    try { const j = JSON.parse(text); if (j.error) msg = j.error; } catch {}
+    throw new Error(msg);
+  }
+  const reader = res.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+  while (true) {
+    const { value, done } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+    let idx: number;
+    while ((idx = buffer.indexOf("\n\n")) !== -1) {
+      const frame = buffer.slice(0, idx);
+      buffer = buffer.slice(idx + 2);
+      for (const line of frame.split("\n")) {
+        if (line.startsWith(": ping") || line.startsWith(":") || line.trim() === "") continue;
+        if (line.startsWith("data: ")) {
+          try { onEvent(JSON.parse(line.slice(6))); } catch {}
+        }
+      }
+    }
+  }
+  if (buffer.trim()) {
+    for (const line of buffer.split("\n")) if (line.startsWith("data: ")) try { onEvent(JSON.parse(line.slice(6))); } catch {}
+  }
+}
+
+export async function abortCompaction(sessionFile: string, cwd?: string): Promise<{ ok: boolean; active: boolean }> {
+  const res = await apiFetch(`/compact/abort`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ sessionFile, cwd }),
+  });
+  return jsonOrThrow(res);
+}
+
 export async function abortPrompt(sessionFile: string): Promise<{ ok: boolean; active: boolean }> {
   const res = await apiFetch(`/abort`, {
     method: "POST",

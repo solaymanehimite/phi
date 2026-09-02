@@ -29,6 +29,8 @@ type ComposerProps = {
     onSend: (message: string, images?: ComposerImagePayload[]) => void;
     onAbort?: () => void;
     isStreaming?: boolean;
+    isCompacting?: boolean;
+    compactAttached?: boolean;
     disabled?: boolean;
     cwd?: string;
     draftKey?: string | null;
@@ -118,6 +120,8 @@ export const Composer = memo(function Composer({
     onSend,
     onAbort,
     isStreaming,
+    isCompacting,
+    compactAttached,
     disabled,
     cwd,
     draftKey,
@@ -179,19 +183,20 @@ export const Composer = memo(function Composer({
     const [slashQuery, setSlashQuery] = useState<string | null>(null);
     const [slashIndex, setSlashIndex] = useState(0);
 
+    const compactCmd: import("../lib/api").SlashCommand = useMemo(() => ({ name: "compact", description: "Compact transcript with optional instructions", source: "prompt" as const, argumentHint: "[instructions]" }), []);
     const filteredSlash = useMemo(() => {
         if (slashQuery === null) return [];
-        const skillsOnly = commands.filter((c) => c.source === "skill");
         const q = slashQuery.toLowerCase().trim();
-        if (!q) return skillsOnly.slice(0, 30);
-        return skillsOnly
+        const base: import("../lib/api").SlashCommand[] = [compactCmd, ...commands.filter((c) => c.source === "skill")];
+        if (!q) return base.slice(0, 30);
+        return base
             .filter(
                 (c) =>
                     c.name.toLowerCase().includes(q) ||
                     (c.description ?? "").toLowerCase().includes(q),
             )
             .slice(0, 30);
-    }, [commands, slashQuery]);
+    }, [commands, slashQuery, compactCmd]);
 
     const isSlashOpen = slashQuery !== null && filteredSlash.length > 0;
 
@@ -398,6 +403,7 @@ export const Composer = memo(function Composer({
     const submit = useCallback(
         (event?: FormEvent) => {
             event?.preventDefault();
+            if (isCompacting) return;
             if (isStreaming) {
                 onAbort?.();
                 focusTextarea();
@@ -627,6 +633,7 @@ export const Composer = memo(function Composer({
 
     const isMenuOpen = isSlashOpen || isAtOpen;
 
+    const attached = Boolean(compactAttached ?? isCompacting);
     return (
         <form
             onSubmit={submit}
@@ -634,7 +641,8 @@ export const Composer = memo(function Composer({
             onDragOver={handleDragOver}
             onDragLeave={handleDragLeave}
             onDrop={handleDrop}
-            className="phi-composer-focus relative mx-auto w-full max-w-3xl border-b-0 rounded-[17px] rounded-b-none border border-phi-border-strong bg-phi-bg-surface p-2 shadow-[0_14px_45px_var(--color-phi-shadow),inset_0_1px_0_var(--color-phi-border)] transition-[border-color,box-shadow] focus-within:border-phi-border-strong focus-within:shadow-[0_16px_50px_var(--color-phi-shadow-strong),0_0_0_1px_var(--color-phi-border)]"
+            data-compacting={attached ? "true" : "false"}
+            className={`phi-composer-focus relative mx-auto w-full max-w-3xl border border-phi-border-strong bg-phi-bg-surface p-2 shadow-[0_14px_45px_var(--color-phi-shadow),inset_0_1px_0_var(--color-phi-border)] transition-[border-color,box-shadow] focus-within:border-phi-border-strong focus-within:shadow-[0_16px_50px_var(--color-phi-shadow-strong),0_0_0_1px_var(--color-phi-border)] ${attached ? "rounded-b-none rounded-t-none border-t-0 border-b-0" : "rounded-[17px] rounded-b-none border-b-0"}`}
         >
             {/* drag overlay */}
             {isDragging && (
@@ -705,9 +713,11 @@ export const Composer = memo(function Composer({
                 aria-autocomplete={isMenuOpen ? "list" : undefined}
                 aria-expanded={isMenuOpen ? true : undefined}
                 placeholder={
-                    isStreaming
-                        ? "Streaming… press Stop or Enter to abort"
-                        : "What do you want to build today?"
+                    isCompacting
+                        ? "Compacting…"
+                        : isStreaming
+                            ? "Streaming… press Stop or Enter to abort"
+                            : "What do you want to build today?"
                 }
                 onChange={handleChange}
                 onKeyDown={handleKeyDown}
@@ -715,7 +725,7 @@ export const Composer = memo(function Composer({
                 onSelect={handleSelect}
                 onClick={handleSelect}
                 onPaste={handlePaste}
-                disabled={!!disabled}
+                disabled={!!disabled || !!isCompacting}
                 onInput={handleInput}
                 onBlur={() => {
                     setTimeout(() => {
@@ -743,7 +753,7 @@ export const Composer = memo(function Composer({
                         aria-label="Attach images"
                         title="Attach images (drag & drop or paste too)"
                         onClick={() => fileInputRef.current?.click()}
-                        disabled={!!disabled || isStreaming}
+                        disabled={!!disabled || isStreaming || !!isCompacting}
                         className="disabled:opacity-40"
                     >
                         <PaperClipIcon className="size-4" />
@@ -764,7 +774,7 @@ export const Composer = memo(function Composer({
                     <Button
                         type="submit"
                         variant="primary"
-                        disabled={!hasContent || !!disabled}
+                        disabled={!hasContent || !!disabled || !!isCompacting}
                         aria-label="Send message"
                         title="Send message"
                     >

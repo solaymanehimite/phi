@@ -577,6 +577,71 @@ app.post("/api/prompt", async (req, res) => {
   }
 });
 
+// ---- Compaction (M3) ----
+// POST /api/compact { sessionFile, cwd?, customInstructions? } -> SSE stream of compaction events
+app.post("/api/compact", async (req, res) => {
+  const { sessionFile, cwd, customInstructions } = req.body as {
+    sessionFile?: string;
+    cwd?: string;
+    customInstructions?: string;
+  };
+  try {
+    if (!sessionFile) throw new ApiError("missing sessionFile");
+    const entry = await getSessionRuntime(sessionFile, cwd);
+    const session: any = entry.runtime.session;
+    if (session.isCompacting) throw new ApiError("compaction already in progress", 409);
+    const instructions = typeof customInstructions === "string" ? customInstructions.trim() : undefined;
+    touchRuntime(entry);
+    sseHeaders(res);
+    if (typeof (res as any).flushHeaders === "function") (res as any).flushHeaders();
+    let connectionClosed = false;
+    const heartbeat = setInterval(() => { if (!connectionClosed) res.write(": ping\n\n"); }, 15_000);
+    const off = session.subscribe((event: unknown) => sendSSE(res, event));
+    res.on("close", () => { connectionClosed = true; clearInterval(heartbeat); try { off(); } catch {} });
+    try {
+      const result = await session.compact(instructions || undefined);
+      invalidateSessionsCache();
+      if (!connectionClosed) {
+        sendSSE(res, { type: "done", result });
+        res.end();
+      }
+    } catch (error) {
+      if (!connectionClosed) {
+        const aborted = (error as Error).name === "AbortError" || String(errorMessage(error)).toLowerCase().includes("cancelled");
+        if (aborted) sendSSE(res, { type: "compaction_end", aborted: true });
+        sendSSE(res, { type: "error", error: errorMessage(error), aborted });
+        res.end();
+      }
+    } finally {
+      clearInterval(heartbeat);
+      try { off(); } catch {}
+      touchRuntime(entry);
+      void cleanupRuntimeRegistry();
+    }
+  } catch (error) {
+    if (!res.headersSent) return res.status(errorStatus(error)).json({ error: errorMessage(error) });
+    sendSSE(res, { type: "error", error: errorMessage(error) });
+    res.end();
+  }
+});
+
+app.post("/api/compact/abort", async (req, res) => {
+  try {
+    const { sessionFile, cwd } = req.body as { sessionFile?: string; cwd?: string };
+    if (!sessionFile) throw new ApiError("missing sessionFile");
+    const entry = runtimeEntries.get(normalisePath(sessionFile));
+    if (!entry) return res.json({ ok: true, active: false });
+    if (cwd) assertCwdMatches(entry.cwd, cwd);
+    const session: any = entry.runtime.session;
+    if (!session.isCompacting) return res.json({ ok: true, active: false });
+    touchRuntime(entry);
+    try { session.abortCompaction(); } catch {}
+    res.json({ ok: true, active: true });
+  } catch (error) {
+    res.status(errorStatus(error)).json({ error: errorMessage(error) });
+  }
+});
+
 // Exposes just enough state for a future reconnecting client. The current UI
 // keeps its SSE readers open while switching, so it primarily uses local state.
 app.get("/api/runtimes", (_req, res) => {

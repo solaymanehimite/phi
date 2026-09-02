@@ -2,6 +2,7 @@ import { memo, useMemo } from "react";
 import type { WorkItem } from "../../types/work";
 import { Markdown } from "./markdown";
 import { WorkingBlock } from "./working-block";
+import { CompactionSummary } from "./compaction-summary";
 
 type Props = {
     messages: unknown[];
@@ -97,6 +98,7 @@ type Turn = {
     user: Record<string, unknown> | null;
     text: string;
     workItems: WorkItem[];
+    __compactionMeta?: { summary: string; timestamp?: string; tokensBefore?: number; fromHook?: boolean };
 };
 
 const TurnRow = memo(function TurnRow({
@@ -277,8 +279,31 @@ export const Conversation = memo(function Conversation({
                 if (!text.trim()) continue;
                 if (!cur) cur = { user: null, text: "", workItems: [] };
                 cur.text += (cur.text ? "\n\n" : "") + text;
+            } else if (role === "compactionSummary" || String((m as Record<string, unknown>).type ?? "") === "compaction") {
+                flush();
+                // compactionSummary messages contain the compaction summary
+                let summary = "";
+                const content = (m as Record<string, unknown>).content;
+                if (typeof content === "string") summary = content;
+                else if (Array.isArray(content)) {
+                    summary = (content as unknown[])
+                        .map((c) =>
+                            c && typeof c === "object" && "text" in (c as Record<string, unknown>)
+                                ? String((c as Record<string, unknown>).text ?? "")
+                                : typeof c === "string"
+                                    ? c
+                                    : "",
+                        )
+                        .filter(Boolean)
+                        .join("\n");
+                } else if (typeof (m as Record<string, unknown>).summary === "string") summary = String((m as Record<string, unknown>).summary);
+                else if (typeof (m as Record<string, unknown>).text === "string") summary = String((m as Record<string, unknown>).text);
+                if (summary.trim()) {
+                    out.push({ user: null, text: `__compaction__:${summary}`, workItems: [], __compactionMeta: { summary, timestamp: String((m as Record<string, unknown>).timestamp ?? ""), tokensBefore: typeof (m as Record<string, unknown>).tokensBefore === "number" ? Number((m as Record<string, unknown>).tokensBefore) : undefined } } as unknown as Turn);
+                }
+                continue;
             } else {
-                // other unknown roles (compactionSummary, branchSummary, bashExecution, etc.)
+                // other unknown roles (branchSummary, bashExecution, etc.)
                 // try to extract text safely, never JSON-stringify the whole envelope
                 let text = "";
                 const content = (m as Record<string, unknown>).content;
@@ -315,18 +340,30 @@ export const Conversation = memo(function Conversation({
 
     return (
         <div className="w-full min-w-0 space-y-0 pb-8 pt-3">
-            {turns.map((turn, idx) => (
-                <TurnRow
-                    key={idx}
-                    turn={turn}
-                    toolResults={toolResults}
-                    hideWork={
-                        hideLastWork &&
-                        idx === lastTurnWithWork &&
-                        lastTurnWithWork === turns.length - 1
-                    }
-                />
-            ))}
+            {turns.map((turn, idx) => {
+                if ((turn as unknown as { __compactionMeta?: unknown }).__compactionMeta) {
+                    const meta = (turn as unknown as { __compactionMeta: { summary: string; timestamp?: string; tokensBefore?: number; fromHook?: boolean } }).__compactionMeta;
+                    return (
+                        <div key={`c-${idx}`} className="phi-compaction-appear">
+                            <div className="min-h-0 overflow-hidden py-2">
+                                <CompactionSummary summary={meta.summary} tokensBefore={meta.tokensBefore} timestamp={meta.timestamp} fromHook={meta.fromHook} />
+                            </div>
+                        </div>
+                    );
+                }
+                return (
+                    <TurnRow
+                        key={idx}
+                        turn={turn}
+                        toolResults={toolResults}
+                        hideWork={
+                            hideLastWork &&
+                            idx === lastTurnWithWork &&
+                            lastTurnWithWork === turns.length - 1
+                        }
+                    />
+                );
+            })}
         </div>
     );
 });
