@@ -1,8 +1,12 @@
+@import "@fontsource/jetbrains-mono/400.css";
+@import "@fontsource/jetbrains-mono/500.css";
+@import "@fontsource/jetbrains-mono/600.css";
 @import "tailwindcss";
 @plugin "@tailwindcss/typography";
 
 @theme {
   --font-sans: Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
 
   /* Backgrounds — 5 core + aliased */
   --color-phi-bg-app: #08080a;
@@ -591,7 +595,55 @@ html[data-theme="light"] .phi-tab-active {
   .session-row:has([data-open]) .session-row-time {
     opacity: 0;
   }
+
+  .phi-diff-line {
+    min-height: 1.25rem;
+  }
+  .phi-diff-remove {
+    background: rgb(239 68 68 / 0.2);
+    color: var(--color-phi-error-text);
+  }
+  .phi-diff-add {
+    background: rgb(34 197 94 / 0.2);
+    color: var(--color-phi-thinking-low);
+  }
+  .phi-diff-truncation {
+    color: #60a5fa;
+  }
+  .phi-diff-word-remove {
+    border-radius: 3px;
+    background: rgb(239 68 68 / 0.32);
+    color: var(--color-phi-error-text);
+    padding: 0 2px;
+  }
+  .phi-diff-word-add {
+    border-radius: 3px;
+    background: rgb(34 197 94 / 0.32);
+    color: var(--color-phi-thinking-low);
+    padding: 0 2px;
+  }
+
+  .phi-tool-action {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+    border-radius: 0.3rem;
+    padding: 0.18rem 0.35rem;
+    color: var(--color-phi-text-muted);
+    font-size: 10px;
+    line-height: 1;
+    transition: color 150ms ease, background-color 150ms ease;
+  }
+  .phi-tool-action:hover {
+    background: var(--color-phi-overlay-hover);
+    color: var(--color-phi-text-secondary);
+  }
+  .phi-tool-action:focus-visible {
+    outline: 1px solid var(--color-phi-accent);
+    outline-offset: 1px;
+  }
 }
+
 
 @layer base {
   html,

@@ -1,4 +1,4 @@
-import { memo, useMemo } from "react";
+import { memo, useEffect, useMemo, useRef } from "react";
 import type { WorkItem } from "../../types/work";
 import { Markdown } from "./markdown";
 import { WorkingBlock } from "./working-block";
@@ -7,6 +7,7 @@ import { CompactionSummary } from "./compaction-summary";
 type Props = {
     messages: unknown[];
     hideLastWork?: boolean;
+    isStreaming?: boolean;
 };
 
 function asMessages(messages: unknown[]): Array<Record<string, unknown>> {
@@ -105,10 +106,12 @@ const TurnRow = memo(function TurnRow({
     turn,
     toolResults,
     hideWork,
+    animateWorkCollapse,
 }: {
     turn: Turn;
-    toolResults: Map<string, { text: string; isError: boolean }>;
+    toolResults: Map<string, { text: string; isError: boolean; diff?: string }>;
     hideWork?: boolean;
+    animateWorkCollapse?: boolean;
 }) {
     const userText = turn.user ? renderUser(turn.user.content) : "";
     const userImages = turn.user ? getUserImages(turn.user.content) : [];
@@ -164,6 +167,7 @@ const TurnRow = memo(function TurnRow({
                         <WorkingBlock
                             items={workItems}
                             variant="history"
+                            animateOnMount={animateWorkCollapse}
                         />
                     )}
                     {text && <Markdown text={text} />}
@@ -176,11 +180,17 @@ const TurnRow = memo(function TurnRow({
 export const Conversation = memo(function Conversation({
     messages,
     hideLastWork,
+    isStreaming = false,
 }: Props) {
+    const wasStreaming = useRef(false);
+    const justFinishedStreaming = wasStreaming.current && !isStreaming;
+    useEffect(() => {
+        wasStreaming.current = isStreaming;
+    }, [isStreaming]);
     const msgs = useMemo(() => asMessages(messages), [messages]);
 
     const toolResults = useMemo(() => {
-        const map = new Map<string, { text: string; isError: boolean }>();
+        const map = new Map<string, { text: string; isError: boolean; diff?: string }>();
         for (const m of msgs) {
             if (m.role === "toolResult") {
                 const id = String(m.toolCallId ?? "");
@@ -197,7 +207,8 @@ export const Conversation = memo(function Conversation({
                         )
                         .join("\n");
                 } else if (typeof content === "string") text = content;
-                map.set(id, { text, isError: Boolean(m.isError) });
+                const details = m.details && typeof m.details === "object" ? m.details as Record<string, unknown> : null;
+                map.set(id, { text, isError: Boolean(m.isError), diff: typeof details?.diff === "string" ? details.diff : undefined });
             }
         }
         return map;
@@ -361,6 +372,7 @@ export const Conversation = memo(function Conversation({
                             idx === lastTurnWithWork &&
                             lastTurnWithWork === turns.length - 1
                         }
+                        animateWorkCollapse={justFinishedStreaming && idx === lastTurnWithWork}
                     />
                 );
             })}

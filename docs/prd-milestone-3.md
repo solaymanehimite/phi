@@ -21,7 +21,7 @@ This milestone defines the product behavior and boundaries without prescribing d
   - Live updates while streaming
   - Icons or compact visual indicators instead of dots
 
-- **Inspectable tool activity**
+- [x] **Inspectable tool activity**
   - Clear tool names, arguments, status, and duration
   - Collapsible tool details
   - Animated expand and collapse behavior matching the rest of the app

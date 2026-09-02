@@ -400,6 +400,28 @@ export const Composer = memo(function Composer({
         requestAnimationFrame(() => textareaRef.current?.focus());
     }, []);
 
+    // Tool details can hand a file path back to the composer without coupling
+    // the conversation renderer to this component's draft state.
+    useEffect(() => {
+        const onAddPath = (event: Event) => {
+            const path = (event as CustomEvent<{ path?: string }>).detail?.path;
+            if (!path) return;
+            const next = `${message}${message && !/\\s$/.test(message) ? " " : ""}@${path} `;
+            setMessage(next);
+            persistDraft(next, draftStorageKey);
+            requestAnimationFrame(() => {
+                const el = textareaRef.current;
+                if (!el) return;
+                el.focus();
+                el.setSelectionRange(next.length, next.length);
+                el.style.height = "auto";
+                el.style.height = `${Math.min(el.scrollHeight, 180)}px`;
+            });
+        };
+        window.addEventListener("phi:add-to-composer", onAddPath);
+        return () => window.removeEventListener("phi:add-to-composer", onAddPath);
+    }, [draftStorageKey, message, persistDraft]);
+
     const submit = useCallback(
         (event?: FormEvent) => {
             event?.preventDefault();
