@@ -584,7 +584,12 @@ export default function App() {
                                     {!chat.activeFile ? (
                                         <div className="mx-auto flex w-full max-w-3xl flex-1 flex-col overflow-y-auto px-6 pt-6">
                                             <div className="flex flex-1 flex-col items-center justify-center pb-16 text-center">
-                                                <h1 className="text-[32px] font-semibold tracking-[-0.03em] text-phi-text-primary">Build, Fix and Ship</h1>
+                                                <img
+                                                    src="/logo_small.svg"
+                                                    alt=""
+                                                    aria-hidden="true"
+                                                    className="phi-empty-logo"
+                                                />
                                                 {!sessions.loading && sessions.groups.length === 0 && !sessions.error && (
                                                     <p className="mt-6 text-[12px] text-phi-text-muted">No sessions found — run `pi` in a project to create one.</p>
                                                 )}
