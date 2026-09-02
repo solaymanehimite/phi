@@ -83,7 +83,7 @@ const ChatViewport = memo(function ChatViewport({
     return (
         <div className="mx-auto flex w-full flex-1 flex-col items-center overflow-y-auto px-6 pt-6">
             <div className="w-2xl h-full flex flex-col">
-                <Conversation messages={messages} hideLastWork={hideLastWork} />
+                <Conversation messages={messages} hideLastWork={hideLastWork} isStreaming={isStreaming} />
                 {showLive && (
                     <div className="pt-2 phi-work-stagger">
                         <Streaming text={streaming.text} workItems={streaming.workItems} error={streaming.error} isStreaming={isStreaming} />

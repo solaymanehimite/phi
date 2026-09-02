@@ -1,49 +1,34 @@
 import { useEffect, useState } from "react";
 import type { WorkItem } from "../../types/work";
 import { ChevronDownIcon } from "../ui/icons";
+import { ToolLine } from "./tool-line";
 import { Orb } from "@aicss/react";
-
-function getToolDisplay(
-    name: string,
-    args: Record<string, unknown>,
-): { label: string; detail: string | null } {
-    const a = args as Record<string, string>;
-    if (name === "read" && a.path) return { label: "read", detail: a.path };
-    if (name === "write" && a.path) return { label: "write", detail: a.path };
-    if (name === "edit" && a.path) return { label: "edit", detail: a.path };
-    if (name === "bash" && a.command)
-        return { label: "bash", detail: String(a.command).slice(0, 80) };
-    if (name === "grep" && a.pattern)
-        return { label: "grep", detail: a.pattern + (a.path ? ` ${a.path}` : "") };
-    if (name === "find" && a.pattern) return { label: "find", detail: a.pattern };
-    if (name === "ls" && a.path) return { label: "ls", detail: a.path };
-    const first = Object.values(args).find(
-        (v) => typeof v === "string" && v.length > 0,
-    ) as string | undefined;
-    return first
-        ? { label: name, detail: first.slice(0, 80) }
-        : { label: name, detail: null };
-}
 
 type Props = {
     items: WorkItem[];
     isStreaming?: boolean;
     variant: "streaming" | "history";
+    animateOnMount?: boolean;
 };
 
-export function WorkingBlock({ items, isStreaming, variant }: Props) {
+export function WorkingBlock({ items, isStreaming, variant, animateOnMount }: Props) {
     const isStreamingVariant = variant === "streaming";
     const hasWork = items.length > 0;
     if (!hasWork && !(isStreamingVariant && isStreaming)) return null;
 
     const [open, setOpen] = useState(() =>
-        isStreamingVariant ? Boolean(isStreaming) : false,
+        isStreamingVariant ? Boolean(isStreaming) : Boolean(animateOnMount),
     );
 
     useEffect(() => {
-        if (!isStreamingVariant) return;
-        if (isStreaming) setOpen(true);
-    }, [isStreaming, isStreamingVariant]);
+        if (isStreamingVariant) {
+            if (isStreaming) setOpen(true);
+            return;
+        }
+        if (!animateOnMount) return;
+        const frame = requestAnimationFrame(() => setOpen(false));
+        return () => cancelAnimationFrame(frame);
+    }, [animateOnMount, isStreaming, isStreamingVariant]);
 
     let title: string;
     if (isStreamingVariant) {
@@ -71,9 +56,8 @@ export function WorkingBlock({ items, isStreaming, variant }: Props) {
                         <span className="font-medium tracking-wide">{title}</span>
                     </>
                 ) : (
-                    // streaming variant — dot matrix on left, chevron right next to title on hover
                     <>
-                        {isStreaming && <Orb variant="S1" />}
+                        {isStreaming && <Orb variant="S3" />}
                         <span className="font-medium tracking-wide">{title}</span>
                         <ChevronDownIcon
                             className={`size-3 shrink-0 text-phi-text-muted transition-all duration-200 ${open ? "rotate-0" : "-rotate-90"} opacity-0 group-hover:opacity-100 group-focus-visible:opacity-100`}
@@ -104,25 +88,7 @@ export function WorkingBlock({ items, isStreaming, variant }: Props) {
                                 );
                             }
 
-                            const { label, detail } = getToolDisplay(item.name, item.args);
-                            const isError = !!item.result?.isError;
-                            return (
-                                <div
-                                    key={item.id}
-                                    className="flex flex-wrap items-center gap-1.5 py-0.5"
-                                >
-                                    <span
-                                        className={`text-xs leading-4 ${isError ? "text-phi-error" : "text-phi-text-secondary"}`}
-                                    >
-                                        {label}
-                                    </span>
-                                    {detail && (
-                                        <code className="rounded border border-phi-border-faint bg-phi-bg-sunken px-1.5 py-0.5 font-mono text-[11px] leading-none text-phi-text-tertiary">
-                                            {detail}
-                                        </code>
-                                    )}
-                                </div>
-                            );
+                            return <ToolLine key={item.id} item={item} />;
                         })}
                     </div>
                 </div>

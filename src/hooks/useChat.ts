@@ -409,9 +409,9 @@ export function useChat() {
             const call = toolCallFromAssistantEvent(assistantEvent); if (call) { flushStream(file!); if (pending.assistantMessageIndex < 0) pending.assistantMessageIndex = 0; const contentIndex = typeof assistantEvent.contentIndex === "number" ? assistantEvent.contentIndex : pending.fallbackContentIndex++; updateStream(file!, (stream) => ({ ...stream, workItems: insertWorkItem(stream.workItems, { kind: "tool", id: call.id, name: call.name, args: call.args, order: { message: pending.assistantMessageIndex, content: contentIndex } }) })); }
           }
         } else if (type === "tool_execution_start") {
-          flushStream(file!); if (pending.assistantMessageIndex < 0) pending.assistantMessageIndex = 0; const toolCallId = String(event.toolCallId ?? event.id ?? `${Date.now()}`); const toolName = String(event.toolName ?? event.name ?? "tool"); const args = asRecord(event.args ?? event.toolArgs); const fallbackOrder = { message: pending.assistantMessageIndex, content: pending.fallbackContentIndex++ }; updateStream(file!, (stream) => { const existing = stream.workItems.find((item) => item.id === toolCallId); return { ...stream, workItems: insertWorkItem(stream.workItems, { kind: "tool", id: toolCallId, name: toolName, args, order: existing?.order ?? fallbackOrder }) }; });
+          flushStream(file!); if (pending.assistantMessageIndex < 0) pending.assistantMessageIndex = 0; const toolCallId = String(event.toolCallId ?? event.id ?? `${Date.now()}`); const toolName = String(event.toolName ?? event.name ?? "tool"); const args = asRecord(event.args ?? event.toolArgs); const fallbackOrder = { message: pending.assistantMessageIndex, content: pending.fallbackContentIndex++ }; updateStream(file!, (stream) => { const existing = stream.workItems.find((item) => item.id === toolCallId); return { ...stream, workItems: insertWorkItem(stream.workItems, { kind: "tool", id: toolCallId, name: toolName, args, startedAt: (existing as Extract<WorkItem, { kind: "tool" }> | undefined)?.startedAt ?? Date.now(), order: existing?.order ?? fallbackOrder }) }; });
         } else if (type === "tool_execution_update") { flushStream(file!); const toolCallId = String(event.toolCallId ?? ""); const partial = event.partialResult ?? event.output ?? ""; const partialText = typeof partial === "string" ? partial : partial && typeof partial === "object" ? JSON.stringify(partial).slice(0, 500) : ""; updateStream(file!, (stream) => ({ ...stream, workItems: patchWorkItem(stream.workItems, toolCallId, { partial: partialText }) })); }
-        else if (type === "tool_execution_end") { flushStream(file!); const toolCallId = String(event.toolCallId ?? ""); const result = event.result; const resultRecord = asRecord(result); let resultText = ""; if (typeof result === "string") resultText = result; else if (Array.isArray(resultRecord.content)) resultText = resultRecord.content.map((part) => String(asRecord(part).text ?? "")).join("\n"); else if (result) resultText = JSON.stringify(result).slice(0, 4000); updateStream(file!, (stream) => ({ ...stream, workItems: patchWorkItem(stream.workItems, toolCallId, { result: resultText, isError: Boolean(event.isError), done: true }) })); }
+        else if (type === "tool_execution_end") { flushStream(file!); const toolCallId = String(event.toolCallId ?? ""); const result = event.result; const resultRecord = asRecord(result); let resultText = ""; if (typeof result === "string") resultText = result; else if (Array.isArray(resultRecord.content)) resultText = resultRecord.content.map((part) => String(asRecord(part).text ?? "")).join("\n"); else if (result) resultText = JSON.stringify(result).slice(0, 4000); const resultDetails = asRecord(resultRecord.details); const resultDiff = typeof resultDetails.diff === "string" ? resultDetails.diff : undefined; updateStream(file!, (stream) => ({ ...stream, workItems: patchWorkItem(stream.workItems, toolCallId, { result: { text: resultText, isError: Boolean(event.isError), diff: resultDiff }, isError: Boolean(event.isError), done: true, durationMs: Date.now() - ((stream.workItems.find((item) => item.id === toolCallId) as Extract<WorkItem, { kind: "tool" }> | undefined)?.startedAt ?? Date.now()) }) })); }
         else if (type === "error") { const message = String(event.error ?? "error"); updateStream(file!, (stream) => ({ ...stream, error: message })); setFileError(file!, message); }
       }, controller.signal);
     } catch (error) {
@@ -629,6 +629,7 @@ export function useChat() {
                   id: toolCallId,
                   name: toolName,
                   args,
+                  startedAt: (existing as Extract<WorkItem, { kind: "tool" }> | undefined)?.startedAt ?? Date.now(),
                   order: existing?.order ?? fallbackOrder,
                 }),
               };
@@ -656,12 +657,15 @@ export function useChat() {
                 .map((part) => String(asRecord(part).text ?? ""))
                 .join("\n");
             } else if (result) resultText = JSON.stringify(result).slice(0, 4000);
+            const resultDetails = asRecord(resultRecord.details);
+            const resultDiff = typeof resultDetails.diff === "string" ? resultDetails.diff : undefined;
             updateStream(file!, (stream) => ({
               ...stream,
               workItems: patchWorkItem(stream.workItems, toolCallId, {
-                result: resultText,
+                result: { text: resultText, isError: Boolean(event.isError), diff: resultDiff },
                 isError: Boolean(event.isError),
                 done: true,
+                durationMs: Date.now() - ((stream.workItems.find((item) => item.id === toolCallId) as Extract<WorkItem, { kind: "tool" }> | undefined)?.startedAt ?? Date.now()),
               }),
             }));
           } else if (type === "error") {

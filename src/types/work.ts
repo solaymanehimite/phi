@@ -15,8 +15,10 @@ export type WorkItem =
       id: string;
       name: string;
       args: Record<string, unknown>;
-      result?: { text: string; isError: boolean };
+      result?: { text: string; isError: boolean; diff?: string };
       partial?: string;
       done?: boolean;
+      startedAt?: number;
+      durationMs?: number;
       order: WorkOrder;
     };
