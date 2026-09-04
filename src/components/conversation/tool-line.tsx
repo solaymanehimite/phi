@@ -52,7 +52,7 @@ function inlineChange(oldText: string, newText: string, kind: "add" | "remove"):
 function DiffOutput({ diff, isError }: { diff: string; isError: boolean }) {
     const entries = parseDiff(diff);
     return (
-        <div className={`phi-diff max-h-64 overflow-auto rounded-md bg-phi-bg-sunken py-1 font-mono text-[11px] leading-5 ${isError ? "text-phi-error-text" : "text-phi-text-tertiary"}`}>
+        <div className={`phi-diff max-h-64 overflow-auto rounded-md bg-phi-bg-sunken py-1 font-mono text-[11px] leading-5 ${isError ? "text-phi-error-text" : "text-phi-text-primary"}`}>
             {entries.map((entry, index) => {
                 const next = entries[index + 1];
                 const previous = entries[index - 1];
@@ -124,9 +124,9 @@ export function ToolLine({ item }: ToolLineProps) {
                             {item.name === "edit" && result?.diff ? (
                                 <DiffOutput diff={result.diff} isError={isError} />
                             ) : (
-                                <pre className={`max-h-64 overflow-auto whitespace-pre-wrap break-words rounded-md bg-phi-bg-sunken px-1.5 py-2 pr-9 font-mono text-[11px] leading-5 ${isError ? "text-phi-error-text" : "text-phi-text-tertiary"}`}>{output || "No output"}</pre>
+                                <pre className={`max-h-64 overflow-auto whitespace-pre-wrap break-words rounded-md bg-phi-bg-sunken px-1.5 py-2 pr-9 font-mono text-[11px] leading-5 ${isError ? "text-phi-error-text" : "text-phi-text-primary"}`}>{output || "No output"}</pre>
                             )}
-                            {copyText && <button type="button" aria-label="Copy output" title={copied ? "Copied" : "Copy output"} onClick={() => void copy(copyText)} className="absolute right-1.5 top-1.5 grid size-5 place-items-center text-white opacity-70 transition-opacity hover:opacity-100 focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-white/70">{copied ? <CheckIcon className="size-3.5" /> : <Square2StackIcon className="size-3.5" />}</button>}
+                            {copyText && <button type="button" aria-label="Copy output" title={copied ? "Copied" : "Copy output"} onClick={() => void copy(copyText)} className="absolute right-1.5 top-1.5 grid size-5 place-items-center text-phi-text-muted opacity-70 transition-opacity hover:text-phi-text-primary hover:opacity-100 focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-phi-accent/60">{copied ? <CheckIcon className="size-3.5" /> : <Square2StackIcon className="size-3.5" />}</button>}
                         </div>
                     </div>
                 </div>
