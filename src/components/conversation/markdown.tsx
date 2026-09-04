@@ -2,6 +2,7 @@ import { memo, useCallback, useMemo, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { CheckIcon, Square2StackIcon } from "@heroicons/react/24/solid";
+import { HighlightedCode } from "../code-theme";
 
 // Single shared instance so remarkGfm isn't recreated per render
 const remarkPlugins = [remarkGfm] as const;
@@ -64,13 +65,13 @@ function CopyButton({ text }: { text: string }) {
   );
 }
 
-function CodeBlock({ code }: { code: string }) {
+function CodeBlock({ code, language }: { code: string; language?: string }) {
   return (
     <div className="not-prose group relative my-3 overflow-hidden rounded-lg border border-phi-border bg-phi-bg-surface">
       <CopyButton text={code} />
       <pre className="m-0 overflow-x-auto bg-transparent p-3 pt-9 text-[13px] leading-5">
         <code className="whitespace-pre-wrap break-words bg-transparent p-0 font-mono font-normal text-phi-text-primary before:content-none after:content-none">
-          {code}
+          <HighlightedCode code={code} language={language} />
         </code>
       </pre>
     </div>
@@ -78,10 +79,10 @@ function CodeBlock({ code }: { code: string }) {
 }
 
 function renderPlainCodeBlock(block: string) {
-  const m = block.match(/^```\w*\n([\s\S]*?)```$/);
-  const code = m ? m[1] : block.slice(3, -3);
-  // language is intentionally ignored — no tag in the corner
-  return <CodeBlock code={code} />;
+  const m = block.match(/^```([\w+-]*)\n([\s\S]*?)```$/);
+  const language = m?.[1] || undefined;
+  const code = m ? m[2] : block.slice(3, -3);
+  return <CodeBlock code={code} language={language} />;
 }
 
 // shared markdown components — handles both inline and block code
@@ -101,7 +102,8 @@ const mdComponents = {
       );
     }
     const code = String(children).replace(/\n$/, "");
-    return <CodeBlock code={code} />;
+    const langMatch = /language-([\w+-]+)/.exec(String(className ?? ""));
+    return <CodeBlock code={code} language={langMatch?.[1]} />;
   },
 } as const;
 

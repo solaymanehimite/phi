@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useTheme, type Theme } from "../hooks/useTheme";
 import { ChevronLeftIcon, Cog6ToothIcon, KeyIcon, PaintBrushIcon } from "@heroicons/react/24/solid";
+import { Highlight, type PrismTheme } from "prism-react-renderer";
+import { CODE_THEMES, setCodeTheme, useCodeTheme, type CodeThemeChoice, type CodeThemeId } from "./code-theme";
 import { Tabs } from "./tabs";
 import { listProviders, upsertProvider, deleteProvider, testProvider, type ProviderRow } from "../lib/api";
 
@@ -61,6 +63,64 @@ export function SettingsPage({ onClose, onProvidersChanged }: { onClose: () => v
   );
 }
 
+function CodeThemeSection() {
+  const { choice, theme: activeTheme } = useCodeTheme();
+  const options: { id: CodeThemeChoice; label: string; badge?: string; previewTheme?: PrismTheme }[] = [
+    { id: "auto", label: "Auto", badge: "Follows app", previewTheme: activeTheme },
+    ...(Object.keys(CODE_THEMES) as CodeThemeId[]).map((id) => ({
+      id,
+      label: CODE_THEMES[id].label,
+      badge: CODE_THEMES[id].mode === "dark" ? "Dark" : "Light",
+      previewTheme: CODE_THEMES[id].theme,
+    })),
+  ];
+  return (
+    <div>
+      <h3 className="text-[12px] font-semibold tracking-wide text-phi-text-muted">Code theme</h3>
+      <p className="mt-1 text-[11px] text-phi-text-muted">Syntax highlighting for code blocks and file outputs.</p>
+      <div className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-3">
+        {options.map((opt) => {
+          const selected = choice === opt.id;
+          return (
+            <button
+              key={opt.id}
+              onClick={() => setCodeTheme(opt.id)}
+              aria-pressed={selected}
+              className={`overflow-hidden rounded-xl border text-left transition ${selected ? "border-phi-accent/60 ring-1 ring-phi-accent/40" : "border-phi-border hover:border-phi-border-strong"}`}
+            >
+              {opt.previewTheme && <CodeThemePreview theme={opt.previewTheme} />}
+              <div className="flex items-center justify-between bg-phi-bg-surface px-2.5 py-1.5">
+                <span className="text-[12px] font-medium text-phi-text-primary">{opt.label}</span>
+                {opt.badge && <span className="text-[10px] text-phi-text-muted">{opt.badge}</span>}
+              </div>
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+const CODE_THEME_SAMPLE = "const greet = (name: string): string => {\n  return `hello, ${name}!`;\n};";
+
+function CodeThemePreview({ theme }: { theme: PrismTheme }) {
+  return (
+    <Highlight theme={theme} code={CODE_THEME_SAMPLE} language="tsx">
+      {({ tokens, getLineProps, getTokenProps }) => (
+        <pre className="overflow-hidden rounded-md rounded-b-none border-b border-phi-border bg-phi-bg-app p-2 font-mono text-[10px] leading-4">
+          {tokens.map((line, i) => (
+            <div key={i} {...getLineProps({ line })} className="whitespace-pre">
+              {line.map((token, key) => (
+                <span key={key} {...getTokenProps({ token })} />
+              ))}
+            </div>
+          ))}
+        </pre>
+      )}
+    </Highlight>
+  );
+}
+
 function AppearanceTab() {
   const { theme, setTheme } = useTheme();
   const [playgroundOpen, setPlaygroundOpen] = useState(false);
@@ -103,6 +163,8 @@ function AppearanceTab() {
           ))}
         </div>
       </div>
+
+      <CodeThemeSection />
 
       <div className="rounded-xl border border-phi-border bg-phi-bg-surface p-3">
         <button onClick={() => setPlaygroundOpen((v) => !v)} className="flex w-full items-center justify-between text-left">

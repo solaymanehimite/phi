@@ -1,0 +1,41 @@
+// Extra Prism grammars beyond the renderer's bundled set.
+// NOTE: `prism-setup` must stay the first import — it installs `globalThis.Prism`
+// before these side-effectful component scripts evaluate. Dependency order
+// matters: markup-templating before php, java before scala, css/markup/clike
+// (already bundled) before their extensions.
+import "./prism-setup";
+
+import "prismjs/components/prism-markup-templating";
+import "prismjs/components/prism-bash";
+import "prismjs/components/prism-java";
+import "prismjs/components/prism-scala";
+import "prismjs/components/prism-csharp";
+import "prismjs/components/prism-ruby";
+import "prismjs/components/prism-php";
+import "prismjs/components/prism-lua";
+import "prismjs/components/prism-toml";
+import "prismjs/components/prism-ini";
+import "prismjs/components/prism-diff";
+import "prismjs/components/prism-docker";
+import "prismjs/components/prism-makefile";
+import "prismjs/components/prism-powershell";
+import "prismjs/components/prism-perl";
+import "prismjs/components/prism-r";
+import "prismjs/components/prism-dart";
+import "prismjs/components/prism-groovy";
+import "prismjs/components/prism-elixir";
+import "prismjs/components/prism-erlang";
+import "prismjs/components/prism-clojure";
+import "prismjs/components/prism-haskell";
+import "prismjs/components/prism-julia";
+import "prismjs/components/prism-latex";
+import "prismjs/components/prism-nginx";
+import "prismjs/components/prism-vim";
+import "prismjs/components/prism-batch";
+import "prismjs/components/prism-protobuf";
+import "prismjs/components/prism-json5";
+import "prismjs/components/prism-scss";
+import "prismjs/components/prism-less";
+import "prismjs/components/prism-cmake";
+import "prismjs/components/prism-glsl";
+import "prismjs/components/prism-ignore";
