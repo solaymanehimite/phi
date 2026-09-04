@@ -1,4 +1,5 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { StickToBottom, useStickToBottomContext } from "use-stick-to-bottom";
 import { Composer } from "./components/composer";
 import { DirectoryPicker } from "./components/directory-picker";
 import { ModelSelector } from "./components/model-selector";
@@ -8,7 +9,7 @@ import { Sidebar } from "./components/sidebar";
 import { SearchSessionsButton, SessionCommand } from "./components/session-command";
 import { Tabs } from "./components/tabs";
 import { Button } from "./components/ui/button";
-import { PanelLeftIcon } from "./components/ui/icons";
+import { ArrowDownIcon, PanelLeftIcon } from "./components/ui/icons";
 import { useSessions } from "./hooks/useSessions";
 import { useChat } from "./hooks/useChat";
 import { useCompaction } from "./hooks/useCompaction";
@@ -22,6 +23,49 @@ import { SettingsPage } from "./components/settings";
 import { useShortcuts } from "./hooks/useShortcuts";
 import { clearDraftFor } from "./hooks/useDraft";
 import { InlineErrorBlock, type InlineError } from "./components/inline-error";
+
+function prefersReducedMotion(): boolean {
+    if (typeof window === "undefined" || typeof window.matchMedia !== "function") return false;
+    return window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+}
+
+// Small floating arrow-down indicator, visible only when the viewport is not stuck to the bottom
+const ScrollToBottomButton = memo(function ScrollToBottomButton() {
+    const { isAtBottom, scrollToBottom } = useStickToBottomContext();
+    const visible = !isAtBottom;
+    return (
+        <button
+            type="button"
+            aria-label="Scroll to bottom"
+            title="Scroll to bottom"
+            aria-hidden={!visible}
+            tabIndex={visible ? 0 : -1}
+            onClick={() => void scrollToBottom(prefersReducedMotion() ? "instant" : undefined)}
+            data-visible={visible ? "true" : "false"}
+            className="absolute bottom-4 left-1/2 z-10 inline-flex size-8 -translate-x-1/2 items-center justify-center rounded-full border border-phi-border-strong bg-phi-bg-elevated text-phi-text-secondary shadow-[0_4px_16px_var(--color-phi-shadow-strong)] transition-all duration-200 hover:bg-phi-overlay-hover hover:text-phi-text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-phi-accent/40 data-[visible=false]:pointer-events-none data-[visible=false]:translate-y-2 data-[visible=false]:opacity-0"
+        >
+            <ArrowDownIcon />
+        </button>
+    );
+});
+
+// When the user sends a message while scrolled up, re-stick to the bottom.
+// Streaming growth itself is handled by the stick-to-bottom resize observer,
+// which intentionally preserves the position when the user scrolled up to read.
+const StickOnUserMessage = memo(function StickOnUserMessage({ messages }: { messages: unknown[] }) {
+    const { scrollToBottom } = useStickToBottomContext();
+    const prevLengthRef = useRef(messages.length);
+    useEffect(() => {
+        const prevLength = prevLengthRef.current;
+        prevLengthRef.current = messages.length;
+        if (messages.length <= prevLength) return;
+        const last = messages[messages.length - 1] as Record<string, unknown> | undefined;
+        if (last && String(last.role ?? "") === "user") {
+            void scrollToBottom(prefersReducedMotion() ? "instant" : undefined);
+        }
+    }, [messages, scrollToBottom]);
+    return null;
+});
 
 // Isolated scroll-aware viewport so App doesn't need to re-render on every streaming token
 const ChatViewport = memo(function ChatViewport({
@@ -80,24 +124,37 @@ const ChatViewport = memo(function ChatViewport({
     }
     const showLive = isStreaming;
     const hideLastWork = showLive && streaming.workItems.length > 0;
+    const resizeAnimation: "instant" | "smooth" = prefersReducedMotion() ? "instant" : "smooth";
     return (
-        <div className="mx-auto flex w-full flex-1 flex-col items-center overflow-y-auto px-6 pt-6">
-            <div className="w-2xl h-full flex flex-col">
-                <Conversation messages={messages} hideLastWork={hideLastWork} isStreaming={isStreaming} />
-                {showLive && (
-                    <div className="pt-2 phi-work-stagger">
-                        <Streaming text={streaming.text} workItems={streaming.workItems} error={streaming.error} isStreaming={isStreaming} />
-                    </div>
-                )}
-                {archivedErrors?.map((e) => (
-                    <InlineErrorBlock key={e.id} error={e} onDismiss={() => {}} archived />
-                ))}
-                {inlineError && <InlineErrorBlock error={inlineError} onContinue={onContinue} onDismiss={onDismiss!} />}
-                {error && !isStreaming && !inlineError && (
-                    <div className="mx-auto mt-3 w-full max-w-3xl rounded-lg border border-phi-error-border bg-phi-error-bg px-3 py-2 text-[13px] text-phi-error-text">{error}</div>
-                )}
-            </div>
-        </div>
+        <StickToBottom
+            key={activeFile}
+            className="relative min-h-0 w-full flex-1"
+            resize={resizeAnimation}
+            initial="instant"
+        >
+            <StickToBottom.Content
+                scrollClassName="overflow-y-auto px-6 pt-6"
+                className="flex flex-col items-center"
+            >
+                <div className="w-2xl flex h-full max-w-full flex-col">
+                    <Conversation messages={messages} hideLastWork={hideLastWork} isStreaming={isStreaming} />
+                    {showLive && (
+                        <div className="pt-2 phi-work-stagger">
+                            <Streaming text={streaming.text} workItems={streaming.workItems} error={streaming.error} isStreaming={isStreaming} />
+                        </div>
+                    )}
+                    {archivedErrors?.map((e) => (
+                        <InlineErrorBlock key={e.id} error={e} onDismiss={() => {}} archived />
+                    ))}
+                    {inlineError && <InlineErrorBlock error={inlineError} onContinue={onContinue} onDismiss={onDismiss!} />}
+                    {error && !isStreaming && !inlineError && (
+                        <div className="mx-auto mt-3 w-full max-w-3xl rounded-lg border border-phi-error-border bg-phi-error-bg px-3 py-2 text-[13px] text-phi-error-text">{error}</div>
+                    )}
+                </div>
+            </StickToBottom.Content>
+            <ScrollToBottomButton />
+            <StickOnUserMessage messages={messages} />
+        </StickToBottom>
     );
 });
 
