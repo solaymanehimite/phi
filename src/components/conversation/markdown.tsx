@@ -2,7 +2,7 @@ import { memo, useCallback, useMemo, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { CheckIcon, Square2StackIcon } from "@heroicons/react/24/solid";
-import { HighlightedCode } from "../code-theme";
+import { LazyHighlightedCode } from "../code-theme";
 
 // Single shared instance so remarkGfm isn't recreated per render
 const remarkPlugins = [remarkGfm] as const;
@@ -71,7 +71,7 @@ function CodeBlock({ code, language }: { code: string; language?: string }) {
       <CopyButton text={code} />
       <pre className="m-0 overflow-x-auto bg-transparent p-3 pt-9 text-[13px] leading-5">
         <code className="whitespace-pre-wrap break-words bg-transparent p-0 font-mono font-normal text-phi-text-primary before:content-none after:content-none">
-          <HighlightedCode code={code} language={language} />
+          <LazyHighlightedCode code={code} language={language} />
         </code>
       </pre>
     </div>

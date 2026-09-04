@@ -1,10 +1,11 @@
-import { useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import {
 } from "@heroicons/react/24/outline";
 import { CheckIcon, Square2StackIcon, XMarkIcon } from "@heroicons/react/24/solid";
 import { Highlight, type PrismTheme, type Token, type TokenInputProps, type TokenOutputProps } from "prism-react-renderer";
 import type { WorkItem } from "../../types/work";
-import { InlineShell, HighlightedCode, detectLanguage, grammarFor, useCodeTheme } from "../code-theme";
+import { InlineShell, LazyHighlightedCode, detectLanguage, grammarFor, useCodeTheme } from "../code-theme";
+import { useInView } from "../../hooks/useInView";
 
 type ToolLineProps = {
     item: Extract<WorkItem, { kind: "tool" }>;
@@ -119,9 +120,19 @@ function DiffLineText({ text, language, theme, mark, markClassName, lineKey }: {
 function DiffOutput({ diff, isError, language }: { diff: string; isError: boolean; language?: string }) {
     const { theme } = useCodeTheme();
     const entries = parseDiff(diff);
+    // One observer for the whole diff — never one per line. Offscreen diffs
+    // render identical-layout plain text until scrolled near the viewport.
+    const { ref, inView } = useInView<HTMLDivElement>();
     return (
-        <div className={`phi-diff max-h-64 overflow-auto rounded-md bg-phi-bg-sunken py-1 font-mono text-[11px] leading-5 ${isError ? "text-phi-error-text" : "text-phi-text-primary"}`}>
-            {entries.map((entry, index) => {
+        <div ref={ref} className={`phi-diff max-h-64 overflow-auto rounded-md bg-phi-bg-sunken py-1 font-mono text-[11px] leading-5 ${isError ? "text-phi-error-text" : "text-phi-text-primary"}`}>
+            {!inView ? entries.map((entry, index) => (
+                <div key={`${index}-${entry.kind}`} className={`phi-diff-line relative flex min-w-max items-stretch px-1.5 ${entry.kind === "remove" ? "phi-diff-remove" : entry.kind === "add" ? "phi-diff-add" : entry.text.trim() === "..." ? "phi-diff-truncation" : ""}`}>
+                    <span aria-hidden="true" className={`mr-1.5 w-[3px] shrink-0 ${entry.kind === "remove" ? "bg-phi-error" : entry.kind === "add" ? "bg-phi-thinking-low" : "bg-transparent"}`} />
+                    <span className="w-3 shrink-0 select-none font-semibold">{entry.kind === "remove" ? "-" : entry.kind === "add" ? "+" : ""}</span>
+                    <span className="mr-2 w-7 shrink-0 select-none text-right opacity-70">{entry.number ?? ""}</span>
+                    <span className="whitespace-pre">{entry.text}</span>
+                </div>
+            )) : entries.map((entry, index) => {
                 const next = entries[index + 1];
                 const previous = entries[index - 1];
                 const paired = entry.kind === "remove" && next?.kind === "add";
@@ -145,6 +156,13 @@ function DiffOutput({ diff, isError, language }: { diff: string; isError: boolea
 export function ToolLine({ item }: ToolLineProps) {
     const [open, setOpen] = useState(false);
     const [copied, setCopied] = useState(false);
+    // Collapsed output mounts nothing: Highlight tokenization must not run
+    // for tool results the user never expanded (the common history case).
+    // Retained after first open so collapse doesn't discard work.
+    const [hasOpened, setHasOpened] = useState(false);
+    useEffect(() => {
+        if (open && !hasOpened) setHasOpened(true);
+    }, [open, hasOpened]);
     const result = item.result;
     const output = result?.text || item.partial || "";
     const copyText = item.name === "edit" && result?.diff ? result.diff : output;
@@ -195,10 +213,10 @@ export function ToolLine({ item }: ToolLineProps) {
                 <div className="min-h-0 overflow-hidden">
                     <div className="ml-1 border-l border-phi-border-strong py-1 pl-2">
                         <div className="relative">
-                            {item.name === "edit" && result?.diff ? (
+                            {!hasOpened ? null : item.name === "edit" && result?.diff ? (
                                 <DiffOutput diff={result.diff} isError={isError} language={isError ? undefined : outputLanguage} />
                             ) : (
-                                <pre className={`max-h-64 overflow-auto whitespace-pre-wrap break-words rounded-md bg-phi-bg-sunken px-1.5 py-2 pr-9 font-mono text-[11px] leading-5 ${isError ? "text-phi-error-text" : "text-phi-text-primary"}`}>{output ? <HighlightedCode code={output} language={isError ? undefined : outputLanguage} /> : "No output"}</pre>
+                                <pre className={`max-h-64 overflow-auto whitespace-pre-wrap break-words rounded-md bg-phi-bg-sunken px-1.5 py-2 pr-9 font-mono text-[11px] leading-5 ${isError ? "text-phi-error-text" : "text-phi-text-primary"}`}>{output ? <LazyHighlightedCode code={output} language={isError ? undefined : outputLanguage} /> : "No output"}</pre>
                             )}
                             {copyText && <button type="button" aria-label="Copy output" title={copied ? "Copied" : "Copy output"} onClick={() => void copy(copyText)} className="absolute right-1.5 top-1.5 grid size-5 place-items-center text-phi-text-muted opacity-70 transition-opacity hover:text-phi-text-primary hover:opacity-100 focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-phi-accent/60">{copied ? <CheckIcon className="size-3.5" /> : <Square2StackIcon className="size-3.5" />}</button>}
                         </div>

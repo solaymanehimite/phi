@@ -1,5 +1,6 @@
 import { memo, useSyncExternalStore } from "react";
 import { Highlight, themes, type PrismTheme } from "prism-react-renderer";
+import { useInView } from "../hooks/useInView";
 import { Prism } from "../lib/prism-setup";
 import "../lib/prism-languages";
 import { getEffectiveTheme, getStoredTheme } from "../hooks/useTheme";
@@ -335,6 +336,30 @@ export const HighlightedCode = memo(function HighlightedCode({
                 </>
             )}
         </Highlight>
+    );
+});
+
+/**
+ * Viewport-lazy syntax highlight. Renders plain text (identical layout —
+ * token spans never change metrics) until scrolled near the viewport,
+ * then upgrades to full Prism colors. This keeps offscreen code blocks
+ * out of the click-to-paint critical path with zero layout shift.
+ */
+export const LazyHighlightedCode = memo(function LazyHighlightedCode({
+    code,
+    language,
+}: {
+    code: string;
+    language?: string;
+}) {
+    const { ref, inView } = useInView();
+    if (!inView) {
+        return <span ref={ref}>{code}</span>;
+    }
+    return (
+        <span ref={ref}>
+            <HighlightedCode code={code} language={language} />
+        </span>
     );
 });
 
