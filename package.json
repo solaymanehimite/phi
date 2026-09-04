@@ -30,7 +30,8 @@
     "react-colorful": "^5.8.1",
     "react-dom": "^19.2.8",
     "react-markdown": "^10.1.0",
-    "remark-gfm": "^4.0.1"
+    "remark-gfm": "^4.0.1",
+    "use-stick-to-bottom": "^1.1.6"
   },
   "devDependencies": {
     "@tailwindcss/typography": "^0.5.20",

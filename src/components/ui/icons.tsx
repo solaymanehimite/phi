@@ -1,4 +1,5 @@
 import {
+  ArrowDownIcon as HeroArrowDownIcon,
   ArrowUpIcon as HeroArrowUpIcon,
   ChatBubbleLeftIcon,
   ChevronDownIcon as HeroChevronDownIcon,
@@ -24,6 +25,10 @@ export function ChatIcon(props: IconProps) {
 
 export function ChevronDownIcon(props: IconProps) {
   return <HeroChevronDownIcon {...props} className={`size-4 ${props.className ?? ""}`} />;
+}
+
+export function ArrowDownIcon(props: IconProps) {
+  return <HeroArrowDownIcon {...props} className={`size-4 ${props.className ?? ""}`} />;
 }
 
 export function ArrowUpIcon(props: IconProps) {
