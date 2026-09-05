@@ -114,10 +114,15 @@ export type ModelsResponse = {
   available: ModelInfo[];
   error?: string | null;
   providers?: Array<{ id: string; name: string; hasAuth: boolean }>;
+  /** The model Pi itself would pick for a fresh session (null when none available). */
+  default?: ModelInfo | null;
+  /** The thinking level a fresh session would start with. */
+  defaultThinkingLevel?: string | null;
 };
 
-export async function getModels(): Promise<ModelsResponse> {
-  const res = await apiFetch(`/models`);
+export async function getModels(cwd?: string): Promise<ModelsResponse> {
+  const qs = cwd ? `?cwd=${encodeURIComponent(cwd)}` : "";
+  const res = await apiFetch(`/models${qs}`);
   return jsonOrThrow(res);
 }
 

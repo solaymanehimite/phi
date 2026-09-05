@@ -6,6 +6,7 @@ import { resolve as resolvePath, join as joinPath, dirname } from "node:path";
 import {
   SessionManager,
   ModelRuntime,
+  SettingsManager,
   getAgentDir,
   createAgentSessionRuntime,
   createAgentSessionServices,
@@ -273,22 +274,145 @@ app.get("/api/health", (_req, res) => {
 });
 
 // Models are process-wide because ModelRuntime owns provider configuration and credentials.
-let modelsCache: { at: number; payload: any } | null = null;
+// Cache is keyed by cwd because project settings can override the default model.
+const modelsCache = new Map<string, { at: number; payload: any }>();
 const MODELS_TTL_MS = 30_000;
-app.get("/api/models", async (_req, res) => {
+const MODELS_CACHE_MAX_KEYS = 8;
+
+// Preferred default model per provider, mirroring Pi's own fresh-session
+// fallback (defaultModelPerProvider in pi's model-resolver). Only the order
+// matters: the first entry matching an available model wins. If Pi adds or
+// renames providers, the final "first available" fallback keeps us correct.
+const DEFAULT_MODEL_PRIORITY: Array<[string, string]> = [
+  ["anthropic", "claude-opus-4-8"],
+  ["openai-codex", "gpt-5.5"],
+  ["openai", "gpt-5.5"],
+  ["azure-openai-responses", "gpt-5.4"],
+  ["google", "gemini-3.1-pro-preview"],
+  ["google-vertex", "gemini-3.1-pro-preview"],
+  ["github-copilot", "gpt-5.4"],
+  ["xai", "grok-4.6"],
+  ["kimi-coding", "kimi-for-coding"],
+  ["moonshotai", "kimi-k2.6"],
+  ["moonshotai-cn", "kimi-k2.6"],
+  ["opencode", "kimi-k2.6"],
+  ["opencode-go", "kimi-k2.6"],
+  ["zai", "glm-5.3"],
+  ["zai-coding-cn", "glm-5.3"],
+  ["deepseek", "deepseek-v4-pro"],
+  ["minimax", "MiniMax-M2.7"],
+  ["minimax-cn", "MiniMax-M2.7"],
+  ["mistral", "devstral-medium-latest"],
+  ["openrouter", "moonshotai/kimi-k2.6"],
+  ["vercel-ai-gateway", "zai/glm-5.1"],
+  ["groq", "openai/gpt-oss-120b"],
+  ["cerebras", "gpt-oss-120b"],
+  ["nvidia", "nvidia/nemotron-3-super-120b-a12b"],
+  ["radius", "auto"],
+  ["huggingface", "moonshotai/Kimi-K2.6"],
+  ["fireworks", "accounts/fireworks/models/kimi-k2p6"],
+  ["together", "moonshotai/Kimi-K2.6"],
+  ["baseten", "zai-org/GLM-5.2"],
+  ["qwen-token-plan", "qwen3.7-max"],
+  ["qwen-token-plan-cn", "qwen3.7-max"],
+  ["qwen-token-plan-individual", "qwen3.8-max"],
+  ["xiaomi", "mimo-v2.5-pro"],
+  ["xiaomi-token-plan-cn", "mimo-v2.5-pro"],
+  ["xiaomi-token-plan-ams", "mimo-v2.5-pro"],
+  ["xiaomi-token-plan-sgp", "mimo-v2.5-pro"],
+  ["ant-ling", "Ring-2.6-1T"],
+  ["amazon-bedrock", "us.anthropic.claude-opus-4-6-v1"],
+  ["cloudflare-workers-ai", "@cf/moonshotai/kimi-k2.6"],
+  ["cloudflare-ai-gateway", "workers-ai/@cf/moonshotai/kimi-k2.6"],
+];
+
+// Mirrors pi-ai's getSupportedThinkingLevels / clampThinkingLevel so the
+// reported default thinking level matches what a fresh Pi session would use.
+const EXTENDED_THINKING_LEVELS = ["off", "minimal", "low", "medium", "high", "xhigh", "max"];
+
+function supportedThinkingLevels(model: any): string[] {
+  if (!model?.reasoning) return ["off"];
+  const map = model.thinkingLevelMap as Record<string, string | null> | undefined;
+  return EXTENDED_THINKING_LEVELS.filter((level) => {
+    const mapped = map?.[level];
+    if (mapped === null) return false;
+    if (level === "xhigh" || level === "max") return mapped !== undefined;
+    return true;
+  });
+}
+
+function clampThinkingLevel(model: any, level: string): string {
+  const supported = supportedThinkingLevels(model);
+  if (supported.includes(level)) return level;
+  const idx = EXTENDED_THINKING_LEVELS.indexOf(level);
+  if (idx === -1) return supported[0] ?? "off";
+  for (let i = idx; i < EXTENDED_THINKING_LEVELS.length; i++) {
+    if (supported.includes(EXTENDED_THINKING_LEVELS[i])) return EXTENDED_THINKING_LEVELS[i];
+  }
+  for (let i = idx - 1; i >= 0; i--) {
+    if (supported.includes(EXTENDED_THINKING_LEVELS[i])) return EXTENDED_THINKING_LEVELS[i];
+  }
+  return supported[0] ?? "off";
+}
+
+// Resolve the model Pi itself would pick for a fresh session in `cwd`:
+// saved settings default first, then per-provider preferred defaults,
+// then first available. `availableRaw` is already auth-filtered.
+function resolveDefaultModel(availableRaw: any[], settings: any): any | undefined {
+  const defaultProvider = settings?.getDefaultProvider?.();
+  const defaultModelId = settings?.getDefaultModel?.();
+  if (defaultProvider && defaultModelId) {
+    const found = availableRaw.find((m) => m.provider === defaultProvider && m.id === defaultModelId);
+    if (found) return found;
+  }
+  for (const [provider, id] of DEFAULT_MODEL_PRIORITY) {
+    const match = availableRaw.find((m) => m.provider === provider && m.id === id);
+    if (match) return match;
+  }
+  return availableRaw[0];
+}
+
+function resolveDefaultThinkingLevel(defaultModel: any, settings: any): string | null {
+  if (!defaultModel) return null;
+  const perModel = settings?.getModelThinkingLevel?.(defaultModel.provider, defaultModel.id);
+  const level = perModel ?? settings?.getDefaultThinkingLevel?.() ?? "medium";
+  return clampThinkingLevel(defaultModel, level);
+}
+
+app.get("/api/models", async (req, res) => {
   try {
     const now = Date.now();
-    if (modelsCache && now - modelsCache.at < MODELS_TTL_MS) {
+    const cwdParam = typeof req.query.cwd === "string" && req.query.cwd.trim() ? req.query.cwd : "";
+    const cacheKey = cwdParam ? normalisePath(cwdParam) : "";
+    const cached = modelsCache.get(cacheKey);
+    if (cached && now - cached.at < MODELS_TTL_MS) {
+      // Refresh recency for the LRU cap.
+      modelsCache.delete(cacheKey);
+      modelsCache.set(cacheKey, cached);
       res.setHeader("Cache-Control", "public, max-age=30");
-      return res.json(modelsCache.payload);
+      return res.json(cached.payload);
     }
     const mr = await getModelRuntime();
     const availableRaw: any[] = (await (mr as any).getAvailable?.()) ?? [];
+    // Settings read is two tiny JSON files; never let it fail the request.
+    let settings: any = null;
+    try {
+      settings = SettingsManager.create(cacheKey || os.homedir(), getAgentDir());
+    } catch {
+      settings = null;
+    }
+    const defaultRaw = resolveDefaultModel(availableRaw, settings);
     const payload = {
       available: availableRaw.map(serialiseModel),
       error: (mr as any).getError?.() ?? null,
+      default: serialiseModel(defaultRaw ?? null),
+      defaultThinkingLevel: resolveDefaultThinkingLevel(defaultRaw, settings),
     };
-    modelsCache = { at: now, payload };
+    modelsCache.set(cacheKey, { at: now, payload });
+    if (modelsCache.size > MODELS_CACHE_MAX_KEYS) {
+      const oldest = modelsCache.keys().next().value as string | undefined;
+      if (oldest !== undefined) modelsCache.delete(oldest);
+    }
     res.setHeader("Cache-Control", "public, max-age=30");
     res.json(payload);
   } catch (error) {
@@ -683,7 +807,7 @@ async function saveStoredProviders(providers: StoredProvider[]): Promise<void> {
   try { await fs.chmod(file, 0o600); } catch {}
 }
 
-function invalidateModelsCache() { modelsCache = null; }
+function invalidateModelsCache() { modelsCache.clear(); }
 
 async function syncProvidersToRuntime() {
   const providers = await loadStoredProviders();

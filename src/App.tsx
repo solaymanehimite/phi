@@ -313,9 +313,9 @@ export default function App() {
 
     const ctxModel: any = (chat.data?.context as any)?.model;
     const ctxModelKey = ctxModel ? `${ctxModel.provider}/${ctxModel.modelId ?? ctxModel.id}` : undefined;
-    const selectedModelKey = ctxModelKey ?? draftModelKey;
+    const selectedModelKey = ctxModelKey ?? draftModelKey ?? models.defaultModelKey;
     const ctxThinking = (chat.data?.context as any)?.thinkingLevel as string | undefined;
-    const thinkingLevel = ctxThinking ?? draftThinking;
+    const thinkingLevel = ctxThinking ?? draftThinking ?? models.defaultThinkingLevel ?? undefined;
 
     const handleSelectModel = useCallback(async (provider: string, id: string) => {
         const key = `${provider}/${id}`;
@@ -404,6 +404,16 @@ export default function App() {
     useEffect(() => {
         if (chat.activeFile && chat.data?.context) { setDraftModelKey(undefined); setDraftThinking(undefined); }
     }, [chat.activeFile, chat.data?.context]);
+
+    // New chat has no session yet, so there is no context model to display.
+    // Silently resolve Pi's actual default for the new-chat workspace (project
+    // settings can override it per workspace). Server-cached and never blocks
+    // the new-chat screen — the selector updates in place when it lands.
+    const newChatDefaultCwd = !chat.activeFile ? (newChatCwd ?? homeCwd ?? "") : "";
+    useEffect(() => {
+        if (!newChatDefaultCwd) return;
+        void models.refresh({ silent: true, cwd: newChatDefaultCwd });
+    }, [newChatDefaultCwd]); // eslint-disable-line react-hooks/exhaustive-deps
 
     const focusComposer = useCallback(() => {
         requestAnimationFrame(() => { document.querySelector<HTMLTextAreaElement>('textarea[aria-label="Message Pi"]')?.focus(); });
