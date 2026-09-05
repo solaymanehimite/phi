@@ -1,4 +1,4 @@
-import { memo, useCallback, useEffect, useMemo, useState } from "react";
+import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import {
     ArrowDownIcon,
     ArrowUpIcon,
@@ -236,7 +236,7 @@ export const ModelSelector = memo(function ModelSelector({
 
     // Arrow / Enter navigation while the popover is open
     const handleKeyDown = useCallback(
-        (e: React.KeyboardEvent) => {
+        (e: React.KeyboardEvent, close?: () => void) => {
             if (e.key === "ArrowDown") {
                 e.preventDefault();
                 setActiveIdx((i) => Math.min(i + 1, Math.max(0, filtered.length - 1)));
@@ -247,6 +247,7 @@ export const ModelSelector = memo(function ModelSelector({
                 const target = filtered[activeIdx];
                 if (target) {
                     e.preventDefault();
+                    close?.();
                     void handleSelect(target);
                 }
             }
@@ -257,19 +258,44 @@ export const ModelSelector = memo(function ModelSelector({
     const isDisabled = !!disabled || !!isStreaming;
 
     const railBtn = (isActive: boolean) =>
-        `group relative grid size-11 place-items-center rounded-lg ${
+        `grid size-11 place-items-center rounded-lg ${
             isActive
                 ? "text-phi-text-primary"
                 : "text-phi-text-muted hover:bg-phi-overlay hover:text-phi-text-secondary"
         }`;
 
-    const railIndicator = (
-        <span className="absolute right-0 top-1/2 h-6 w-[3px] -translate-y-1/2 rounded-full bg-[#2f81f7]" />
+    // Sliding rail indicator — a single bar that glides between the active
+    // buttons via transform (compositor-thread, no library needed).
+    const INDICATOR_HEIGHT = 24;
+    const railColRef = useRef<HTMLDivElement>(null);
+    const railBtnRefs = useRef(new Map<string, HTMLButtonElement>());
+    const [indicatorY, setIndicatorY] = useState<number | null>(null);
+    const isRailActive = activeCategory !== "all";
+
+    const registerRailBtn = useCallback(
+        (key: string) => (el: HTMLButtonElement | null) => {
+            if (el) railBtnRefs.current.set(key, el);
+            else railBtnRefs.current.delete(key);
+        },
+        [],
     );
+
+    const updateIndicator = useCallback(() => {
+        const col = railColRef.current;
+        const btn = railBtnRefs.current.get(activeCategory);
+        if (!col || !btn) return;
+        const colRect = col.getBoundingClientRect();
+        const btnRect = btn.getBoundingClientRect();
+        setIndicatorY(btnRect.top - colRect.top + btnRect.height / 2 - INDICATOR_HEIGHT / 2);
+    }, [activeCategory]);
+
+    useLayoutEffect(() => {
+        updateIndicator();
+    }, [updateIndicator, providerIds]);
 
     return (
         <Popover className="relative">
-            {({ open }: { open: boolean }) => (
+            {({ open, close }: { open: boolean; close: () => void }) => (
                 <>
                     <PopoverTrigger
                         disabled={isDisabled}
@@ -302,14 +328,15 @@ export const ModelSelector = memo(function ModelSelector({
                     >
                         <div
                             className="flex h-full flex-col"
-                            onKeyDown={open ? handleKeyDown : undefined}
+                            onKeyDown={open ? (e) => handleKeyDown(e, close) : undefined}
                             data-model-popover={open ? "open" : "closed"}
                         >
-                            <div className="flex min-h-0 flex-1 flex-col">
-                                {/* header — star cell + search share one separator so they line up */}
-                                <div className="flex shrink-0 items-stretch border-b border-phi-border-faint">
-                                    <div className="flex h-[52px] w-[54px] shrink-0 items-center justify-center border-r border-phi-border-faint">
+                            <div className="flex min-h-0 flex-1 items-stretch">
+                                {/* left column — star + provider rail, owns the sliding indicator */}
+                                <div ref={railColRef} className="relative flex w-[54px] shrink-0 flex-col border-r border-phi-border-faint">
+                                    <div className="flex h-[52px] shrink-0 items-center justify-center border-b border-phi-border-faint">
                                         <button
+                                            ref={registerRailBtn("favorites")}
                                             onClick={() =>
                                                 setActiveCategory((c) =>
                                                     c === "favorites" ? "all" : "favorites",
@@ -319,25 +346,14 @@ export const ModelSelector = memo(function ModelSelector({
                                             title="Favorites"
                                             className={railBtn(activeCategory === "favorites")}
                                         >
-                                            {activeCategory === "favorites" && railIndicator}
                                             <StarIcon className={`size-5 ${activeCategory === "favorites" ? "text-[#f0b429]" : ""}`} />
                                         </button>
                                     </div>
-                                    <div className="flex min-w-0 flex-1 items-center gap-2 px-3.5">
-                                        <MagnifyingGlassIcon className="size-4 shrink-0 text-phi-text-tertiary" />
-                                        <input
-                                            autoFocus
-                                            value={query}
-                                            onChange={handleQueryChange}
-                                            placeholder="Search models..."
-                                            className="h-full w-full bg-transparent text-[14px] text-phi-text-primary placeholder:text-phi-text-muted focus:outline-none"
-                                        />
-                                    </div>
-                                </div>
-                                <div className="flex min-h-0 flex-1 items-stretch">
-                                {/* provider rail */}
-                                <div className="flex w-[54px] shrink-0 flex-col items-center border-r border-phi-border-faint py-2">
-                                    <div className="flex flex-1 flex-col items-center gap-1 overflow-x-hidden overflow-y-auto">
+                                    <div
+                                        className="flex min-h-0 flex-1 flex-col items-center overflow-x-hidden overflow-y-auto py-2"
+                                        onScroll={updateIndicator}
+                                    >
+                                    <div className="flex flex-col items-center gap-1">
                                         {providerIds.map((pid) => {
                                             const isActive = activeCategory === pid;
                                             const url = providerIconUrl(pid, theme);
@@ -345,6 +361,7 @@ export const ModelSelector = memo(function ModelSelector({
                                             return (
                                                 <button
                                                     key={pid}
+                                                    ref={registerRailBtn(pid)}
                                                     onClick={() =>
                                                         setActiveCategory((c) =>
                                                             c === pid ? "all" : pid,
@@ -354,7 +371,6 @@ export const ModelSelector = memo(function ModelSelector({
                                                     title={prettyProvider(pid)}
                                                     className={railBtn(isActive)}
                                                 >
-                                                    {isActive && railIndicator}
                                                     {url ? (
                                                         <img
                                                             src={url}
@@ -371,10 +387,29 @@ export const ModelSelector = memo(function ModelSelector({
                                             );
                                         })}
                                     </div>
+                                    </div>
+                                    {indicatorY != null && (
+                                        <span
+                                            aria-hidden="true"
+                                            className={`absolute right-0 top-0 h-6 w-[3px] rounded-full bg-[#2f81f7] motion-safe:transition-[transform,opacity] motion-safe:duration-200 motion-safe:ease-out ${isRailActive ? "opacity-100" : "opacity-0"}`}
+                                            style={{ transform: `translateY(${indicatorY}px)` }}
+                                        />
+                                    )}
                                 </div>
 
-                                {/* main column */}
+                                {/* right column */}
                                 <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
+                                    {/* search — same height as the star cell so separators line up */}
+                                    <div className="flex h-[52px] shrink-0 items-center gap-2 border-b border-phi-border-faint px-3.5">
+                                        <MagnifyingGlassIcon className="size-4 shrink-0 text-phi-text-tertiary" />
+                                        <input
+                                            autoFocus
+                                            value={query}
+                                            onChange={handleQueryChange}
+                                            placeholder="Search models..."
+                                            className="h-full w-full bg-transparent text-[14px] text-phi-text-primary placeholder:text-phi-text-muted focus:outline-none"
+                                        />
+                                    </div>
                                     {error && (
                                         <div className="mx-3.5 mb-2 mt-2 rounded-md border border-phi-error-border bg-phi-error-bg px-2.5 py-1.5 text-[11.5px] leading-snug text-phi-error-text">
                                             {error}
@@ -411,7 +446,10 @@ export const ModelSelector = memo(function ModelSelector({
                                                     return (
                                                         <button
                                                             key={k}
-                                                            onClick={() => handleSelect(model)}
+                                                            onClick={() => {
+                                                                close();
+                                                                void handleSelect(model);
+                                                            }}
                                                             onMouseEnter={() => setActiveIdx(idx)}
                                                             disabled={isDisabled}
                                                             className={`group flex w-full items-center justify-between gap-3 rounded-xl px-3.5 py-2.5 text-left disabled:opacity-60 ${
@@ -493,7 +531,6 @@ export const ModelSelector = memo(function ModelSelector({
                                             </div>
                                         )}
                                     </div>
-                                </div>
                                 </div>
                             </div>
                         </div>

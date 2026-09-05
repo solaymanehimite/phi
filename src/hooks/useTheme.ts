@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState, useSyncExternalStore } from "react";
+import { syncFavicon } from "../lib/themed-assets";
 
 export type Theme = "light" | "dark" | "system";
 
@@ -22,11 +23,12 @@ export function getEffectiveTheme(theme: Theme): "light" | "dark" {
 function applyTheme(theme: Theme) {
   if (typeof document === "undefined") return;
   document.documentElement.setAttribute("data-theme", theme);
+  const eff = getEffectiveTheme(theme);
   const m = document.querySelector('meta[name="theme-color"]');
   if (m) {
-    const eff = getEffectiveTheme(theme);
     m.setAttribute("content", eff === "light" ? "#ffffff" : "#08080a");
   }
+  syncFavicon(eff);
   try { localStorage.setItem(STORAGE_KEY, theme); } catch {}
 }
 

@@ -1,5 +1,7 @@
 import {
     ArrowPathIcon,
+    ChevronDownIcon,
+    ChevronUpIcon,
     Cog6ToothIcon,
     EllipsisHorizontalIcon,
     PaperAirplaneIcon,
@@ -7,7 +9,7 @@ import {
     PlusIcon,
     TrashIcon,
 } from "@heroicons/react/24/solid";
-import { memo, useCallback, useMemo, useState } from "react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
 import { GroupCollapsibleTrigger } from "./ui/collapsible";
@@ -86,6 +88,49 @@ export const Sidebar = memo(function Sidebar({
     runningFiles,
     onPrefetch,
 }: SidebarProps) {
+    const scrollRef = useRef<HTMLDivElement>(null);
+    const [canScrollUp, setCanScrollUp] = useState(false);
+    const [canScrollDown, setCanScrollDown] = useState(false);
+
+    const updateScrollEdges = useCallback(() => {
+        const el = scrollRef.current;
+        if (!el) return;
+        const threshold = 2;
+        setCanScrollUp(el.scrollTop > threshold);
+        setCanScrollDown(el.scrollHeight - el.scrollTop - el.clientHeight > threshold);
+    }, []);
+
+    useEffect(() => {
+        updateScrollEdges();
+        const el = scrollRef.current;
+        if (!el) return;
+        const ro = new ResizeObserver(() => updateScrollEdges());
+        ro.observe(el);
+        window.addEventListener("resize", updateScrollEdges);
+        // Content height animates on group collapse; re-check after transition
+        const t = window.setTimeout(updateScrollEdges, 320);
+        return () => {
+            window.clearTimeout(t);
+            window.removeEventListener("resize", updateScrollEdges);
+            ro.disconnect();
+        };
+    }, [groups, collapsed, loading, updateScrollEdges]);
+
+    const scrollByPage = useCallback((direction: 1 | -1) => {
+        const el = scrollRef.current;
+        if (!el) return;
+        const reduceMotion =
+            typeof window !== "undefined" &&
+            typeof window.matchMedia === "function" &&
+            window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+        el.scrollBy({
+            top: direction * Math.max(el.clientHeight * 0.8, 120),
+            behavior: reduceMotion ? "instant" as ScrollBehavior : "smooth",
+        });
+    }, []);
+    const scrollUp = useCallback(() => scrollByPage(-1), [scrollByPage]);
+    const scrollDown = useCallback(() => scrollByPage(1), [scrollByPage]);
+
     return (
         <aside className="flex h-full w-[268px] min-w-[268px] shrink-0 flex-col bg-phi-bg-sidebar">
             <div
@@ -101,44 +146,88 @@ export const Sidebar = memo(function Sidebar({
                 </button>
             </div>
 
-            <div className="px-2 pt-2">
+            <div className="shrink-0 px-2 pt-2">
                 <Button className="w-full justify-start" onClick={onNewChat}>
                     <PlusIcon className="size-4" />
                     New chat
                 </Button>
             </div>
 
-            <div className="min-h-0 flex-1 overflow-y-auto px-2 pt-4">
-                {loading ? (
-                    <p className="px-2 py-6 text-center text-[12px] text-phi-text-muted">
-                        Loading sessions…
-                    </p>
-                ) : error ? (
-                    <div className="mx-2 rounded-lg border border-phi-error-border bg-phi-error-bg px-3 py-2 text-[12px] leading-4 text-phi-error-text">
-                        {error}
-                    </div>
-                ) : groups.length === 0 ? (
-                    <p className="px-2 py-6 text-center text-[12px] text-phi-text-muted">
-                        No sessions yet
-                    </p>
-                ) : (
-                    <div className="space-y-0.5">
-                        {groups.map((group) => (
-                            <GroupSection
-                                key={group.cwd}
-                                group={group}
-                                collapsed={collapsed.has(group.cwd)}
-                                activeFile={activeFile}
-                                runningFiles={runningFiles}
-                                onToggleGroup={onToggleGroup}
-                                onSelect={onSelect}
-                                onRename={onRename}
-                                onDelete={onDelete}
-                                onPrefetch={onPrefetch}
-                            />
-                        ))}
-                    </div>
-                )}
+            <div aria-hidden="true" className="h-4 shrink-0" />
+
+            <div className="relative min-h-0 flex-1">
+                <div
+                    ref={scrollRef}
+                    onScroll={updateScrollEdges}
+                    className="min-h-0 h-full overflow-y-auto scrollbar-none px-2"
+                >
+                    {loading ? (
+                        <p className="px-2 py-6 text-center text-[12px] text-phi-text-muted">
+                            Loading sessions…
+                        </p>
+                    ) : error ? (
+                        <div className="mx-2 rounded-lg border border-phi-error-border bg-phi-error-bg px-3 py-2 text-[12px] leading-4 text-phi-error-text">
+                            {error}
+                        </div>
+                    ) : groups.length === 0 ? (
+                        <p className="px-2 py-6 text-center text-[12px] text-phi-text-muted">
+                            No sessions yet
+                        </p>
+                    ) : (
+                        <div className="space-y-0.5">
+                            {groups.map((group) => (
+                                <GroupSection
+                                    key={group.cwd}
+                                    group={group}
+                                    collapsed={collapsed.has(group.cwd)}
+                                    activeFile={activeFile}
+                                    runningFiles={runningFiles}
+                                    onToggleGroup={onToggleGroup}
+                                    onSelect={onSelect}
+                                    onRename={onRename}
+                                    onDelete={onDelete}
+                                    onPrefetch={onPrefetch}
+                                />
+                            ))}
+                        </div>
+                    )}
+                </div>
+
+                {/* Top fade + more-content indicator */}
+                <div
+                    aria-hidden={!canScrollUp}
+                    className={`pointer-events-none absolute inset-x-0 top-0 z-10 flex h-12 items-start justify-center pt-1 transition-opacity duration-200 ${canScrollUp ? "opacity-100" : "opacity-0"}`}
+                    style={{ background: "linear-gradient(to bottom, var(--color-phi-bg-sidebar) 15%, transparent)" }}
+                >
+                    <button
+                        type="button"
+                        tabIndex={canScrollUp ? 0 : -1}
+                        aria-label="Scroll sessions up"
+                        title="Scroll up"
+                        onClick={scrollUp}
+                        className={`pointer-events-auto inline-flex items-center justify-center text-phi-text-tertiary transition-all duration-200 hover:text-phi-text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-phi-accent/40 ${canScrollUp ? "translate-y-0 opacity-100" : "pointer-events-none -translate-y-1 opacity-0"}`}
+                    >
+                        <ChevronUpIcon className="size-3.5" />
+                    </button>
+                </div>
+
+                {/* Bottom fade + more-content indicator */}
+                <div
+                    aria-hidden={!canScrollDown}
+                    className={`pointer-events-none absolute inset-x-0 bottom-0 z-10 flex h-12 items-end justify-center pb-1 transition-opacity duration-200 ${canScrollDown ? "opacity-100" : "opacity-0"}`}
+                    style={{ background: "linear-gradient(to top, var(--color-phi-bg-sidebar) 15%, transparent)" }}
+                >
+                    <button
+                        type="button"
+                        tabIndex={canScrollDown ? 0 : -1}
+                        aria-label="Scroll sessions down"
+                        title="Scroll down"
+                        onClick={scrollDown}
+                        className={`pointer-events-auto inline-flex items-center justify-center text-phi-text-tertiary transition-all duration-200 hover:text-phi-text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-phi-accent/40 ${canScrollDown ? "translate-y-0 opacity-100" : "pointer-events-none translate-y-1 opacity-0"}`}
+                    >
+                        <ChevronDownIcon className="size-3.5" />
+                    </button>
+                </div>
             </div>
 
             <div className="mt-auto flex shrink-0 items-center px-3 pb-4 pt-2">

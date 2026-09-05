@@ -18,3 +18,22 @@ export function brandingUrl(
 ): string {
   return `/branding/${theme}/${name}`;
 }
+
+/** Favicon URL — the small logo for the given theme. */
+export function faviconUrl(theme: EffectiveTheme): string {
+  return brandingUrl("logo_small.svg", theme);
+}
+
+/** Point the tab favicon at the themed small logo (creates the link if missing). */
+export function syncFavicon(theme: EffectiveTheme): void {
+  if (typeof document === "undefined") return;
+  const href = faviconUrl(theme);
+  let link = document.querySelector<HTMLLinkElement>('link[rel="icon"]');
+  if (!link) {
+    link = document.createElement("link");
+    link.rel = "icon";
+    document.head.appendChild(link);
+  }
+  link.type = "image/svg+xml";
+  if (link.getAttribute("href") !== href) link.setAttribute("href", href);
+}

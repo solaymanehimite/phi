@@ -24,8 +24,8 @@
      inkscape:deskcolor="#d1d1d1"
      inkscape:document-units="mm"
      inkscape:zoom="1.9351394"
-     inkscape:cx="37.206623"
-     inkscape:cy="43.924485"
+     inkscape:cx="37.206622"
+     inkscape:cy="-18.086552"
      inkscape:window-width="1745"
      inkscape:window-height="982"
      inkscape:window-x="0"
@@ -56,58 +56,9 @@
      inkscape:label="Layer 1"
      inkscape:groupmode="layer"
      id="layer1">
-    <rect
-       style="fill:#ffffff;fill-opacity:1;stroke-width:0.264583"
-       id="rect2"
-       width="7.9999995"
-       height="16"
-       x="3.8146973e-06"
-       y="8" />
-    <rect
-       style="fill:#ffffff;fill-opacity:1;stroke-width:0.264583"
-       id="rect3"
-       width="7.9999995"
-       height="48"
-       x="16.000002"
-       y="3.5527137e-15" />
-    <rect
-       style="fill:#ffffff;fill-opacity:1;stroke-width:0.264583"
-       id="rect4"
-       width="8"
-       height="8.000001"
-       x="8.0000038"
-       y="24" />
-    <rect
-       style="fill:#ffffff;fill-opacity:1;stroke-width:0.264583"
-       id="rect5"
-       width="16.000002"
-       height="8"
-       x="24"
-       y="3.5527137e-15" />
-    <rect
-       style="fill:#ffffff;fill-opacity:1;stroke-width:0.264583"
-       id="rect6"
-       width="7.9999995"
-       height="16"
-       x="40.000004"
-       y="8" />
-    <rect
-       style="fill:#ffffff;fill-opacity:1;stroke-width:0.264583"
-       id="rect7"
-       width="15.999999"
-       height="8"
-       x="24.000004"
-       y="24" />
     <path
-       style="fill:#ffffff;fill-opacity:1;stroke-width:0.264583"
-       id="rect14"
-       width="7.9999995"
-       height="8"
-       x="40"
-       y="24"
-       ry="0"
-       inkscape:path-effect="#path-effect14"
-       sodipodi:type="rect"
-       d="m 40,24 h 8 v 0 a 7.9999995,7.9999995 135 0 1 -8,8 h 0 z" />
+       d="M 16.000057,0 V 24.000085 H 8.0000285 v 8.000029 h 8.0000285 v 16.000057 h 8.000028 V 32.000114 h 16.000057 a 7.9999995,7.9999995 0 0 0 8.000029,-8.000029 V 8.0000285 H 40.000142 V 24.000085 H 24.000085 V 8.0000285 H 40.000142 V 0 H 24.000085 Z M 8.0000285,24.000085 V 8.0000285 H 0 V 24.000085 Z"
+       style="fill:#ffffff;stroke-width:0.264583"
+       id="path1" />
   </g>
 </svg>
