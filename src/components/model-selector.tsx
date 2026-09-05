@@ -1,4 +1,4 @@
-import { memo, useCallback, useMemo, useState } from "react";
+import { memo, useCallback, useEffect, useMemo, useState } from "react";
 import {
     ArrowDownIcon,
     ArrowUpIcon,
@@ -7,18 +7,18 @@ import {
     ChevronDownIcon,
     MapIcon,
     CpuChipIcon,
-    EyeIcon,
-    ListBulletIcon,
     MagnifyingGlassIcon,
     SparklesIcon,
     StarIcon,
 } from "@heroicons/react/24/solid";
+import { StarIcon as StarOutlineIcon } from "@heroicons/react/24/outline";
 import { Popover, PopoverContent, PopoverTrigger } from "./ui/popover";
 import type { ModelInfo, ThinkingLevel } from "../types/session";
 import { useEffectiveTheme } from "../hooks/useTheme";
 import { providerIconUrl } from "../lib/themed-assets";
 
-// Canonical order — matches pi-ai ThinkingLevel union, used for the slider
+// Canonical order — matches pi-ai ThinkingLevel union.
+// Thinking slider UI is hidden for now; kept so re-enabling is trivial.
 const CANONICAL_LEVELS: ThinkingLevel[] = [
     "minimal",
     "low",
@@ -27,17 +27,9 @@ const CANONICAL_LEVELS: ThinkingLevel[] = [
     "xhigh",
     "max",
 ];
-// Keep legacy order for compat but we render canonical; helper normalizes
 export const THINKING_LEVELS = CANONICAL_LEVELS;
 
-const THINKING_COLORS: Record<ThinkingLevel, string> = {
-    minimal: "var(--color-phi-thinking-minimal)",
-    low: "var(--color-phi-thinking-low)",
-    medium: "var(--color-phi-thinking-medium)",
-    high: "var(--color-phi-thinking-high)",
-    xhigh: "var(--color-phi-thinking-xhigh)",
-    max: "var(--color-phi-thinking-max)",
-};
+const FAVORITES_KEY = "phi-favorite-models";
 
 const PROVIDER_ICONS: Record<string, typeof StarIcon> = {
     openai: BeakerIcon,
@@ -47,8 +39,6 @@ const PROVIDER_ICONS: Record<string, typeof StarIcon> = {
     kimi: MapIcon,
     "kimi-coding": MapIcon,
 };
-
-
 
 function prettyProvider(id: string): string {
     const normalized = id.toLowerCase();
@@ -103,29 +93,24 @@ function parseModelKey(key: string): { provider: string; id: string } | null {
 
 function formatCost(n: number | undefined): string {
     if (n == null || Number.isNaN(n)) return "—";
-    // n is $/M tokens asset as per pi-ai ModelCost; keep 2 decimals for composer list
     return `${Number(n).toFixed(2)}$`;
 }
 
-function availableLevelsFor(model: ModelInfo | undefined): ThinkingLevel[] {
-    if (!model) return CANONICAL_LEVELS;
-    const map = model.thinkingLevelMap as
-        Record<string, string | null> | null | undefined;
-    if (!map || typeof map !== "object" || Object.keys(map).length === 0) {
-        // No map → assume model supports the canonical reasoning ladder if reasoning=true, else still show all
-        // For non-reasoning models pi still accepts but maps to null — show all so user isn't blocked before server validates
-        return CANONICAL_LEVELS;
+function loadFavorites(): string[] {
+    try {
+        const raw = localStorage.getItem(FAVORITES_KEY);
+        if (!raw) return [];
+        const parsed = JSON.parse(raw);
+        return Array.isArray(parsed) ? parsed.filter((x) => typeof x === "string") : [];
+    } catch {
+        return [];
     }
-    const levels = CANONICAL_LEVELS.filter((lvl) => map[lvl] !== null);
-    // Always exclude "off" from slider (it's a separate concept); keep at least 1 entry so slider renders
-    // If filter empties (e.g. only "off" supported) fall back to canonical to avoid empty slider
-    return levels.length ? levels : CANONICAL_LEVELS;
 }
 
 type ModelSelectorProps = {
     models?: ModelInfo[];
-    value?: string; // "provider/id" — e.g. "anthropic/claude-sonnet-4-20250514" or bare id for legacy
-    thinkingLevel?: string; // ThinkingLevel | "off"
+    value?: string;
+    thinkingLevel?: string;
     onSelect?: (provider: string, id: string) => void | Promise<void>;
     onThinkingChange?: (level: ThinkingLevel) => void | Promise<void>;
     disabled?: boolean;
@@ -137,18 +122,14 @@ type ModelSelectorProps = {
 export const ModelSelector = memo(function ModelSelector({
     models,
     value,
-    thinkingLevel,
     onSelect,
-    onThinkingChange,
     disabled,
     loading,
     error,
     isStreaming,
 }: ModelSelectorProps) {
     const list = models ?? [];
-    // Derive selected model from value — support both "provider/id" and bare "id"
-    // If value refers to a model not in the available list (e.g. legacy/unavailable), keep a synthetic
-    // so the pill still shows the actual active model instead of falling back to list[0].
+
     const selected = useMemo(() => {
         if (!value) return list[0] ?? null;
         const parsed = parseModelKey(value);
@@ -157,7 +138,6 @@ export const ModelSelector = memo(function ModelSelector({
                 (m) => m.provider === parsed.provider && m.id === parsed.id,
             );
             if (found) return found;
-            // synthetic for unavailable/legacy model
             return {
                 provider: parsed.provider,
                 id: parsed.id,
@@ -171,7 +151,6 @@ export const ModelSelector = memo(function ModelSelector({
                 thinkingLevelMap: null,
             } as ModelInfo;
         }
-        // legacy: bare id
         const byId = list.find((m) => m.id === value);
         if (byId) return byId;
         if (value) {
@@ -192,47 +171,37 @@ export const ModelSelector = memo(function ModelSelector({
     }, [list, value]);
 
     const selectedKey = selected ? modelKey(selected) : (value ?? "");
-    // Thinking effort is controlled by parent when provided, else local fallback only for unauthed/loading state
-    const [localEffort, setLocalEffort] = useState<ThinkingLevel>("medium");
-    const effortRaw = (thinkingLevel as ThinkingLevel | undefined) ?? localEffort;
-    // Normalize to canonical — if server sends "off" treat as minimal for slider position but keep label
-    const effortForSlider = (
-        CANONICAL_LEVELS.includes(effortRaw as ThinkingLevel) ? effortRaw : "medium"
-    ) as ThinkingLevel;
 
     const [query, setQuery] = useState("");
     const [activeCategory, setActiveCategory] = useState<string>("all");
+    const [favorites, setFavorites] = useState<string[]>(() => loadFavorites());
+    const [activeIdx, setActiveIdx] = useState(0);
+
+    useEffect(() => {
+        try {
+            localStorage.setItem(FAVORITES_KEY, JSON.stringify(favorites));
+        } catch {}
+    }, [favorites]);
+
+    const toggleFavorite = useCallback((key: string) => {
+        setFavorites((prev) =>
+            prev.includes(key) ? prev.filter((k) => k !== key) : [...prev, key],
+        );
+    }, []);
+
+    const theme = useEffectiveTheme();
 
     const providerIds = useMemo(
         () => [...new Set(list.map((m) => m.provider))].sort(),
         [list],
     );
 
-    const theme = useEffectiveTheme();
-
-    const categories = useMemo(() => {
-        const cats: Array<{
-            id: string;
-            label: string;
-            icon?: typeof StarIcon;
-            iconUrl?: string;
-        }> = [{ id: "all", label: "All", icon: ListBulletIcon }];
-        for (const pid of providerIds) {
-            const url = providerIconUrl(pid, theme);
-            if (url) cats.push({ id: pid, label: prettyProvider(pid), iconUrl: url });
-            else
-                cats.push({
-                    id: pid,
-                    label: prettyProvider(pid),
-                    icon: PROVIDER_ICONS[pid] ?? StarIcon,
-                });
-        }
-        return cats;
-    }, [providerIds, theme]);
-
     const filtered = useMemo(() => {
         let out = list;
-        if (activeCategory !== "all") {
+        if (activeCategory === "favorites") {
+            const fav = new Set(favorites);
+            out = out.filter((m) => fav.has(modelKey(m)));
+        } else if (activeCategory !== "all") {
             out = out.filter((m) => m.provider === activeCategory);
         }
         if (query.trim()) {
@@ -245,29 +214,11 @@ export const ModelSelector = memo(function ModelSelector({
             );
         }
         return out;
-    }, [list, query, activeCategory]);
+    }, [list, query, activeCategory, favorites]);
 
-    const activeCategoryLabel =
-        activeCategory === "all" ? "All Models" : prettyProvider(activeCategory);
-
-    // Gap B: only levels supported by the CURRENT model are shown in the slider
-    const availableLevels = useMemo(
-        () => availableLevelsFor(selected ?? undefined),
-        [selected],
-    );
-    const effortIdx = Math.max(
-        0,
-        availableLevels.indexOf(effortForSlider as ThinkingLevel),
-    );
-    // If current effort not in available, clamp to nearest (fallback to middle)
-    const clampedIdx = availableLevels.includes(effortForSlider as ThinkingLevel)
-        ? effortIdx
-        : Math.floor(availableLevels.length / 2);
-    const clampedEffort = availableLevels[clampedIdx] ?? "medium";
-    const pct =
-        availableLevels.length <= 1
-            ? 100
-            : (clampedIdx / (availableLevels.length - 1)) * 100;
+    useEffect(() => {
+        setActiveIdx(0);
+    }, [query, activeCategory]);
 
     const handleSelect = useCallback(
         async (m: ModelInfo) => {
@@ -278,264 +229,277 @@ export const ModelSelector = memo(function ModelSelector({
         [disabled, isStreaming, onSelect],
     );
 
-    const handleThinkingChange = useCallback(
-        async (level: ThinkingLevel) => {
-            if (disabled || isStreaming) return;
-            if (onThinkingChange) await onThinkingChange(level);
-            else setLocalEffort(level);
-        },
-        [disabled, isStreaming, onThinkingChange],
-    );
     const handleQueryChange = useCallback(
         (e: React.ChangeEvent<HTMLInputElement>) => setQuery(e.target.value),
         [],
     );
-    const handleClearQuery = useCallback(() => setQuery(""), []);
+
+    // Arrow / Enter navigation while the popover is open
+    const handleKeyDown = useCallback(
+        (e: React.KeyboardEvent) => {
+            if (e.key === "ArrowDown") {
+                e.preventDefault();
+                setActiveIdx((i) => Math.min(i + 1, Math.max(0, filtered.length - 1)));
+            } else if (e.key === "ArrowUp") {
+                e.preventDefault();
+                setActiveIdx((i) => Math.max(i - 1, 0));
+            } else if (e.key === "Enter") {
+                const target = filtered[activeIdx];
+                if (target) {
+                    e.preventDefault();
+                    void handleSelect(target);
+                }
+            }
+        },
+        [filtered, activeIdx, handleSelect],
+    );
 
     const isDisabled = !!disabled || !!isStreaming;
 
+    const railBtn = (isActive: boolean) =>
+        `group relative grid size-11 place-items-center rounded-lg ${
+            isActive
+                ? "text-phi-text-primary"
+                : "text-phi-text-muted hover:bg-phi-overlay hover:text-phi-text-secondary"
+        }`;
+
+    const railIndicator = (
+        <span className="absolute right-0 top-1/2 h-6 w-[3px] -translate-y-1/2 rounded-full bg-[#2f81f7]" />
+    );
+
     return (
         <Popover className="relative">
-            <>
-                <PopoverTrigger
-                    disabled={isDisabled}
-                    className="group inline-flex max-w-full min-w-0 items-center gap-1.5 rounded-md px-1.5 py-1 text-left text-phi-text-secondary transition-colors hover:bg-phi-overlay-hover hover:text-phi-text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-phi-accent/40 disabled:pointer-events-none disabled:opacity-60"
-                    aria-label={
-                        selected
-                            ? `Change model, currently ${selected.provider}/${selected.id}`
-                            : "Change model"
-                    }
-                >
-                    {!loading && selected && (
-                        <ProviderImg
-                            provider={selected.provider}
-                            size={14}
-                            className="shrink-0 text-phi-text-secondary"
-                        />
-                    )}
-                    <span className="min-w-0 truncate text-[12.5px] font-medium">
-                        {loading
-                            ? "Loading models…"
-                            : (selected?.name ??
-                                (list.length === 0 ? "No models" : "Select model"))}
-                    </span>
-                    <span className="shrink-0 text-[11px] font-normal text-phi-text-muted/60">
-                        {clampedEffort}
-                    </span>
-                    <ChevronDownIcon className="size-3.5 shrink-0 text-phi-text-muted transition-transform group-data-open:rotate-180" />
-                </PopoverTrigger>
-
-                <PopoverContent
-                    anchor={{ to: "top start", gap: 12 }}
-                    className="h-[360px] w-[500px] overflow-hidden"
-                >
-                    <div className="flex h-full flex-col">
-                        {/* search header — plain, part of popover */}
-                        <div className="flex items-center gap-2 px-3 pt-3 pb-2">
-                            <MagnifyingGlassIcon className="size-3.5 shrink-0 text-phi-text-muted" />
-                            <input
-                                autoFocus
-                                value={query}
-                                onChange={handleQueryChange}
-                                placeholder="Search models..."
-                                className="w-full bg-transparent text-[13px] text-phi-text-primary placeholder:text-phi-text-muted focus:outline-none"
+            {({ open }: { open: boolean }) => (
+                <>
+                    <PopoverTrigger
+                        disabled={isDisabled}
+                        className="group inline-flex max-w-full min-w-0 items-center gap-1.5 rounded-md px-1.5 py-1 text-left text-phi-text-secondary transition-colors hover:bg-phi-overlay-hover hover:text-phi-text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-phi-accent/40 disabled:pointer-events-none disabled:opacity-60"
+                        aria-label={
+                            selected
+                                ? `Change model, currently ${selected.provider}/${selected.id}`
+                                : "Change model"
+                        }
+                    >
+                        {!loading && selected && (
+                            <ProviderImg
+                                provider={selected.provider}
+                                size={14}
+                                className="shrink-0 text-phi-text-secondary"
                             />
-                            {query && (
-                                <button
-                                    onClick={handleClearQuery}
-                                    className="text-[11px] text-phi-text-muted hover:text-phi-text-secondary"
-                                >
-                                    Clear
-                                </button>
-                            )}
-                        </div>
-
-                        {error && (
-                            <div className="mx-3 mb-2 rounded-md border border-phi-error-border bg-phi-error-bg px-2.5 py-1.5 text-[11.5px] leading-snug text-phi-error-text">
-                                {error}
-                            </div>
                         )}
-                        {!loading && !error && list.length === 0 && (
-                            <div className="mx-3 mb-2 rounded-md border border-phi-warning-border bg-phi-warning-bg px-2.5 py-2 text-[11.5px] leading-snug text-phi-warning-text">
-                                No models available — check auth (run{" "}
-                                <code className="rounded bg-phi-overlay px-1 py-0.5">pi auth</code>
-                                ) or add an API key for your provider. The selector will
-                                populate after auth.
-                            </div>
-                        )}
+                        <span className="min-w-0 truncate text-[12.5px] font-medium">
+                            {loading
+                                ? "Loading models…"
+                                : (selected?.name ??
+                                    (list.length === 0 ? "No models" : "Select model"))}
+                        </span>
+                        <ChevronDownIcon className="size-3.5 shrink-0 text-phi-text-muted transition-transform group-data-open:rotate-180" />
+                    </PopoverTrigger>
 
-                        <div className="flex min-h-0 flex-1 overflow-hidden">
-                            {/* left provider nav — attached to popover edges */}
-                            <div className="flex w-[56px] shrink-0 flex-col items-center gap-1 self-stretch rounded-tr-2xl bg-phi-bg-sunken px-1.5 py-3">
-                                {categories.map((cat) => {
-                                    const isActive = activeCategory === cat.id;
-                                    return (
+                    <PopoverContent
+                        anchor={{ to: "top start", gap: 12 }}
+                        className="h-[360px] w-[420px] overflow-hidden"
+                    >
+                        <div
+                            className="flex h-full flex-col"
+                            onKeyDown={open ? handleKeyDown : undefined}
+                            data-model-popover={open ? "open" : "closed"}
+                        >
+                            <div className="flex min-h-0 flex-1 flex-col">
+                                {/* header — star cell + search share one separator so they line up */}
+                                <div className="flex shrink-0 items-stretch border-b border-phi-border-faint">
+                                    <div className="flex h-[52px] w-[54px] shrink-0 items-center justify-center border-r border-phi-border-faint">
                                         <button
-                                            key={cat.id}
-                                            onClick={() => setActiveCategory(cat.id)}
-                                            aria-label={cat.label}
-                                            title={cat.label}
-                                            className={`group relative grid size-10 place-items-center ${isActive
-                                                    ? "text-phi-text-primary"
-                                                    : "text-phi-text-muted hover:text-phi-text-secondary"
-                                                }`}
-                                        >
-                                            {isActive && (
-                                                <span className="absolute -right-1.5 top-1/2 h-5 w-0.5 -translate-y-1/2 rounded-full bg-phi-accent" />
-                                            )}
-                                            {cat.iconUrl ? (
-                                                <img
-                                                    src={cat.iconUrl}
-                                                    alt=""
-                                                    width={20}
-                                                    height={20}
-                                                    className={`size-5 object-contain ${isActive ? "" : "opacity-80"}`}
-                                                    draggable={false}
-                                                />
-                                            ) : cat.icon ? (
-                                                <cat.icon className="size-5" />
-                                            ) : null}
-                                        </button>
-                                    );
-                                })}
-                            </div>
-
-                            {/* model list */}
-                            <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
-                                <div className="flex-1 overflow-y-auto p-2">
-                                    <div className="px-3 pb-2 pt-1 text-[14px] font-semibold text-phi-text-tertiary">
-                                        {activeCategoryLabel}
-                                    </div>
-                                    {loading ? (
-                                        <p className="px-3 py-10 text-center text-[13px] text-phi-text-muted">
-                                            Loading models…
-                                        </p>
-                                    ) : filtered.length === 0 ? (
-                                        <p className="px-3 py-10 text-center text-[13px] text-phi-text-muted">
-                                            No models found
-                                        </p>
-                                    ) : (
-                                        <div className="space-y-0.5">
-                                            {filtered.map((model) => {
-                                                const k = modelKey(model);
-                                                const isSelected = k === selectedKey;
-                                                const isMulti = model.input.includes("image");
-                                                return (
-                                                    <button
-                                                        key={k}
-                                                        onClick={() => handleSelect(model)}
-                                                        disabled={isDisabled}
-                                                        className={`group flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left ${isSelected
-                                                                ? "bg-phi-overlay-strong"
-                                                                : "hover:bg-phi-overlay"
-                                                            } disabled:opacity-60`}
-                                                    >
-                                                        <span className="grid shrink-0 place-items-center text-phi-text-muted">
-                                                            <ProviderImg
-                                                                provider={model.provider}
-                                                                size={26}
-                                                                className=""
-                                                            />
-                                                        </span>
-                                                        <span className="min-w-0 flex-1">
-                                                            <span className="block truncate text-[13px] font-[550] leading-none text-phi-text-primary">
-                                                                {model.name}
-                                                            </span>
-                                                            <span className="mt-1 flex items-center gap-1 truncate text-[11.5px] leading-none text-phi-text-muted">
-                                                                <span className="inline-flex items-center gap-0.5">
-                                                                    {formatCost(model.cost.input)}{" "}
-                                                                    <ArrowDownIcon className="size-[11px] shrink-0" />
-                                                                </span>
-                                                                <span className="opacity-60">-</span>
-                                                                <span className="inline-flex items-center gap-0.5">
-                                                                    {formatCost(model.cost.output)}{" "}
-                                                                    <ArrowUpIcon className="size-[11px] shrink-0" />
-                                                                </span>
-                                                                {isMulti && (
-                                                                    <EyeIcon
-                                                                        className="size-[11px] shrink-0"
-                                                                        aria-label="Multimodal"
-                                                                    />
-                                                                )}
-                                                            </span>
-                                                        </span>
-                                                    </button>
-                                                );
-                                            })}
-                                        </div>
-                                    )}
-                                </div>
-
-                                {/* thinking effort — bottom left, attached to provider rail */}
-                                <div className="flex justify-start">
-                                    <div className="w-[210px] shrink-0 rounded-tr-2xl bg-phi-bg-sunken px-3 pb-3 pr-4 pt-2.5">
-                                    <div className="mb-2 flex items-center justify-between">
-                                        <span className="text-[11px] font-medium tracking-wide text-phi-text-muted">
-                                            Thinking effort
-                                        </span>
-                                        <span
-                                            className="text-[11px] font-medium transition-colors duration-300"
-                                            style={{
-                                                color:
-                                                    THINKING_COLORS[clampedEffort as ThinkingLevel] ??
-                                                    "var(--color-phi-text-muted)",
-                                            }}
-                                        >
-                                            {clampedEffort}
-                                        </span>
-                                    </div>
-
-                                    <div className="relative flex h-[18px] items-center">
-                                        <div className="h-[18px] w-full overflow-hidden rounded-full bg-phi-overlay">
-                                            <div
-                                                className="h-full rounded-full transition-all duration-300 ease-out"
-                                                style={{
-                                                    // Keep a 2px wrap on every side, including at both endpoints.
-                                                    width: `calc(${pct}% + ${18 - pct * 0.18}px)`,
-                                                    backgroundColor:
-                                                        THINKING_COLORS[clampedEffort as ThinkingLevel] ??
-                                                        "var(--color-phi-text-muted)",
-                                                }}
-                                            />
-                                        </div>
-                                        <input
-                                            type="range"
-                                            min={0}
-                                            max={Math.max(0, availableLevels.length - 1)}
-                                            step={1}
-                                            value={clampedIdx}
-                                            onChange={(e) =>
-                                                handleThinkingChange(
-                                                    availableLevels[Number(e.target.value)],
+                                            onClick={() =>
+                                                setActiveCategory((c) =>
+                                                    c === "favorites" ? "all" : "favorites",
                                                 )
                                             }
-                                            disabled={isDisabled || availableLevels.length <= 1}
-                                            className="absolute inset-x-[2px] top-1/2 z-10 h-[18px] w-auto -translate-y-1/2 cursor-pointer appearance-none bg-transparent disabled:cursor-not-allowed disabled:opacity-30 [&::-webkit-slider-thumb]:h-3.5 [&::-webkit-slider-thumb]:w-3.5 [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-transparent [&::-moz-range-thumb]:h-3.5 [&::-moz-range-thumb]:w-3.5 [&::-moz-range-thumb]:rounded-full [&::-moz-range-thumb]:border-0 [&::-moz-range-thumb]:bg-transparent"
-                                            aria-label="Thinking effort"
-                                        />
-                                        <span
-                                            aria-hidden="true"
-                                            className="pointer-events-none absolute top-1/2 z-0 size-3.5 -translate-x-1/2 -translate-y-1/2 rounded-full bg-phi-white shadow-[0_1px_4px_var(--color-phi-shadow)] transition-[left] duration-300 ease-out"
-                                            style={{ left: `calc(${pct}% + ${9 - pct * 0.18}px)` }}
+                                            aria-label="Favorite models"
+                                            title="Favorites"
+                                            className={railBtn(activeCategory === "favorites")}
+                                        >
+                                            {activeCategory === "favorites" && railIndicator}
+                                            <StarIcon className={`size-5 ${activeCategory === "favorites" ? "text-[#f0b429]" : ""}`} />
+                                        </button>
+                                    </div>
+                                    <div className="flex min-w-0 flex-1 items-center gap-2 px-3.5">
+                                        <MagnifyingGlassIcon className="size-4 shrink-0 text-phi-text-tertiary" />
+                                        <input
+                                            autoFocus
+                                            value={query}
+                                            onChange={handleQueryChange}
+                                            placeholder="Search models..."
+                                            className="h-full w-full bg-transparent text-[14px] text-phi-text-primary placeholder:text-phi-text-muted focus:outline-none"
                                         />
                                     </div>
-                                    {availableLevels.length <= 1 && (
-                                        <p className="mt-1.5 text-[10px] leading-none text-phi-text-muted/70">
-                                            Single effort — model default
-                                        </p>
-                                    )}
-                                    {isStreaming && (
-                                        <p className="mt-1.5 text-[10px] leading-none text-phi-text-muted/70">
-                                            Locked while streaming
-                                        </p>
-                                    )}
+                                </div>
+                                <div className="flex min-h-0 flex-1 items-stretch">
+                                {/* provider rail */}
+                                <div className="flex w-[54px] shrink-0 flex-col items-center border-r border-phi-border-faint py-2">
+                                    <div className="flex flex-1 flex-col items-center gap-1 overflow-x-hidden overflow-y-auto">
+                                        {providerIds.map((pid) => {
+                                            const isActive = activeCategory === pid;
+                                            const url = providerIconUrl(pid, theme);
+                                            const Icon = PROVIDER_ICONS[pid] ?? StarIcon;
+                                            return (
+                                                <button
+                                                    key={pid}
+                                                    onClick={() =>
+                                                        setActiveCategory((c) =>
+                                                            c === pid ? "all" : pid,
+                                                        )
+                                                    }
+                                                    aria-label={prettyProvider(pid)}
+                                                    title={prettyProvider(pid)}
+                                                    className={railBtn(isActive)}
+                                                >
+                                                    {isActive && railIndicator}
+                                                    {url ? (
+                                                        <img
+                                                            src={url}
+                                                            alt=""
+                                                            width={22}
+                                                            height={22}
+                                                            className="size-[22px] object-contain"
+                                                            draggable={false}
+                                                        />
+                                                    ) : (
+                                                        <Icon className="size-[22px]" />
+                                                    )}
+                                                </button>
+                                            );
+                                        })}
                                     </div>
+                                </div>
+
+                                {/* main column */}
+                                <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
+                                    {error && (
+                                        <div className="mx-3.5 mb-2 mt-2 rounded-md border border-phi-error-border bg-phi-error-bg px-2.5 py-1.5 text-[11.5px] leading-snug text-phi-error-text">
+                                            {error}
+                                        </div>
+                                    )}
+                                    {!loading && !error && list.length === 0 && (
+                                        <div className="mx-3.5 mb-2 mt-2 rounded-md border border-phi-warning-border bg-phi-warning-bg px-2.5 py-2 text-[11.5px] leading-snug text-phi-warning-text">
+                                            No models available — check auth (run{" "}
+                                            <code className="rounded bg-phi-overlay px-1 py-0.5">
+                                                pi auth
+                                            </code>
+                                            ) or add an API key for your provider.
+                                        </div>
+                                    )}
+
+                                    <div className="min-h-0 flex-1 overflow-y-auto px-2.5 py-2">
+                                        {loading ? (
+                                            <p className="px-3 py-10 text-center text-[13px] text-phi-text-muted">
+                                                Loading models…
+                                            </p>
+                                        ) : filtered.length === 0 ? (
+                                            <p className="px-3 py-10 text-center text-[13px] text-phi-text-muted">
+                                                {activeCategory === "favorites"
+                                                    ? "No favorites yet."
+                                                    : "No models found"}
+                                            </p>
+                                        ) : (
+                                            <div className="space-y-1">
+                                                {filtered.map((model, idx) => {
+                                                    const k = modelKey(model);
+                                                    const isSelected = k === selectedKey;
+                                                    const isActive = idx === activeIdx;
+                                                    const isFav = favorites.includes(k);
+                                                    return (
+                                                        <button
+                                                            key={k}
+                                                            onClick={() => handleSelect(model)}
+                                                            onMouseEnter={() => setActiveIdx(idx)}
+                                                            disabled={isDisabled}
+                                                            className={`group flex w-full items-center justify-between gap-3 rounded-xl px-3.5 py-2.5 text-left disabled:opacity-60 ${
+                                                                isSelected || isActive
+                                                                    ? "bg-phi-overlay-strong"
+                                                                    : "hover:bg-phi-overlay"
+                                                            }`}
+                                                        >
+                                                            <span className="min-w-0 flex-1">
+                                                                <span className="block truncate text-[15px] font-semibold leading-tight text-phi-text-primary">
+                                                                    {model.name}
+                                                                </span>
+                                                                <span className="mt-1 flex min-w-0 items-center gap-1.5 truncate text-[12.5px] leading-none text-phi-text-tertiary">
+                                                                    <ProviderImg
+                                                                        provider={model.provider}
+                                                                        size={13}
+                                                                        className="shrink-0"
+                                                                    />
+                                                                    <span className="truncate">
+                                                                        {prettyProvider(
+                                                                            model.provider,
+                                                                        )}
+                                                                    </span>
+                                                                    <span>
+                                                                        ·
+                                                                    </span>
+                                                                    <span className="inline-flex shrink-0 items-center gap-0.5">
+                                                                        {formatCost(
+                                                                            model.cost.input,
+                                                                        )}{" "}
+                                                                        <ArrowDownIcon className="size-[11px]" />
+                                                                    </span>
+                                                                    <span>
+                                                                        ·
+                                                                    </span>
+                                                                    <span className="inline-flex shrink-0 items-center gap-0.5">
+                                                                        {formatCost(
+                                                                            model.cost.output,
+                                                                        )}{" "}
+                                                                        <ArrowUpIcon className="size-[11px]" />
+                                                                    </span>
+                                                                </span>
+                                                            </span>
+                                                            <span className="flex shrink-0 items-center">
+                                                                <span
+                                                                    role="button"
+                                                                    tabIndex={-1}
+                                                                    aria-label={
+                                                                        isFav
+                                                                            ? "Remove from favorites"
+                                                                            : "Add to favorites"
+                                                                    }
+                                                                    onClick={(e) => {
+                                                                        e.stopPropagation();
+                                                                        toggleFavorite(k);
+                                                                    }}
+                                                                    onKeyDown={(e) => {
+                                                                        if (
+                                                                            e.key === "Enter" ||
+                                                                            e.key === " "
+                                                                        ) {
+                                                                            e.stopPropagation();
+                                                                            e.preventDefault();
+                                                                            toggleFavorite(k);
+                                                                        }
+                                                                    }}
+                                                                    className="grid shrink-0 place-items-center rounded p-0.5"
+                                                                >
+                                                                    {isFav ? (
+                                                                        <StarIcon className="size-4 text-[#f0b429]" />
+                                                                    ) : (
+                                                                        <StarOutlineIcon className="size-4 text-phi-text-tertiary" />
+                                                                    )}
+                                                                </span>
+                                                            </span>
+                                                        </button>
+                                                    );
+                                                })}
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
                                 </div>
                             </div>
                         </div>
-                    </div>
-                </PopoverContent>
-            </>
+                    </PopoverContent>
+                </>
+            )}
         </Popover>
     );
 });

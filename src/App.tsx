@@ -3,6 +3,7 @@ import { StickToBottom, useStickToBottomContext } from "use-stick-to-bottom";
 import { Composer } from "./components/composer";
 import { DirectoryPicker } from "./components/directory-picker";
 import { ModelSelector } from "./components/model-selector";
+import { ThinkingEffortSelector } from "./components/thinking-effort";
 import { Conversation } from "./components/conversation/conversation";
 import { Streaming } from "./components/conversation/streaming";
 import { Sidebar } from "./components/sidebar";
@@ -748,6 +749,7 @@ export default function App() {
                                                 <DirectoryPicker cwd={(newChatCwd ?? homeCwd) || null} homeCwd={homeCwd} projects={sessions.groups.map(({ cwd, displayCwd }) => ({ cwd, displayCwd }))} onChange={setNewChatCwd} disabled={chat.isStreaming || (chat.activeFile ? compaction.isCompacting(chat.activeFile) : false)} />
                                             )}
                                             <ModelSelector models={models.models} value={selectedModelKey} thinkingLevel={thinkingLevel} onSelect={handleSelectModel} onThinkingChange={handleThinkingChange} disabled={chat.isStreaming || (chat.activeFile ? compaction.isCompacting(chat.activeFile) : false)} isStreaming={chat.isStreaming} loading={models.loading} error={models.error} />
+                                            <ThinkingEffortSelector models={models.models} modelKey={selectedModelKey} value={thinkingLevel} onChange={handleThinkingChange} disabled={chat.isStreaming || (chat.activeFile ? compaction.isCompacting(chat.activeFile) : false)} />
                                         </div>
                                         {(() => {
                                             const cFile = chat.activeFile;
