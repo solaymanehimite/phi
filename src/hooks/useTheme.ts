@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState, useSyncExternalStore } from "react";
 
 export type Theme = "light" | "dark" | "system";
 
@@ -28,6 +28,44 @@ function applyTheme(theme: Theme) {
     m.setAttribute("content", eff === "light" ? "#ffffff" : "#08080a");
   }
   try { localStorage.setItem(STORAGE_KEY, theme); } catch {}
+}
+
+function subscribeToEffectiveTheme(listener: () => void) {
+  if (typeof document !== "undefined") {
+    const observer = new MutationObserver((mutations) => {
+      if (mutations.some((m) => m.attributeName === "data-theme")) listener();
+    });
+    observer.observe(document.documentElement, {
+      attributes: true,
+      attributeFilter: ["data-theme"],
+    });
+    const onStorage = (e: StorageEvent) => {
+      if (e.key === STORAGE_KEY) listener();
+    };
+    window.addEventListener("storage", onStorage);
+    const media = window.matchMedia?.("(prefers-color-scheme: light)");
+    const onMedia = () => listener();
+    media?.addEventListener?.("change", onMedia);
+    return () => {
+      observer.disconnect();
+      window.removeEventListener("storage", onStorage);
+      media?.removeEventListener?.("change", onMedia);
+    };
+  }
+  return () => {};
+}
+
+function getEffectiveSnapshot(): "light" | "dark" {
+  return getEffectiveTheme(getStoredTheme());
+}
+
+/** Re-renders the caller whenever the resolved light/dark theme changes. */
+export function useEffectiveTheme(): "light" | "dark" {
+  return useSyncExternalStore(
+    subscribeToEffectiveTheme,
+    getEffectiveSnapshot,
+    () => "dark" as const,
+  );
 }
 
 export function useTheme() {

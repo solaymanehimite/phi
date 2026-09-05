@@ -13,9 +13,10 @@ import {
     SparklesIcon,
     StarIcon,
 } from "@heroicons/react/24/solid";
-import opencodeUrl from "../assets/opencode.svg";
 import { Popover, PopoverContent, PopoverTrigger } from "./ui/popover";
 import type { ModelInfo, ThinkingLevel } from "../types/session";
+import { useEffectiveTheme } from "../hooks/useTheme";
+import { providerIconUrl } from "../lib/themed-assets";
 
 // Canonical order — matches pi-ai ThinkingLevel union, used for the slider
 const CANONICAL_LEVELS: ThinkingLevel[] = [
@@ -47,9 +48,7 @@ const PROVIDER_ICONS: Record<string, typeof StarIcon> = {
     "kimi-coding": MapIcon,
 };
 
-const PROVIDER_ICON_URLS: Record<string, string> = {
-    opencode: opencodeUrl,
-};
+
 
 function prettyProvider(id: string): string {
     const normalized = id.toLowerCase();
@@ -73,7 +72,8 @@ function ProviderImg({
     size?: number;
     className?: string;
 }) {
-    const url = PROVIDER_ICON_URLS[provider];
+    const theme = useEffectiveTheme();
+    const url = providerIconUrl(provider, theme);
     const Icon = PROVIDER_ICONS[provider] ?? StarIcon;
     if (url) {
         return (
@@ -208,6 +208,8 @@ export const ModelSelector = memo(function ModelSelector({
         [list],
     );
 
+    const theme = useEffectiveTheme();
+
     const categories = useMemo(() => {
         const cats: Array<{
             id: string;
@@ -216,7 +218,7 @@ export const ModelSelector = memo(function ModelSelector({
             iconUrl?: string;
         }> = [{ id: "all", label: "All", icon: ListBulletIcon }];
         for (const pid of providerIds) {
-            const url = PROVIDER_ICON_URLS[pid];
+            const url = providerIconUrl(pid, theme);
             if (url) cats.push({ id: pid, label: prettyProvider(pid), iconUrl: url });
             else
                 cats.push({
@@ -226,7 +228,7 @@ export const ModelSelector = memo(function ModelSelector({
                 });
         }
         return cats;
-    }, [providerIds]);
+    }, [providerIds, theme]);
 
     const filtered = useMemo(() => {
         let out = list;
@@ -373,9 +375,9 @@ export const ModelSelector = memo(function ModelSelector({
                                             onClick={() => setActiveCategory(cat.id)}
                                             aria-label={cat.label}
                                             title={cat.label}
-                                            className={`group relative grid size-8 place-items-center rounded-xl ${isActive
-                                                    ? "bg-phi-overlay-strong text-phi-text-primary"
-                                                    : "text-phi-text-muted hover:bg-phi-overlay hover:text-phi-text-secondary"
+                                            className={`group relative grid size-10 place-items-center ${isActive
+                                                    ? "text-phi-text-primary"
+                                                    : "text-phi-text-muted hover:text-phi-text-secondary"
                                                 }`}
                                         >
                                             {isActive && (
@@ -385,13 +387,13 @@ export const ModelSelector = memo(function ModelSelector({
                                                 <img
                                                     src={cat.iconUrl}
                                                     alt=""
-                                                    width={16}
-                                                    height={16}
-                                                    className={`size-4 object-contain ${isActive ? "" : "opacity-80"}`}
+                                                    width={20}
+                                                    height={20}
+                                                    className={`size-5 object-contain ${isActive ? "" : "opacity-80"}`}
                                                     draggable={false}
                                                 />
                                             ) : cat.icon ? (
-                                                <cat.icon className="size-4" />
+                                                <cat.icon className="size-5" />
                                             ) : null}
                                         </button>
                                     );
@@ -399,8 +401,8 @@ export const ModelSelector = memo(function ModelSelector({
                             </div>
 
                             {/* model list */}
-                            <div className="relative flex min-w-0 flex-1 flex-col overflow-hidden">
-                                <div className="flex-1 overflow-y-auto p-2 pb-20">
+                            <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
+                                <div className="flex-1 overflow-y-auto p-2">
                                     <div className="px-3 pb-2 pt-1 text-[14px] font-semibold text-phi-text-tertiary">
                                         {activeCategoryLabel}
                                     </div>
@@ -428,10 +430,10 @@ export const ModelSelector = memo(function ModelSelector({
                                                                 : "hover:bg-phi-overlay"
                                                             } disabled:opacity-60`}
                                                     >
-                                                        <span className="grid size-7 shrink-0 place-items-center rounded-lg bg-phi-overlay text-phi-text-muted group-[.bg-phi-overlay-strong]:bg-phi-bg-surface">
+                                                        <span className="grid shrink-0 place-items-center text-phi-text-muted">
                                                             <ProviderImg
                                                                 provider={model.provider}
-                                                                size={14}
+                                                                size={26}
                                                                 className=""
                                                             />
                                                         </span>
@@ -464,8 +466,9 @@ export const ModelSelector = memo(function ModelSelector({
                                     )}
                                 </div>
 
-                                {/* sticky thinking effort — bottom right, attached like provider rail */}
-                                <div className="pointer-events-auto absolute bottom-0 right-0 w-[210px] rounded-tl-2xl bg-phi-bg-sunken px-3 pb-3 pr-4 pt-2.5">
+                                {/* thinking effort — bottom left, attached to provider rail */}
+                                <div className="flex justify-start">
+                                    <div className="w-[210px] shrink-0 rounded-tr-2xl bg-phi-bg-sunken px-3 pb-3 pr-4 pt-2.5">
                                     <div className="mb-2 flex items-center justify-between">
                                         <span className="text-[11px] font-medium tracking-wide text-phi-text-muted">
                                             Thinking effort
@@ -526,6 +529,7 @@ export const ModelSelector = memo(function ModelSelector({
                                             Locked while streaming
                                         </p>
                                     )}
+                                    </div>
                                 </div>
                             </div>
                         </div>

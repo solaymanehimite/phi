@@ -19,9 +19,9 @@ import {
 } from "./ui/dropdown-menu";
 import type { SessionGroup } from "../hooks/useSessions";
 import type { SessionInfo } from "../types/session";
-// @ts-ignore - svgr import
-import PhiLogo from "../../public/logo.svg?react";
 import { useHasDraft } from "../hooks/useHasDraft";
+import { useEffectiveTheme } from "../hooks/useTheme";
+import { brandingUrl } from "../lib/themed-assets";
 
 type SidebarProps = {
     groups: SessionGroup[];
@@ -59,6 +59,18 @@ function titleFor(s: { name?: string; firstMessage: string }): string {
     return t.length > 42 ? `${t.slice(0, 42).trim()}…` : t;
 }
 
+function BrandLogo({ className = "" }: { className?: string }) {
+    const theme = useEffectiveTheme();
+    return (
+        <img
+            src={brandingUrl("logo.svg", theme)}
+            alt="Phi"
+            className={className}
+            draggable={false}
+        />
+    );
+}
+
 export const Sidebar = memo(function Sidebar({
     groups,
     activeFile,
@@ -85,7 +97,7 @@ export const Sidebar = memo(function Sidebar({
                     onClick={onNewChat}
                     className="ml-2 mt-2 flex items-center focus-visible:outline-none"
                 >
-                    <PhiLogo className="h-5 w-auto" />
+                    <BrandLogo className="h-5 w-auto" />
                 </button>
             </div>
 

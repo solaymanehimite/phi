@@ -1,6 +1,7 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState, type ComponentType } from "react";
 import { useTheme, type Theme } from "../hooks/useTheme";
-import { ChevronLeftIcon, Cog6ToothIcon, KeyIcon, PaintBrushIcon } from "@heroicons/react/24/solid";
+import { ChevronDownIcon, ChevronLeftIcon, Cog6ToothIcon, KeyIcon } from "@heroicons/react/24/solid";
+import { Palette } from "@phosphor-icons/react";
 import { Highlight, type PrismTheme } from "prism-react-renderer";
 import { CODE_THEMES, setCodeTheme, useCodeTheme, type CodeThemeChoice, type CodeThemeId } from "./code-theme";
 import { Tabs } from "./tabs";
@@ -9,8 +10,12 @@ import { listProviders, upsertProvider, deleteProvider, testProvider, type Provi
 
 type SettingsSection = "appearance" | "providers";
 
-const sections: { id: SettingsSection; label: string; description: string; icon: typeof PaintBrushIcon }[] = [
-  { id: "appearance", label: "Appearance", description: "Theme and colors", icon: PaintBrushIcon },
+function AppearanceSectionIcon({ className }: { className?: string }) {
+  return <Palette weight="fill" className={className} />;
+}
+
+const sections: { id: SettingsSection; label: string; description: string; icon: ComponentType<{ className?: string }> }[] = [
+  { id: "appearance", label: "Appearance", description: "Theme and colors", icon: AppearanceSectionIcon },
   { id: "providers", label: "Providers / Auth", description: "Models and API keys", icon: KeyIcon },
 ];
 
@@ -50,12 +55,16 @@ export function SettingsPage({ onClose, onProvidersChanged }: { onClose: () => v
       <main className="phi-main bg-phi-bg-sidebar px-2 pb-2">
         <Tabs tabs={[{ id: section, title: active.label }]} activeId={section} onSelect={() => {}} onClose={() => {}} hideClose tablistLabel="Settings section" />
         <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border border-phi-border-subtle bg-phi-bg-main shadow-[0_8px_30px_var(--color-phi-shadow)]">
-          <header className="shrink-0 border-b border-phi-border px-6 py-5">
-            <h1 className="text-[20px] font-semibold tracking-[-0.02em] text-phi-text-primary">{active.label}</h1>
-            <p className="mt-1 text-[12px] text-phi-text-muted">{active.description}</p>
+          <header className="shrink-0 px-6 py-5">
+            <div className="mx-auto w-full max-w-3xl">
+              <h1 className="text-[20px] font-semibold tracking-[-0.02em] text-phi-text-primary">{active.label}</h1>
+              <p className="mt-1 text-[12px] text-phi-text-muted">{active.description}</p>
+            </div>
           </header>
-          <div className="min-h-0 flex-1 overflow-y-auto p-6">
-            {section === "appearance" ? <AppearanceTab /> : <ProvidersTab onChanged={onProvidersChanged} />}
+          <div className="min-h-0 flex-1 overflow-y-auto p-6 pt-1">
+            <div className="mx-auto w-full max-w-3xl">
+              {section === "appearance" ? <AppearanceTab /> : <ProvidersTab onChanged={onProvidersChanged} />}
+            </div>
           </div>
         </div>
       </main>
@@ -64,60 +73,161 @@ export function SettingsPage({ onClose, onProvidersChanged }: { onClose: () => v
 }
 
 function CodeThemeSection() {
+  const { effective } = useTheme();
   const { choice, theme: activeTheme } = useCodeTheme();
-  const options: { id: CodeThemeChoice; label: string; badge?: string; previewTheme?: PrismTheme }[] = [
-    { id: "auto", label: "Auto", badge: "Follows app", previewTheme: activeTheme },
-    ...(Object.keys(CODE_THEMES) as CodeThemeId[]).map((id) => ({
-      id,
-      label: CODE_THEMES[id].label,
-      badge: CODE_THEMES[id].mode === "dark" ? "Dark" : "Light",
-      previewTheme: CODE_THEMES[id].theme,
-    })),
+  const filtered = useMemo(
+    () => (Object.entries(CODE_THEMES) as [CodeThemeId, (typeof CODE_THEMES)[CodeThemeId]][]).filter(([, meta]) => meta.mode === effective),
+    [effective],
+  );
+  const options: { id: CodeThemeChoice; label: string }[] = [
+    { id: "auto", label: "Auto (follows app)" },
+    ...filtered.map(([id, meta]) => ({ id: id as CodeThemeChoice, label: meta.label })),
   ];
+  // Keep the select valid when the stored choice belongs to the other mode.
+  const allOptions = useMemo(() => {
+    if (choice !== "auto" && !options.some((o) => o.id === choice)) {
+      return [...options, { id: choice, label: CODE_THEMES[choice as CodeThemeId].label }];
+    }
+    return options;
+  }, [options, choice]);
+  const previewTheme: PrismTheme = choice === "auto" ? activeTheme : CODE_THEMES[choice as CodeThemeId].theme;
+  const currentLabel = choice === "auto" ? "Auto" : CODE_THEMES[choice as CodeThemeId].label;
   return (
     <div>
-      <h3 className="text-[12px] font-semibold tracking-wide text-phi-text-muted">Code theme</h3>
-      <p className="mt-1 text-[11px] text-phi-text-muted">Syntax highlighting for code blocks and file outputs.</p>
-      <div className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-3">
-        {options.map((opt) => {
-          const selected = choice === opt.id;
-          return (
-            <button
-              key={opt.id}
-              onClick={() => setCodeTheme(opt.id)}
-              aria-pressed={selected}
-              className={`overflow-hidden rounded-xl border text-left transition ${selected ? "border-phi-accent/60 ring-1 ring-phi-accent/40" : "border-phi-border hover:border-phi-border-strong"}`}
-            >
-              {opt.previewTheme && <CodeThemePreview theme={opt.previewTheme} />}
-              <div className="flex items-center justify-between bg-phi-bg-surface px-2.5 py-1.5">
-                <span className="text-[12px] font-medium text-phi-text-primary">{opt.label}</span>
-                {opt.badge && <span className="text-[10px] text-phi-text-muted">{opt.badge}</span>}
-              </div>
-            </button>
-          );
-        })}
+      <h3 className="text-[12px] font-semibold tracking-wide text-phi-text-muted">Themes</h3>
+      <p className="mt-1 text-[11px] text-phi-text-muted">
+        Showing {effective === "light" ? "light" : "dark"} code themes for the current appearance. Syntax highlighting for code blocks and file outputs.
+      </p>
+      <label className="mt-3 block">
+        <span className="mb-1 block text-[11px] font-medium text-phi-text-secondary">Code theme</span>
+        <span className="relative block">
+          <select
+            value={choice}
+            onChange={(e) => setCodeTheme(e.target.value as CodeThemeChoice)}
+            className="w-full appearance-none rounded-lg border border-phi-input-border bg-phi-input-bg py-1.5 pl-2 pr-8 text-[12px] text-phi-text-primary outline-none focus:border-phi-input-border-focus"
+          >
+            {allOptions.map((o) => (
+              <option key={o.id} value={o.id}>
+                {o.label}
+              </option>
+            ))}
+          </select>
+          <ChevronDownIcon aria-hidden className="pointer-events-none absolute right-2 top-1/2 size-3.5 -translate-y-1/2 text-phi-text-muted" />
+        </span>
+      </label>
+      <div className="mt-3 overflow-hidden rounded-2xl border border-phi-border">
+        <CodeThemePreview theme={previewTheme} />
+        <div className="flex items-center justify-between bg-phi-bg-surface px-4 py-2.5">
+          <span className="text-[13px] font-medium text-phi-text-primary">{currentLabel}</span>
+          <span className="text-[11px] text-phi-text-muted">{choice === "auto" ? "Follows app" : effective === "light" ? "Light" : "Dark"}</span>
+        </div>
       </div>
     </div>
   );
 }
 
-const CODE_THEME_SAMPLE = "const greet = (name: string): string => {\n  return `hello, ${name}!`;\n};";
+const CODE_THEME_SAMPLE = `// themed preview
+import { useState } from "react";
+
+type Status = "idle" | "loading" | "done";
+
+export function Counter({ initial = 0 }: { initial?: number }) {
+  const [count, setCount] = useState<number>(initial);
+  const status: Status = count > 10 ? "done" : "idle";
+  return <button onClick={() => setCount(count + 1)}>count: {count} ({status})</button>;
+}`;
 
 function CodeThemePreview({ theme }: { theme: PrismTheme }) {
   return (
     <Highlight theme={theme} code={CODE_THEME_SAMPLE} language="tsx">
       {({ tokens, getLineProps, getTokenProps }) => (
-        <pre className="overflow-hidden rounded-md rounded-b-none border-b border-phi-border bg-phi-bg-app p-2 font-mono text-[10px] leading-4">
+        <pre className="overflow-x-auto border-b border-phi-border bg-phi-bg-app p-4 font-mono text-[12px] leading-5">
           {tokens.map((line, i) => (
-            <div key={i} {...getLineProps({ line })} className="whitespace-pre">
+            <span key={i} {...getLineProps({ line })} className="block whitespace-pre">
               {line.map((token, key) => (
                 <span key={key} {...getTokenProps({ token })} />
               ))}
-            </div>
+            </span>
           ))}
         </pre>
       )}
     </Highlight>
+  );
+}
+
+function SchemePreview({ mode }: { mode: Theme }) {
+  if (mode === "system") {
+    return (
+      <span aria-hidden className="relative block h-[132px] w-full overflow-hidden rounded-[10px] border border-white/10">
+        <span className="absolute inset-0 flex">
+          <span className="relative h-full w-1/2 overflow-hidden bg-white">
+            <span className="absolute bottom-0 left-0 top-0 w-[38%] bg-[#e7d6f2]" />
+            <span className="absolute left-[6%] top-2 h-3 w-[26%] rounded-full bg-white/80" />
+            <span className="absolute left-[44%] right-[8%] top-6 space-y-1.5">
+              <span className="block h-2 rounded-full bg-[#3a3a3f]" />
+              <span className="block h-1.5 rounded-full bg-[#e3e3e6]" />
+              <span className="block h-1.5 w-4/5 rounded-full bg-[#e3e3e6]" />
+            </span>
+          </span>
+          <span className="relative h-full w-1/2 overflow-hidden bg-black">
+            <span className="absolute bottom-0 left-0 top-0 w-[38%] border-r border-white/10 bg-[#101014]" />
+            <span className="absolute left-[44%] right-[30%] top-6 space-y-1.5">
+              <span className="block h-2 rounded-full bg-[#3a3a3f]" />
+              <span className="block h-1.5 rounded-full bg-[#2c2c31]" />
+              <span className="block h-1.5 w-4/5 rounded-full bg-[#2c2c31]" />
+            </span>
+            <span className="absolute right-1 top-2 w-[30%] rounded-lg border border-white/10 bg-[#17171c] p-1.5 shadow-lg">
+              <span className="block space-y-1.5">
+                <span className="flex items-center gap-1"><i className="size-1 rounded-full bg-[#34d17b]" /><i className="block h-1 flex-1 rounded-full bg-[#3a3a3f]" /></span>
+                <span className="flex items-center gap-1"><i className="size-1 rounded-full bg-[#7b7bff]" /><i className="block h-1 flex-1 rounded-full bg-[#3a3a3f]" /></span>
+                <span className="flex items-center gap-1"><i className="size-1 rounded-full bg-[#e0a100]" /><i className="block h-1 flex-1 rounded-full bg-[#3a3a3f]" /></span>
+              </span>
+            </span>
+          </span>
+        </span>
+        <span className="absolute inset-x-[6%] bottom-2 flex h-6 items-center rounded-full border border-white/10 bg-white px-1.5">
+          <span className="h-1.5 flex-1 rounded-full bg-[#e3e3e6]" />
+          <span className="absolute inset-y-0 right-0 w-1/2 rounded-r-full bg-[#0c0c0f]" />
+          <span className="absolute bottom-1 left-[8%] top-1 w-[38%] rounded-full bg-[#ececf0]" />
+          <span className="absolute right-1.5 size-3.5 rounded-full bg-[#8b9bff]" />
+        </span>
+      </span>
+    );
+  }
+  const light = mode === "light";
+  return (
+    <span aria-hidden className={`relative block h-[132px] w-full overflow-hidden rounded-[10px] border ${light ? "border-black/10 bg-white" : "border-white/10 bg-black"}`}>
+      <span className={`absolute bottom-0 left-0 top-0 w-[28%] ${light ? "bg-[#e7d6f2]" : "border-r border-white/10 bg-[#101014]"}`}>
+        <span className={`mx-2 mt-2 block h-3 rounded-full ${light ? "bg-white/80" : "border border-white/10 bg-transparent"}`} />
+        {!light && (
+          <span className="mx-2 mt-3 space-y-1.5">
+            <span className="block h-2 rounded-full bg-[#2c2c31]" />
+            <span className="block h-2 rounded-full bg-[#2c2c31]" />
+            <span className="block h-2 rounded-full bg-[#2c2c31]" />
+          </span>
+        )}
+      </span>
+      <span className="absolute left-[32%] right-[30%] top-2.5">
+        {light && <span className="mx-auto block h-3 w-2/3 rounded-full bg-[#f3c9e2]" />}
+        {!light && <span className="ml-auto block h-2.5 w-2/3 rounded-full bg-[#2e2e34]" />}
+        <span className="mt-2.5 block space-y-1.5">
+          <span className={`block h-2 rounded-full ${light ? "bg-[#e3e3e6]" : "bg-[#2e2e34]"}`} />
+          <span className={`block h-2 w-11/12 rounded-full ${light ? "bg-[#e3e3e6]" : "bg-[#2e2e34]"}`} />
+          {!light && <span className="block h-2 w-4/5 rounded-full bg-[#2e2e34]" />}
+        </span>
+      </span>
+      <span className={`absolute right-1.5 top-2.5 w-[26%] rounded-xl p-1.5 shadow-lg ${light ? "border border-black/5 bg-white" : "border border-white/10 bg-[#17171c]"}`}>
+        <span className="block space-y-1.5">
+          <span className="flex items-center gap-1"><i className={`size-1 rounded-full ${light ? "bg-[#2ebd6b]" : "bg-[#34d17b]"}`} /><i className={`block h-1 flex-1 rounded-full ${light ? "bg-[#e3e3e6]" : "bg-[#3a3a3f]"}`} /></span>
+          <span className="flex items-center gap-1"><i className={`size-1 rounded-full ${light ? "bg-[#f0428a]" : "bg-[#7b7bff]"}`} /><i className={`block h-1 flex-1 rounded-full ${light ? "bg-[#e3e3e6]" : "bg-[#3a3a3f]"}`} /></span>
+          <span className="flex items-center gap-1"><i className="size-1 rounded-full bg-[#e0a100]" /><i className={`block h-1 flex-1 rounded-full ${light ? "bg-[#e3e3e6]" : "bg-[#3a3a3f]"}`} /></span>
+        </span>
+      </span>
+      <span className={`absolute inset-x-[30%] bottom-2 flex h-6 items-center rounded-full border px-1.5 ${light ? "border-black/10 bg-white" : "border-white/10 bg-[#101014]"}`}>
+        <span className={`h-1.5 flex-1 rounded-full ${light ? "bg-[#e9e9ed]" : "bg-[#2a2a30]"}`} />
+        <span className={`ml-1 size-3.5 rounded-full ${light ? "bg-[#d81b60]" : "bg-[#8b9bff]"}`} />
+      </span>
+    </span>
   );
 }
 
@@ -150,17 +260,24 @@ function AppearanceTab() {
   return (
     <div className="space-y-6">
       <div>
-        <h3 className="text-[12px] font-semibold tracking-wide text-phi-text-muted">Theme</h3>
-        <div className="mt-2 inline-flex rounded-lg border border-phi-border bg-phi-bg-surface p-1">
-          {(["light", "dark", "system"] as Theme[]).map((t) => (
-            <button
-              key={t}
-              onClick={() => setTheme(t)}
-              className={`rounded-md px-3 py-1.5 text-[12.5px] font-medium capitalize transition ${theme === t ? "bg-phi-bg-inverse text-phi-text-inverse shadow-sm" : "text-phi-text-muted hover:text-phi-text-secondary"}`}
-            >
-              {t}
-            </button>
-          ))}
+        <h3 className="text-[12px] font-semibold tracking-wide text-phi-text-muted">Color scheme</h3>
+        <div className="mt-3 grid grid-cols-3 gap-3">
+          {(["system", "light", "dark"] as Theme[]).map((t) => {
+            const selected = theme === t;
+            const label = t === "system" ? "System" : t === "light" ? "Light" : "Dark";
+            return (
+              <span key={t} className="min-w-0">
+                <button
+                  onClick={() => setTheme(t)}
+                  aria-pressed={selected}
+                  className={`block w-full rounded-2xl border p-2 transition ${selected ? "border-[#2f7bff] ring-1 ring-[#2f7bff]" : "border-phi-border hover:border-phi-border-strong"} bg-[#101014]`}
+                >
+                  <SchemePreview mode={t} />
+                </button>
+                <span className={`mt-2 block text-center text-[13px] ${selected ? "font-medium text-phi-text-primary" : "text-phi-text-muted"}`}>{label}</span>
+              </span>
+            );
+          })}
         </div>
       </div>
 

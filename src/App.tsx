@@ -16,7 +16,8 @@ import { useCompaction } from "./hooks/useCompaction";
 import { useModels } from "./hooks/useModels";
 import { createSession, health, streamContinue } from "./lib/api";
 import { CompactionIndicator } from "./components/compaction-indicator";
-import { useTheme } from "./hooks/useTheme";
+import { useEffectiveTheme, useTheme } from "./hooks/useTheme";
+import { brandingUrl } from "./lib/themed-assets";
 import { useHealth } from "./hooks/useHealth";
 import { FatalState } from "./components/fatal";
 import { SettingsPage } from "./components/settings";
@@ -166,6 +167,7 @@ export default function App() {
     const lastCompactInstructionsRef = useRef<Record<string, string | undefined>>({});
     const models = useModels();
     useTheme();
+    const effectiveTheme = useEffectiveTheme();
     const healthHook = useHealth(3000);
     const [settingsOpen, setSettingsOpen] = useState(false);
     const [modelError, setModelError] = useState<string | null>(null);
@@ -700,7 +702,7 @@ export default function App() {
                                         <div className="mx-auto flex w-full max-w-3xl flex-1 flex-col overflow-y-auto px-6 pt-6">
                                             <div className="flex flex-1 flex-col items-center justify-center pb-16 text-center">
                                                 <img
-                                                    src="/logo_small.svg"
+                                                    src={brandingUrl("logo_small.svg", effectiveTheme)}
                                                     alt=""
                                                     aria-hidden="true"
                                                     className="phi-empty-logo"
