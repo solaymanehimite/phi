@@ -62,10 +62,23 @@ export const ThinkingEffortSelector = memo(function ThinkingEffortSelector({
     }, [value, availableLevels]);
 
     const idx = Math.max(0, availableLevels.indexOf(current));
+    const isMax = current === "max";
+    const isXhigh = current === "xhigh";
     const pct =
         availableLevels.length <= 1
             ? 100
             : (idx / (availableLevels.length - 1)) * 100;
+
+    const sparkles = useMemo(
+        () =>
+            [0, 1, 2, 3, 4, 5].map((i) => ({
+                size: 6 + Math.random() * 7,
+                rotate: Math.random() * 90,
+                y: [-3, 2, -1, 4, 0, -4][i] ?? 0,
+                delay: i * 0.45,
+            })),
+        [],
+    );
 
     const handleChange = useCallback(
         async (level: ThinkingLevel) => {
@@ -103,7 +116,7 @@ export const ThinkingEffortSelector = memo(function ThinkingEffortSelector({
                         Reasoning
                     </span>
                     <span
-                        className="text-sm font-medium capitalize"
+                        className="text-sm font-medium"
                         style={{ color: THINKING_COLORS[current] ?? "var(--color-phi-text-muted)" }}
                     >
                         {current}
@@ -113,13 +126,44 @@ export const ThinkingEffortSelector = memo(function ThinkingEffortSelector({
                 <div className="relative flex h-[26px] items-center">
                     <div className="relative h-[14px] w-full rounded bg-phi-overlay">
                         <div
-                            className="absolute left-0 top-1/2 h-[20px] -translate-y-1/2 rounded transition-[width,background-color] duration-200 ease-out"
-                            style={{
-                                width: `calc(${pct}% + ${9 - pct * 0.18}px)`,
-                                backgroundColor:
-                                    THINKING_COLORS[current] ?? "var(--color-phi-text-muted)",
-                            }}
-                        />
+                            className="absolute left-0 top-1/2 h-[20px] -translate-y-1/2 rounded transition-[width] duration-200 ease-out"
+                            style={{ width: `calc(${pct}% + ${9 - pct * 0.18}px)` }}
+                        >
+                            <div
+                                className="absolute inset-0 rounded transition-[background-color] duration-1000 ease-out"
+                                style={{
+                                    backgroundColor:
+                                        THINKING_COLORS[current] ?? "var(--color-phi-text-muted)",
+                                }}
+                            />
+                            <div
+                                aria-hidden="true"
+                                className={`phi-max-fill absolute inset-0 rounded transition-opacity duration-1000 ease-out ${isMax ? "opacity-100" : "opacity-0"}`}
+                            />
+                            <div
+                                    aria-hidden="true"
+                                    className={`pointer-events-none absolute right-[8px] top-1/2 z-[6] grid -translate-y-1/2 grid-rows-4 grid-flow-col gap-[2px] ${isXhigh ? "opacity-100 transition-opacity duration-200 ease-out" : "opacity-0"}`}
+                                >
+                                    {Array.from({ length: 32 }, (_, i) => {
+                                        const col = Math.floor(i / 4);
+                                        const maxOp = 0.15 + (col / 7) * 0.8;
+                                        return (
+                                            <span
+                                                key={i}
+                                                className="phi-pixel block size-[3px] rounded-[1px] bg-white"
+                                                style={
+                                                    {
+                                                        "--phi-px-min": (maxOp * 0.15).toFixed(2),
+                                                        "--phi-px-max": maxOp.toFixed(2),
+                                                        animationDuration: `${(0.9 + ((i * 53) % 70) / 100).toFixed(2)}s`,
+                                                        animationDelay: `${(((i * 29) % 50) / 100).toFixed(2)}s`,
+                                                    } as React.CSSProperties
+                                                }
+                                            />
+                                        );
+                                    })}
+                                </div>
+                        </div>
                     </div>
                     {availableLevels.length > 1 && (
                         <div className="pointer-events-none absolute inset-y-0 left-[9px] right-[9px] z-[5] flex items-center justify-between">
@@ -128,6 +172,33 @@ export const ThinkingEffortSelector = memo(function ThinkingEffortSelector({
                                     key={lvl}
                                     className="h-[8px] w-[3px] rounded-full bg-white/40"
                                 />
+                            ))}
+                        </div>
+                    )}
+                    {isMax && (
+                        <div
+                            aria-hidden="true"
+                            className="pointer-events-none absolute top-1/2 z-[6] h-0 w-0"
+                            style={{ left: `calc(${pct}% + ${9 - pct * 0.18}px)` }}
+                        >
+                            {sparkles.map((s, i) => (
+                                <span
+                                    key={i}
+                                    className="phi-max-dot absolute"
+                                    style={{ marginTop: s.y, animationDelay: `${s.delay}s` }}
+                                >
+                                    <svg
+                                        width={s.size}
+                                        height={s.size}
+                                        viewBox="0 0 24 24"
+                                        fill="white"
+                                        aria-hidden="true"
+                                        style={{ transform: `rotate(${s.rotate}deg)` }}
+                                        className="drop-shadow-[0_0_3px_rgba(255,255,255,0.8)]"
+                                    >
+                                        <path d="M12 0c.7 6.6 5.4 11.3 12 12-6.6.7-11.3 5.4-12 12-.7-6.6-5.4-11.3-12-12C6.6 11.3 11.3 6.6 12 0z" />
+                                    </svg>
+                                </span>
                             ))}
                         </div>
                     )}

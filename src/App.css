@@ -75,10 +75,10 @@
 
   /* Thinking — 6 */
   --color-phi-thinking-low: #7acd85;
-  --color-phi-thinking-minimal: #7a8eb5;
-  --color-phi-thinking-medium: #d6bd5e;
-  --color-phi-thinking-high: #e69a3a;
-  --color-phi-thinking-xhigh: #ef4444;
+  --color-phi-thinking-minimal: #959dad;
+  --color-phi-thinking-medium: #d1d102;
+  --color-phi-thinking-high: #e0822f;
+  --color-phi-thinking-xhigh: #eb0202;
   --color-phi-thinking-max: #c22faa;
 
   /* Shadows & scrims — semantic */
@@ -145,7 +145,7 @@ html[data-theme="light"] {
 
   --color-phi-thinking-low: #1a7a2e;
   --color-phi-thinking-minimal: #3a5a8a;
-  --color-phi-thinking-medium: #8a6d1b;
+  --color-phi-thinking-medium: #7a5e00;
   --color-phi-thinking-high: #9a5a0a;
   --color-phi-thinking-xhigh: #b91c1c;
   --color-phi-thinking-max: #9a1a7a;
@@ -213,7 +213,7 @@ html[data-theme="light"] {
 
     --color-phi-thinking-low: #1a7a2e;
     --color-phi-thinking-minimal: #3a5a8a;
-    --color-phi-thinking-medium: #8a6d1b;
+    --color-phi-thinking-medium: #7a5e00;
     --color-phi-thinking-high: #9a5a0a;
     --color-phi-thinking-xhigh: #b91c1c;
     --color-phi-thinking-max: #9a1a7a;
@@ -302,6 +302,43 @@ html[data-theme="light"] .phi-empty-logo {
 }
 @media (prefers-reduced-motion: reduce) {
   .phi-shimmer { animation: none; background: none; color: var(--color-phi-text-secondary); }
+}
+
+@keyframes phi-max-fill-flow {
+  0% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
+}
+.phi-max-fill {
+  background-image: linear-gradient(100deg, #6d28d9, #8b5cf6, #a855f7, #c084fc, #6d28d9);
+  background-size: 220% 100%;
+  animation: phi-max-fill-flow 3s ease-in-out infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .phi-max-fill { animation: none; }
+}
+
+@keyframes phi-max-dot-drift {
+  0% { transform: translate(0, -50%) scale(1); opacity: 0; }
+  6% { opacity: 0.95; }
+  100% { transform: translate(-120px, -50%) scale(0.5); opacity: 0; }
+}
+.phi-max-dot {
+  animation: phi-max-dot-drift 4s linear infinite backwards;
+}
+@media (prefers-reduced-motion: reduce) {
+  .phi-max-dot { animation: none; display: none; }
+}
+
+@keyframes phi-pixel-flicker {
+  0%, 100% { opacity: var(--phi-px-min, 0.05); }
+  50% { opacity: var(--phi-px-max, 0.9); }
+}
+.phi-pixel {
+  animation: phi-pixel-flicker 1.4s ease-in-out infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .phi-pixel { animation: none; opacity: var(--phi-px-min, 0.05); }
 }
 
 @keyframes phi-dot-matrix {
