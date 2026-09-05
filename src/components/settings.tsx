@@ -160,72 +160,50 @@ function SchemePreview({ mode }: { mode: Theme }) {
     return (
       <span aria-hidden className="relative block h-[132px] w-full overflow-hidden rounded-[10px] border border-white/10">
         <span className="absolute inset-0 flex">
-          <span className="relative h-full w-1/2 overflow-hidden bg-white">
-            <span className="absolute bottom-0 left-0 top-0 w-[38%] bg-[#e7d6f2]" />
-            <span className="absolute left-[6%] top-2 h-3 w-[26%] rounded-full bg-white/80" />
-            <span className="absolute left-[44%] right-[8%] top-6 space-y-1.5">
-              <span className="block h-2 rounded-full bg-[#3a3a3f]" />
-              <span className="block h-1.5 rounded-full bg-[#e3e3e6]" />
-              <span className="block h-1.5 w-4/5 rounded-full bg-[#e3e3e6]" />
-            </span>
-          </span>
-          <span className="relative h-full w-1/2 overflow-hidden bg-black">
-            <span className="absolute bottom-0 left-0 top-0 w-[38%] border-r border-white/10 bg-[#101014]" />
-            <span className="absolute left-[44%] right-[30%] top-6 space-y-1.5">
-              <span className="block h-2 rounded-full bg-[#3a3a3f]" />
-              <span className="block h-1.5 rounded-full bg-[#2c2c31]" />
-              <span className="block h-1.5 w-4/5 rounded-full bg-[#2c2c31]" />
-            </span>
-            <span className="absolute right-1 top-2 w-[30%] rounded-lg border border-white/10 bg-[#17171c] p-1.5 shadow-lg">
-              <span className="block space-y-1.5">
-                <span className="flex items-center gap-1"><i className="size-1 rounded-full bg-[#34d17b]" /><i className="block h-1 flex-1 rounded-full bg-[#3a3a3f]" /></span>
-                <span className="flex items-center gap-1"><i className="size-1 rounded-full bg-[#7b7bff]" /><i className="block h-1 flex-1 rounded-full bg-[#3a3a3f]" /></span>
-                <span className="flex items-center gap-1"><i className="size-1 rounded-full bg-[#e0a100]" /><i className="block h-1 flex-1 rounded-full bg-[#3a3a3f]" /></span>
-              </span>
-            </span>
-          </span>
-        </span>
-        <span className="absolute inset-x-[6%] bottom-2 flex h-6 items-center rounded-full border border-white/10 bg-white px-1.5">
-          <span className="h-1.5 flex-1 rounded-full bg-[#e3e3e6]" />
-          <span className="absolute inset-y-0 right-0 w-1/2 rounded-r-full bg-[#0c0c0f]" />
-          <span className="absolute bottom-1 left-[8%] top-1 w-[38%] rounded-full bg-[#ececf0]" />
-          <span className="absolute right-1.5 size-3.5 rounded-full bg-[#8b9bff]" />
+          <SchemePreviewPane light />
+          <SchemePreviewPane light={false} />
         </span>
       </span>
     );
   }
-  const light = mode === "light";
+
   return (
-    <span aria-hidden className={`relative block h-[132px] w-full overflow-hidden rounded-[10px] border ${light ? "border-black/10 bg-white" : "border-white/10 bg-black"}`}>
-      <span className={`absolute bottom-0 left-0 top-0 w-[28%] ${light ? "bg-[#e7d6f2]" : "border-r border-white/10 bg-[#101014]"}`}>
-        <span className={`mx-2 mt-2 block h-3 rounded-full ${light ? "bg-white/80" : "border border-white/10 bg-transparent"}`} />
-        {!light && (
-          <span className="mx-2 mt-3 space-y-1.5">
-            <span className="block h-2 rounded-full bg-[#2c2c31]" />
-            <span className="block h-2 rounded-full bg-[#2c2c31]" />
-            <span className="block h-2 rounded-full bg-[#2c2c31]" />
-          </span>
-        )}
-      </span>
-      <span className="absolute left-[32%] right-[30%] top-2.5">
-        {light && <span className="mx-auto block h-3 w-2/3 rounded-full bg-[#f3c9e2]" />}
-        {!light && <span className="ml-auto block h-2.5 w-2/3 rounded-full bg-[#2e2e34]" />}
-        <span className="mt-2.5 block space-y-1.5">
-          <span className={`block h-2 rounded-full ${light ? "bg-[#e3e3e6]" : "bg-[#2e2e34]"}`} />
-          <span className={`block h-2 w-11/12 rounded-full ${light ? "bg-[#e3e3e6]" : "bg-[#2e2e34]"}`} />
-          {!light && <span className="block h-2 w-4/5 rounded-full bg-[#2e2e34]" />}
+    <span aria-hidden className={`relative block h-[132px] w-full overflow-hidden rounded-[10px] border ${mode === "light" ? "border-black/10 bg-white" : "border-white/10 bg-black"}`}>
+      <SchemePreviewPane light={mode === "light"} />
+    </span>
+  );
+}
+
+function SchemePreviewPane({ light }: { light: boolean }) {
+  const palette = light
+    ? {
+        pane: "bg-white",
+        line: "bg-[#d9d9df]",
+        mutedLine: "bg-[#d9d9df]",
+        composer: "border-black/10 bg-white",
+        composerLine: "bg-[#e9e9ed]",
+        accent: "bg-[#c79a43]",
+      }
+    : {
+        pane: "bg-black",
+        line: "bg-[#2e2e34]",
+        mutedLine: "bg-[#2e2e34]",
+        composer: "border-white/10 bg-[#17171c]",
+        composerLine: "bg-[#2a2a30]",
+        accent: "bg-[#d6a85f]",
+      };
+
+  return (
+    <span className={`relative block h-full min-w-0 flex-1 overflow-hidden ${palette.pane}`}>
+      <span className="absolute inset-0">
+        <span className="absolute left-1/2 top-[30%] w-[62%] -translate-x-1/2 space-y-1.5">
+          <span className={`block h-1.5 rounded-full ${palette.line}`} />
+          <span className={`block h-1.5 w-4/5 rounded-full ${palette.mutedLine} opacity-70`} />
         </span>
-      </span>
-      <span className={`absolute right-1.5 top-2.5 w-[26%] rounded-xl p-1.5 shadow-lg ${light ? "border border-black/5 bg-white" : "border border-white/10 bg-[#17171c]"}`}>
-        <span className="block space-y-1.5">
-          <span className="flex items-center gap-1"><i className={`size-1 rounded-full ${light ? "bg-[#2ebd6b]" : "bg-[#34d17b]"}`} /><i className={`block h-1 flex-1 rounded-full ${light ? "bg-[#e3e3e6]" : "bg-[#3a3a3f]"}`} /></span>
-          <span className="flex items-center gap-1"><i className={`size-1 rounded-full ${light ? "bg-[#f0428a]" : "bg-[#7b7bff]"}`} /><i className={`block h-1 flex-1 rounded-full ${light ? "bg-[#e3e3e6]" : "bg-[#3a3a3f]"}`} /></span>
-          <span className="flex items-center gap-1"><i className="size-1 rounded-full bg-[#e0a100]" /><i className={`block h-1 flex-1 rounded-full ${light ? "bg-[#e3e3e6]" : "bg-[#3a3a3f]"}`} /></span>
+        <span className={`absolute bottom-2 left-1/2 flex h-6 w-[72%] -translate-x-1/2 items-center rounded-full border px-1.5 ${palette.composer}`}>
+          <span className={`h-1.5 flex-1 rounded-full ${palette.composerLine}`} />
+          <span className={`ml-1 size-3 rounded-full ${palette.accent}`} />
         </span>
-      </span>
-      <span className={`absolute inset-x-[30%] bottom-2 flex h-6 items-center rounded-full border px-1.5 ${light ? "border-black/10 bg-white" : "border-white/10 bg-[#101014]"}`}>
-        <span className={`h-1.5 flex-1 rounded-full ${light ? "bg-[#e9e9ed]" : "bg-[#2a2a30]"}`} />
-        <span className={`ml-1 size-3.5 rounded-full ${light ? "bg-[#d81b60]" : "bg-[#8b9bff]"}`} />
       </span>
     </span>
   );

@@ -17,6 +17,7 @@ import {
 const rawPort = process.argv[2] ?? process.env.PORT ?? "3001";
 const PORT = Number.parseInt(String(rawPort), 10) || 3001;
 const HOST = "127.0.0.1";
+const PHI_SYSTEM_PROMPT_APPEND = "When writing reasoning or thinking, use plain text only. Do not use Markdown formatting.";
 
 const app = express();
 app.use(cors());
@@ -101,6 +102,9 @@ async function createRuntimeEntry(sessionManager: any): Promise<SessionRuntimeEn
       cwd: runtimeCwd,
       agentDir: getAgentDir(),
       modelRuntime: sharedModelRuntime,
+      resourceLoaderOptions: {
+        appendSystemPrompt: [PHI_SYSTEM_PROMPT_APPEND],
+      },
     });
     const created = await createAgentSessionFromServices({
       services,
