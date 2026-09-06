@@ -95,13 +95,7 @@ export const ThinkingEffortSelector = memo(function ThinkingEffortSelector({
                 className="group inline-flex max-w-full min-w-0 items-center gap-1.5 rounded-md px-1.5 py-1 text-left text-phi-text-secondary hover:bg-phi-overlay-hover hover:text-phi-text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-phi-accent/40 disabled:pointer-events-none disabled:opacity-60"
                 aria-label={`Change thinking effort, currently ${current}`}
             >
-                <span className="min-w-0 truncate text-[12.5px] font-medium">
-                    Thinking
-                </span>
-                <span
-                    className="shrink-0 text-[11px] font-medium"
-                    style={{ color: THINKING_COLORS[current] ?? "var(--color-phi-text-muted)" }}
-                >
+                <span className="min-w-0 truncate text-[12.5px] font-medium capitalize">
                     {current}
                 </span>
                 <ChevronDownIcon className="size-3.5 shrink-0 text-phi-text-muted transition-transform group-data-open:rotate-180" />

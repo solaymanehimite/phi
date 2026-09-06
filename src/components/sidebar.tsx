@@ -174,7 +174,11 @@ export const Sidebar = memo(function Sidebar({
                             No sessions yet
                         </p>
                     ) : (
-                        <div className="space-y-0.5">
+                        <div>
+                            <p className="px-2 pb-1 text-[11px] font-medium tracking-wide text-phi-text-faint">
+                                Projects
+                            </p>
+                            <div className="space-y-0.5">
                             {groups.map((group) => (
                                 <GroupSection
                                     key={group.cwd}
@@ -189,6 +193,7 @@ export const Sidebar = memo(function Sidebar({
                                     onPrefetch={onPrefetch}
                                 />
                             ))}
+                            </div>
                         </div>
                     )}
                 </div>
@@ -279,7 +284,7 @@ const GroupSection = memo(function GroupSection({
                 aria-expanded={!collapsed}
                 title={group.displayCwd}
             >
-                <span className="shrink-0 truncate text-[12px] font-semibold tracking-wide text-phi-text-muted">
+                <span className="shrink-0 truncate text-[12px] font-semibold tracking-wide text-current">
                     {group.displayCwd}
                 </span>
             </GroupCollapsibleTrigger>
@@ -290,7 +295,7 @@ const GroupSection = memo(function GroupSection({
                 <div className="overflow-hidden">
                     <nav
                         aria-label={group.displayCwd}
-                        className="mt-1 space-y-0.5 pb-0.5"
+                        className="mt-1 space-y-0.5 border-l border-phi-border-faint pb-0.5 ml-[13px] pl-2"
                     >
                         {group.sessions.map((s) => (
                             <SessionRowMemo

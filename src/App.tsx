@@ -8,7 +8,7 @@ import { Conversation } from "./components/conversation/conversation";
 import { Streaming } from "./components/conversation/streaming";
 import { Sidebar } from "./components/sidebar";
 import { SearchSessionsButton, SessionCommand } from "./components/session-command";
-import { Tabs } from "./components/tabs";
+import { SETTINGS_TAB_ID, Tabs } from "./components/tabs";
 import { Button } from "./components/ui/button";
 import { ArrowDownIcon, PanelLeftIcon } from "./components/ui/icons";
 import { useSessions } from "./hooks/useSessions";
@@ -21,7 +21,7 @@ import { useEffectiveTheme, useTheme } from "./hooks/useTheme";
 import { brandingUrl } from "./lib/themed-assets";
 import { useHealth } from "./hooks/useHealth";
 import { FatalState } from "./components/fatal";
-import { SettingsPage } from "./components/settings";
+import { SettingsPanel, type SettingsSection } from "./components/settings";
 import { useShortcuts } from "./hooks/useShortcuts";
 import { clearDraftFor } from "./hooks/useDraft";
 import { InlineErrorBlock, type InlineError } from "./components/inline-error";
@@ -170,7 +170,8 @@ export default function App() {
     useTheme();
     const effectiveTheme = useEffectiveTheme();
     const healthHook = useHealth(3000);
-    const [settingsOpen, setSettingsOpen] = useState(false);
+    const [settingsActive, setSettingsActive] = useState(false);
+    const [settingsSection, setSettingsSection] = useState<SettingsSection>("appearance");
     const [modelError, setModelError] = useState<string | null>(null);
     const [draftModelKey, setDraftModelKey] = useState<string | undefined>(undefined);
     const [draftThinking, setDraftThinking] = useState<import("./types/session").ThinkingLevel | undefined>(undefined);
@@ -293,6 +294,16 @@ export default function App() {
         else next.push(file);
         openTabIdsRef.current = next;
         setOpenTabIds(next);
+    }, []);
+
+    const openSettingsTab = useCallback(() => {
+        const current = openTabIdsRef.current;
+        if (!current.includes(SETTINGS_TAB_ID)) {
+            const next = [...current, SETTINGS_TAB_ID];
+            openTabIdsRef.current = next;
+            setOpenTabIds(next);
+        }
+        setSettingsActive(true);
     }, []);
 
     useEffect(() => {
@@ -434,6 +445,7 @@ export default function App() {
     }, []);
 
     const handleSelect = useCallback(async (file: string) => {
+        setSettingsActive(false);
         openSessionTab(file);
         if (file === chat.activeFile) { focusComposer(); return; }
         if (chat.hasCache(file)) {
@@ -454,22 +466,64 @@ export default function App() {
         } finally { focusComposer(); }
     }, [openSessionTab, sessions.switchTo, chat.openFile, chat.hydrateFromSwitch, chat.hydrateFromCache, chat.hasCache, chat.revalidate, chat.activeFile, chat.prepareSwitch, focusComposer]);
 
-    const handleNewChat = useCallback(() => { ensureNewChatTab(); chat.clear(); focusComposer(); }, [chat.clear, ensureNewChatTab, focusComposer]);
+    const handleNewChat = useCallback(() => { setSettingsActive(false); ensureNewChatTab(); chat.clear(); focusComposer(); }, [chat.clear, ensureNewChatTab, focusComposer]);
 
     const handleCloseTab = useCallback((id: string | null) => {
         const current = openTabIdsRef.current;
-        if (id === null && current.length === 1) return;
+        // Settings behaves like any other tab.
+        if (id === SETTINGS_TAB_ID) {
+            if (!current.includes(SETTINGS_TAB_ID)) return;
+            const next = current.filter((tabId) => tabId !== SETTINGS_TAB_ID);
+            openTabIdsRef.current = next;
+            setOpenTabIds(next);
+            if (settingsActive) {
+                setSettingsActive(false);
+                // The backend may point at a session whose tab was closed while settings was front.
+                const backend = chat.activeFile;
+                if (!next.includes(backend)) {
+                    const fallback = next.find((tabId) => tabId !== SETTINGS_TAB_ID) ?? null;
+                    if (fallback === null) handleNewChat();
+                    else void handleSelect(fallback);
+                }
+            }
+            return;
+        }
+        // Session tabs — always keep at least one chat tab (settings doesn't count).
+        const chatTabs = current.filter((tabId) => tabId !== SETTINGS_TAB_ID);
+        if (id === null && chatTabs.length <= 1 && chatTabs.includes(null)) return;
         const index = current.indexOf(id);
         if (index < 0) return;
-        const next = current.filter((tabId) => tabId !== id);
-        const nextActiveId = next[index] ?? next[index - 1] ?? null;
+        const filtered = current.filter((tabId) => tabId !== id);
+        const nextActiveId = filtered[index] ?? filtered[index - 1] ?? null;
+        let next = filtered;
+        if (!next.some((tabId) => tabId !== SETTINGS_TAB_ID)) {
+            next = [...next, null];
+        }
         openTabIdsRef.current = next.length > 0 ? next : [null];
         setOpenTabIds(openTabIdsRef.current);
-        const isActive = id === chat.activeFile || (id === null && chat.activeFile === null);
-        if (!isActive) return;
+        const isUiActive = !settingsActive && (id === chat.activeFile || (id === null && chat.activeFile === null));
+        if (!isUiActive) return;
+        if (nextActiveId === SETTINGS_TAB_ID) {
+            setSettingsActive(true);
+            return;
+        }
         if (nextActiveId === null) handleNewChat();
         else void handleSelect(nextActiveId);
-    }, [chat.activeFile, handleNewChat, handleSelect]);
+    }, [chat.activeFile, handleNewChat, handleSelect, settingsActive]);
+
+    const handleTabSelect = useCallback((id: string | null) => {
+        if (id === SETTINGS_TAB_ID) {
+            openSettingsTab();
+            return;
+        }
+        if (id === null) handleNewChat();
+        else void handleSelect(id);
+    }, [handleNewChat, handleSelect, openSettingsTab]);
+
+    const handleCloseActiveTab = useCallback(() => {
+        if (settingsActive) handleCloseTab(SETTINGS_TAB_ID);
+        else handleCloseTab(chat.activeFile);
+    }, [settingsActive, handleCloseTab, chat.activeFile]);
 
     const handleRename = useCallback(async (file: string, name: string) => {
         await sessions.rename(file, name);
@@ -630,6 +684,7 @@ export default function App() {
 
     const tabItems = useMemo(() => openTabIds.map((id) => {
         if (id === null) return { id, title: "New chat" };
+        if (id === SETTINGS_TAB_ID) return { id, title: "Settings" };
         const session = sessions.sessions.find((item) => item.path === id);
         const fallback = id.split("/").pop() || "Session";
         const title = session?.name?.trim() || session?.firstMessage?.trim() || (id === chat.activeFile ? activeTitle : fallback);
@@ -639,21 +694,17 @@ export default function App() {
     // shortcuts
     useShortcuts({
         onNewChat: handleNewChat,
-        onCloseTab: () => handleCloseTab(chat.activeFile),
-        onDeleteSession: () => void handleDeleteCurrent(),
+        onCloseTab: handleCloseActiveTab,
+        onDeleteSession: () => { if (!settingsActive) void handleDeleteCurrent(); },
         onFocusProject: focusProjectPicker,
         onOpenSearch: () => {},
-        onOpenSettings: () => setSettingsOpen(true),
-        onAbort: () => void handleAbort(),
+        onOpenSettings: openSettingsTab,
+        onAbort: () => { if (!settingsActive) void handleAbort(); },
     }, { isStreaming: chat.isStreaming });
 
     // fatal gate
     if (healthHook.fatal) {
         return <FatalState error={healthHook.health?.error ?? null} home={healthHook.health?.home} port={healthHook.health?.port} agentDir={healthHook.health?.agentDir} onRetry={async () => { await healthHook.retry(); }} />;
-    }
-
-    if (settingsOpen) {
-        return <SettingsPage onClose={() => setSettingsOpen(false)} onProvidersChanged={() => models.refresh({ silent: true })} />;
     }
 
     return (
@@ -671,10 +722,10 @@ export default function App() {
                         >
                             <Sidebar
                                 groups={sessions.groups}
-                                activeFile={chat.activeFile}
+                                activeFile={settingsActive ? SETTINGS_TAB_ID : chat.activeFile}
                                 onSelect={handleSelect}
                                 onNewChat={handleNewChat}
-                                onOpenSettings={() => setSettingsOpen(true)}
+                                onOpenSettings={openSettingsTab}
                                 collapsed={sessions.collapsed}
                                 onToggleGroup={sessions.toggleGroup}
                                 onRename={handleRename}
@@ -703,11 +754,16 @@ export default function App() {
                                 }
                                 sidebarCollapsed={!sidebarOpen}
                                 tabs={tabItems}
-                                activeId={chat.activeFile}
-                                onSelect={(id) => id === null ? handleNewChat() : void handleSelect(id)}
+                                activeId={settingsActive ? SETTINGS_TAB_ID : chat.activeFile}
+                                onSelect={handleTabSelect}
                                 onClose={handleCloseTab}
                             />
                             <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border border-phi-border-subtle bg-phi-bg-main shadow-[0_8px_30px_var(--color-phi-shadow)]">
+                                {settingsActive ? (
+                                    <section className="flex min-h-0 flex-1" aria-label="Settings">
+                                        <SettingsPanel section={settingsSection} onSectionChange={setSettingsSection} onProvidersChanged={() => models.refresh({ silent: true })} />
+                                    </section>
+                                ) : (
                                 <section className="flex min-h-0 flex-1 flex-col">
                                     {!chat.activeFile ? (
                                         <div className="mx-auto flex w-full max-w-3xl flex-1 flex-col overflow-y-auto px-6 pt-6">
@@ -787,6 +843,7 @@ export default function App() {
                                         })()}
                                     </div>
                                 </section>
+                                )}
                             </div>
                         </main>
                     </div>

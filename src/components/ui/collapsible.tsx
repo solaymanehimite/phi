@@ -1,3 +1,4 @@
+import { ChevronDownIcon } from "@heroicons/react/24/solid";
 import type { ButtonHTMLAttributes, HTMLAttributes, ReactNode } from "react";
 
 type CollapsibleTriggerProps = ButtonHTMLAttributes<HTMLButtonElement> & {
@@ -60,15 +61,14 @@ export function GroupCollapsibleTrigger({
     return (
         <button
             type="button"
-            className={`flex w-full items-center gap-1.5 rounded px-2 py-1 text-left text-[11px] font-medium tracking-wide text-phi-text-muted hover:bg-phi-border-faint hover:text-phi-text-tertiary ${className}`}
+            className={`flex w-full items-center gap-1.5 rounded px-2 py-1 text-left text-[11px] font-medium tracking-wide text-phi-text-secondary hover:bg-phi-border-faint hover:text-phi-text-primary ${className}`}
             {...props}
         >
+            <ChevronDownIcon
+                aria-hidden
+                className={`size-3 shrink-0 text-current transition-transform duration-300 ease-[cubic-bezier(0.4,0,0.2,1)] ${collapsed ? "-rotate-90" : "rotate-0"}`}
+            />
             {children}
-            <span
-                className={`inline-block origin-center text-[10px] transition-transform duration-300 ease-[cubic-bezier(0.4,0,0.2,1)] ${collapsed ? "-rotate-90" : "rotate-0"}`}
-            >
-                ▾
-            </span>
         </button>
     );
 }

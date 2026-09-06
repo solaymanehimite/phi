@@ -1,14 +1,13 @@
 import { useCallback, useEffect, useMemo, useState, type ComponentType } from "react";
 import { useTheme, type Theme } from "../hooks/useTheme";
-import { ChevronDownIcon, ChevronLeftIcon, Cog6ToothIcon, KeyIcon } from "@heroicons/react/24/solid";
+import { ChevronDownIcon, Cog6ToothIcon, KeyIcon } from "@heroicons/react/24/solid";
 import { Palette } from "@phosphor-icons/react";
 import { Highlight, type PrismTheme } from "prism-react-renderer";
 import { CODE_THEMES, setCodeTheme, useCodeTheme, type CodeThemeChoice, type CodeThemeId } from "./code-theme";
-import { Tabs } from "./tabs";
 import { listProviders, upsertProvider, deleteProvider, testProvider, type ProviderRow } from "../lib/api";
 
 
-type SettingsSection = "appearance" | "providers";
+export type SettingsSection = "appearance" | "providers";
 
 function AppearanceSectionIcon({ className }: { className?: string }) {
   return <Palette weight="fill" className={className} />;
@@ -19,57 +18,62 @@ const sections: { id: SettingsSection; label: string; description: string; icon:
   { id: "providers", label: "Providers / Auth", description: "Models and API keys", icon: KeyIcon },
 ];
 
-export function SettingsPage({ onClose, onProvidersChanged }: { onClose: () => void; onProvidersChanged?: () => void }) {
-  const [section, setSection] = useState<SettingsSection>("appearance");
+export function SettingsPanel({
+  onProvidersChanged,
+  section: controlledSection,
+  onSectionChange,
+}: {
+  onProvidersChanged?: () => void;
+  section?: SettingsSection;
+  onSectionChange?: (section: SettingsSection) => void;
+}) {
+  const [internalSection, setInternalSection] = useState<SettingsSection>("appearance");
+  const section = controlledSection ?? internalSection;
+  const setSection = onSectionChange ?? setInternalSection;
   const active = sections.find((item) => item.id === section)!;
 
   return (
-    <div className="phi-layout text-phi-text-primary antialiased selection:bg-phi-accent/25">
-      <div className="phi-sidebar-wrap" data-collapsed="false">
-        <aside className="flex h-full w-[268px] min-w-[268px] shrink-0 flex-col bg-phi-bg-sidebar">
-          <div data-tauri-drag-region className="mb-4 mt-2 flex shrink-0 items-center px-4 py-3">
-            <div className="flex items-center gap-2 text-[15px] font-semibold leading-none text-phi-text-primary">
-              <Cog6ToothIcon className="size-4 shrink-0" />
-              <span>Settings</span>
-            </div>
-          </div>
-          <nav aria-label="Settings sections" className="space-y-0.5 px-2">
-            <button onClick={onClose} className="flex h-8 w-full items-center gap-2.5 rounded-lg px-2 py-1 text-left text-[13px] text-phi-text-tertiary hover:bg-phi-overlay-hover hover:text-phi-text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-phi-accent/40">
-              <ChevronLeftIcon className="size-3.5 shrink-0" />
-              <span className="truncate">Return to home</span>
-            </button>
-            {sections.map((item) => {
-              const Icon = item.icon;
-              const selected = item.id === section;
-              return (
-                <button key={item.id} onClick={() => setSection(item.id)} aria-current={selected ? "page" : undefined} className={`flex h-8 w-full items-center gap-2.5 rounded-lg px-2 py-1 text-left text-[13px] ${selected ? "bg-phi-overlay-active text-phi-text-primary" : "text-phi-text-tertiary hover:bg-phi-overlay-hover hover:text-phi-text-primary"}`}>
-                  <Icon className="size-4 shrink-0" />
-                  <span className="truncate">{item.label}</span>
-                </button>
-              );
-            })}
-          </nav>
-        </aside>
-      </div>
+    <div className="flex min-h-0 flex-1">
+      {/* Secondary sidebar — lives inside the main panel so the app sidebar never changes */}
+      <aside className="flex w-[188px] shrink-0 flex-col border-r border-phi-border py-5 sm:w-[220px]">
+        <div className="flex shrink-0 items-center gap-2 px-4 pb-3">
+          <Cog6ToothIcon className="size-4 shrink-0 text-phi-text-secondary" />
+          <span className="text-[13px] font-semibold leading-none text-phi-text-primary">Settings</span>
+        </div>
+        <nav aria-label="Settings sections" className="space-y-0.5 px-2">
+          {sections.map((item) => {
+            const Icon = item.icon;
+            const selected = item.id === section;
+            return (
+              <button key={item.id} onClick={() => setSection(item.id)} aria-current={selected ? "page" : undefined} className={`flex h-8 w-full items-center gap-2.5 rounded-lg px-2 py-1 text-left text-[13px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-phi-accent/40 ${selected ? "bg-phi-overlay-active text-phi-text-primary" : "text-phi-text-tertiary hover:bg-phi-overlay-hover hover:text-phi-text-primary"}`}>
+                <Icon className="size-4 shrink-0" />
+                <span className="truncate">{item.label}</span>
+              </button>
+            );
+          })}
+        </nav>
+      </aside>
 
-      <main className="phi-main bg-phi-bg-sidebar px-2 pb-2">
-        <Tabs tabs={[{ id: section, title: active.label }]} activeId={section} onSelect={() => {}} onClose={() => {}} hideClose tablistLabel="Settings section" />
-        <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border border-phi-border-subtle bg-phi-bg-main shadow-[0_8px_30px_var(--color-phi-shadow)]">
-          <header className="shrink-0 px-6 py-5">
-            <div className="mx-auto w-full max-w-3xl">
-              <h1 className="text-[20px] font-semibold tracking-[-0.02em] text-phi-text-primary">{active.label}</h1>
-              <p className="mt-1 text-[12px] text-phi-text-muted">{active.description}</p>
-            </div>
-          </header>
-          <div className="min-h-0 flex-1 overflow-y-auto p-6 pt-1">
-            <div className="mx-auto w-full max-w-3xl">
-              {section === "appearance" ? <AppearanceTab /> : <ProvidersTab onChanged={onProvidersChanged} />}
-            </div>
+      <div className="flex min-w-0 flex-1 flex-col">
+        <header className="shrink-0 px-6 py-5">
+          <div className="mx-auto w-full max-w-3xl">
+            <h1 className="text-[20px] font-semibold tracking-[-0.02em] text-phi-text-primary">{active.label}</h1>
+            <p className="mt-1 text-[12px] text-phi-text-muted">{active.description}</p>
+          </div>
+        </header>
+        <div className="min-h-0 flex-1 overflow-y-auto p-6 pt-1">
+          <div className="mx-auto w-full max-w-3xl">
+            {section === "appearance" ? <AppearanceTab /> : <ProvidersTab onChanged={onProvidersChanged} />}
           </div>
         </div>
-      </main>
+      </div>
     </div>
   );
+}
+
+/** @deprecated Use SettingsPanel (settings is now a tab, not a page). Kept for compat — onClose is ignored. */
+export function SettingsPage({ onProvidersChanged }: { onClose: () => void; onProvidersChanged?: () => void }) {
+  return <SettingsPanel onProvidersChanged={onProvidersChanged} />;
 }
 
 function CodeThemeSection() {
