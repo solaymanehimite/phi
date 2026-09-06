@@ -7,8 +7,16 @@ import { ThinkingEffortSelector } from "./components/thinking-effort";
 import { Conversation } from "./components/conversation/conversation";
 import { Streaming } from "./components/conversation/streaming";
 import { Sidebar } from "./components/sidebar";
-import { SearchSessionsButton, SessionCommand } from "./components/session-command";
+import { SearchSessionsButton, SessionCommand, type CommandAction } from "./components/session-command";
 import { SETTINGS_TAB_ID, Tabs } from "./components/tabs";
+import {
+    ChatBubbleLeftIcon,
+    Cog6ToothIcon,
+    MoonIcon,
+    PlusIcon,
+    RectangleStackIcon,
+    SunIcon,
+} from "@heroicons/react/24/solid";
 import { Button } from "./components/ui/button";
 import { ArrowDownIcon, PanelLeftIcon } from "./components/ui/icons";
 import { useSessions } from "./hooks/useSessions";
@@ -168,7 +176,7 @@ export default function App() {
     const compaction = useCompaction({ revalidate: chat.revalidate });
     const lastCompactInstructionsRef = useRef<Record<string, string | undefined>>({});
     const models = useModels();
-    useTheme();
+    const { theme, setTheme } = useTheme();
     const effectiveTheme = useEffectiveTheme();
     const themeEditorEnabled = useThemeEditorEnabled();
     const healthHook = useHealth(3000);
@@ -324,6 +332,20 @@ export default function App() {
     const activeTitle = useMemo(() => chat.data?.sessionName || chat.data?.header?.id || chat.activeFile?.split("/").pop() || "New chat", [chat.data?.sessionName, chat.data?.header?.id, chat.activeFile]);
     const activeCwd = chat.data?.cwd || chat.data?.header?.cwd;
 
+    // Current project for the command menu — active session cwd wins, then the
+    // new-chat picker cwd, then home. Short name is the last path segment.
+    const currentProjectCwd = activeCwd || newChatCwd || homeCwd || "";
+    const currentProjectDisplay = useMemo(() => {
+        if (!currentProjectCwd) return "";
+        if (homeCwd && (currentProjectCwd === homeCwd || currentProjectCwd.startsWith(`${homeCwd}/`))) {
+            const rest = currentProjectCwd.slice(homeCwd.length).replace(/^\//, "");
+            if (!rest) return "~";
+            return rest.split("/").pop() || `~/${rest}`;
+        }
+        const trimmed = currentProjectCwd.endsWith("/") ? currentProjectCwd.slice(0, -1) : currentProjectCwd;
+        return trimmed.split("/").pop() || trimmed;
+    }, [currentProjectCwd, homeCwd]);
+
     const ctxModel: any = (chat.data?.context as any)?.model;
     const ctxModelKey = ctxModel ? `${ctxModel.provider}/${ctxModel.modelId ?? ctxModel.id}` : undefined;
     const selectedModelKey = ctxModelKey ?? draftModelKey ?? models.defaultModelKey;
@@ -469,6 +491,80 @@ export default function App() {
     }, [openSessionTab, sessions.switchTo, chat.openFile, chat.hydrateFromSwitch, chat.hydrateFromCache, chat.hasCache, chat.revalidate, chat.activeFile, chat.prepareSwitch, focusComposer]);
 
     const handleNewChat = useCallback(() => { setSettingsActive(false); ensureNewChatTab(); chat.clear(); focusComposer(); }, [chat.clear, ensureNewChatTab, focusComposer]);
+
+    const handleNewChatInProject = useCallback((cwd: string) => {
+        setSettingsActive(false);
+        if (cwd) setNewChatCwd(cwd);
+        ensureNewChatTab();
+        chat.clear();
+        focusComposer();
+    }, [chat.clear, ensureNewChatTab, focusComposer]);
+
+    const handleToggleTheme = useCallback(() => {
+        setTheme(effectiveTheme === "dark" ? "light" : "dark");
+    }, [effectiveTheme, setTheme]);
+
+    // Global actions for the Cmd+K palette — always rendered above sessions.
+    const commandActions: CommandAction[] = useMemo(() => {
+        const iconClass = "size-5 shrink-0 text-current";
+        const list: CommandAction[] = [];
+        if (currentProjectCwd) {
+            list.push({
+                id: "new-chat-in-project",
+                label: `New chat in ${currentProjectDisplay || currentProjectCwd}`,
+                hint: "⌘N",
+                keywords: ["new chat", "create", currentProjectCwd, currentProjectDisplay],
+                icon: <PlusIcon className={iconClass} />,
+            });
+        }
+        list.push({
+            id: "new-chat",
+            label: "New chat",
+            keywords: ["new chat", "blank", "empty"],
+            icon: <ChatBubbleLeftIcon className={iconClass} />,
+        });
+        list.push({
+            id: "open-settings",
+            label: "Open settings",
+            hint: "⌘,",
+            keywords: ["settings", "preferences", "config", "appearance", "models", "providers"],
+            icon: <Cog6ToothIcon className={iconClass} />,
+        });
+        list.push({
+            id: "toggle-theme",
+            label: `Toggle theme (currently ${effectiveTheme})`,
+            keywords: ["theme", "dark", "light", "appearance", "toggle"],
+            icon: effectiveTheme === "dark" ? <SunIcon className={iconClass} /> : <MoonIcon className={iconClass} />,
+        });
+        list.push({
+            id: "toggle-sidebar",
+            label: sidebarOpen ? "Hide sidebar" : "Show sidebar",
+            keywords: ["sidebar", "toggle", "panel", "hide", "show"],
+            icon: <RectangleStackIcon className={iconClass} />,
+        });
+        return list;
+    }, [currentProjectCwd, currentProjectDisplay, effectiveTheme, sidebarOpen]);
+
+    const handleCommandAction = useCallback((id: string) => {
+        switch (id) {
+            case "new-chat-in-project":
+                if (currentProjectCwd) handleNewChatInProject(currentProjectCwd);
+                else handleNewChat();
+                break;
+            case "new-chat":
+                handleNewChat();
+                break;
+            case "open-settings":
+                openSettingsTab();
+                break;
+            case "toggle-theme":
+                handleToggleTheme();
+                break;
+            case "toggle-sidebar":
+                setSidebarOpen((open) => !open);
+                break;
+        }
+    }, [currentProjectCwd, handleNewChat, handleNewChatInProject, handleToggleTheme, openSettingsTab]);
 
     const handleCloseTab = useCallback((id: string | null) => {
         const current = openTabIdsRef.current;
@@ -710,7 +806,7 @@ export default function App() {
     }
 
     return (
-        <SessionCommand groups={sessions.groups} loading={sessions.loading} error={sessions.error} onSelect={(file) => void handleSelect(file)}>
+        <SessionCommand groups={sessions.groups} loading={sessions.loading} error={sessions.error} actions={commandActions} onAction={handleCommandAction} onSelect={(file) => void handleSelect(file)}>
             {(openSearch) => {
                 // inject openSearch into shortcuts
                 // we need to expose via ref hack: set onOpenSearch dynamic
