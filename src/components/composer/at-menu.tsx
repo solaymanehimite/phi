@@ -1,5 +1,5 @@
 import { memo } from "react";
-import { FolderIcon, DocumentIcon } from "@heroicons/react/24/solid";
+import { IconFileFilled, IconFolderFilled } from "@tabler/icons-react";
 import type { ProjectFile } from "../../lib/api";
 
 type AtMenuProps = {
@@ -11,9 +11,9 @@ type AtMenuProps = {
 
 function FileIcon({ isDirectory }: { isDirectory: boolean }) {
   return isDirectory ? (
-    <FolderIcon className="size-[14px] shrink-0 text-phi-text-tertiary group-[.is-active]:text-phi-text-secondary" />
+    <IconFolderFilled className="size-[14px] shrink-0 text-phi-text-tertiary group-[.is-active]:text-phi-text-secondary" />
   ) : (
-    <DocumentIcon className="size-[14px] shrink-0 text-phi-text-tertiary group-[.is-active]:text-phi-text-secondary" />
+    <IconFileFilled className="size-[14px] shrink-0 text-phi-text-tertiary group-[.is-active]:text-phi-text-secondary" />
   );
 }
 

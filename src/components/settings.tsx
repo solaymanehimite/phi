@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useMemo, useState, type ComponentType } from "react";
 import { useTheme, type Theme } from "../hooks/useTheme";
-import { ChevronDownIcon, KeyIcon } from "@heroicons/react/24/solid";
-import { Palette } from "@phosphor-icons/react";
+import { IconChevronDownFilled, IconKeyFilled, IconPaletteFilled } from "@tabler/icons-react";
 import { Highlight, type PrismTheme } from "prism-react-renderer";
 import { CODE_THEMES, setCodeTheme, useCodeTheme, type CodeThemeChoice, type CodeThemeId } from "./code-theme";
 import { ThemeEditorToggle } from "./dev/ThemeEditor";
@@ -10,13 +9,9 @@ import { listProviders, upsertProvider, deleteProvider, testProvider, type Provi
 
 export type SettingsSection = "appearance" | "providers";
 
-function AppearanceSectionIcon({ className }: { className?: string }) {
-  return <Palette weight="fill" className={className} />;
-}
-
 const sections: { id: SettingsSection; label: string; description: string; icon: ComponentType<{ className?: string }> }[] = [
-  { id: "appearance", label: "Appearance", description: "Theme and colors", icon: AppearanceSectionIcon },
-  { id: "providers", label: "Auth", description: "Models and API keys", icon: KeyIcon },
+  { id: "appearance", label: "Appearance", description: "Theme and colors", icon: IconPaletteFilled },
+  { id: "providers", label: "Auth", description: "Models and API keys", icon: IconKeyFilled },
 ];
 
 export function SettingsPanel({
@@ -112,7 +107,7 @@ function CodeThemeSection() {
               </option>
             ))}
           </select>
-          <ChevronDownIcon aria-hidden className="pointer-events-none absolute right-2 top-1/2 size-3.5 -translate-y-1/2 text-phi-text-muted" />
+          <IconChevronDownFilled aria-hidden className="pointer-events-none absolute right-2 top-1/2 size-3.5 -translate-y-1/2 text-phi-text-muted" />
         </label>
       </div>
     </div>

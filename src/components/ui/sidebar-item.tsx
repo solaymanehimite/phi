@@ -1,4 +1,4 @@
-import { ChatIcon } from "./icons";
+import { IconMessageCircleFilled } from "@tabler/icons-react";
 
 type SidebarItemProps = {
   active?: boolean;
@@ -17,7 +17,7 @@ export function SidebarItem({ active = false, label, onClick }: SidebarItemProps
           : "text-phi-text-tertiary hover:bg-phi-overlay-hover hover:text-phi-text-secondary"
       }`}
     >
-      <ChatIcon className={active ? "text-phi-icon-active" : "text-phi-icon group-hover:text-phi-text-secondary"} />
+      <IconMessageCircleFilled className={`size-4 ${active ? "text-phi-icon-active" : "text-phi-icon group-hover:text-phi-text-secondary"}`} />
       <span className="min-w-0 flex-1 truncate">{label}</span>
     </button>
   );

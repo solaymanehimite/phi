@@ -1,7 +1,5 @@
 import { useEffect, useState, type ReactNode } from "react";
-import {
-} from "@heroicons/react/24/outline";
-import { CheckIcon, Square2StackIcon, XMarkIcon } from "@heroicons/react/24/solid";
+import { IconCheckFilled, IconCopyFilled, IconXFilled } from "@tabler/icons-react";
 import { Highlight, type PrismTheme, type Token, type TokenInputProps, type TokenOutputProps } from "prism-react-renderer";
 import type { WorkItem } from "../../types/work";
 import { InlineShell, LazyHighlightedCode, detectLanguage, grammarFor, useCodeTheme } from "../code-theme";
@@ -176,7 +174,7 @@ export function ToolLine({ item }: ToolLineProps) {
             ? detectLanguage({ path: filePath })
             : undefined;
     const finished = Boolean(result || item.done);
-    const StatusIcon = isError ? XMarkIcon : CheckIcon;
+    const StatusIcon = isError ? IconXFilled : IconCheckFilled;
 
     const copy = async (text: string) => {
         try {
@@ -203,7 +201,7 @@ export function ToolLine({ item }: ToolLineProps) {
                         <code className={`block truncate rounded bg-phi-overlay-code px-1.5 py-0.5 pr-7 font-mono text-[11px] ${item.name === "bash" ? "text-phi-text-primary" : "text-phi-text-tertiary"}`}>{item.name === "bash" && detail ? <InlineShell code={detail} /> : detail}</code>
                         {["read", "write", "edit", "ls"].includes(item.name) && typeof item.args.path === "string" && (
                             <button type="button" aria-label="Copy path to prompt" title="Copy to prompt" onClick={(event) => { event.stopPropagation(); addPath(String(item.args.path)); }} className="absolute right-0.5 top-1/2 grid size-5 -translate-y-1/2 place-items-center text-phi-text-muted opacity-0 transition-opacity hover:text-phi-text-primary group-hover/path:opacity-100 group-focus-within/path:opacity-100 focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-phi-accent/60">
-                                <Square2StackIcon className="size-3" aria-hidden="true" />
+                                <IconCopyFilled className="size-3" aria-hidden="true" />
                             </button>
                         )}
                     </span>
@@ -218,7 +216,7 @@ export function ToolLine({ item }: ToolLineProps) {
                             ) : (
                                 <pre className={`max-h-64 overflow-auto whitespace-pre-wrap break-words rounded-md bg-phi-bg-sunken px-1.5 py-2 pr-9 font-mono text-[11px] leading-5 ${isError ? "text-phi-error-text" : "text-phi-text-primary"}`}>{output ? <LazyHighlightedCode code={output} language={isError ? undefined : outputLanguage} /> : "No output"}</pre>
                             )}
-                            {copyText && <button type="button" aria-label="Copy output" title={copied ? "Copied" : "Copy output"} onClick={() => void copy(copyText)} className="absolute right-1.5 top-1.5 grid size-5 place-items-center text-phi-text-muted opacity-70 transition-opacity hover:text-phi-text-primary hover:opacity-100 focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-phi-accent/60">{copied ? <CheckIcon className="size-3.5" /> : <Square2StackIcon className="size-3.5" />}</button>}
+                            {copyText && <button type="button" aria-label="Copy output" title={copied ? "Copied" : "Copy output"} onClick={() => void copy(copyText)} className="absolute right-1.5 top-1.5 grid size-5 place-items-center text-phi-text-muted opacity-70 transition-opacity hover:text-phi-text-primary hover:opacity-100 focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-phi-accent/60">{copied ? <IconCheckFilled className="size-3.5" /> : <IconCopyFilled className="size-3.5" />}</button>}
                         </div>
                     </div>
                 </div>

@@ -1,10 +1,10 @@
 import {
-    ArrowPathIcon,
-    ChatBubbleLeftIcon,
-    Cog6ToothIcon,
-    PaperAirplaneIcon,
-    XMarkIcon,
-} from "@heroicons/react/24/solid";
+    IconMessageCircleFilled,
+    IconRefresh,
+    IconSendFilled,
+    IconSettingsFilled,
+    IconXFilled,
+} from "@tabler/icons-react";
 import { memo, type ReactNode } from "react";
 import { useHasDraft } from "../hooks/useHasDraft";
 
@@ -42,9 +42,9 @@ const TabItem = memo(function TabItem({ tab, active, canClose, onSelect, onClose
                 onClick={() => onSelect(tab.id)}
                 className="flex min-w-0 flex-1 items-center gap-2 self-stretch truncate rounded-tl-lg pl-3 pr-1 text-left text-[12px] font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-phi-accent/50"
             >
-                {tab.isRunning ? <ArrowPathIcon className="size-3.5 shrink-0 animate-spin text-phi-accent" /> : isSettings ? <Cog6ToothIcon className="size-3.5 shrink-0 text-phi-text-muted" /> : tab.id === null ? <ChatBubbleLeftIcon className="size-3.5 shrink-0 text-phi-text-muted" /> : null}
+                {tab.isRunning ? <IconRefresh className="size-3.5 shrink-0 animate-spin text-phi-accent" /> : isSettings ? <IconSettingsFilled className="size-3.5 shrink-0 text-phi-text-muted" /> : tab.id === null ? <IconMessageCircleFilled className="size-3.5 shrink-0 text-phi-text-muted" /> : null}
                 <span className="min-w-0 truncate">{tab.title}</span>
-                {!isSettings && hasDraft && <PaperAirplaneIcon className="size-3 shrink-0 text-phi-text-muted" aria-label="Has draft" title="Draft" />}
+                {!isSettings && hasDraft && <IconSendFilled className="size-3 shrink-0 text-phi-text-muted" aria-label="Has draft" title="Draft" />}
             </button>
             {canClose ? (
                 <button
@@ -54,7 +54,7 @@ const TabItem = memo(function TabItem({ tab, active, canClose, onSelect, onClose
                     onClick={() => onClose(tab.id)}
                     className="mr-1.5 flex size-5 shrink-0 items-center justify-center rounded-md text-phi-text-muted opacity-0 hover:bg-phi-overlay-active hover:text-phi-text-primary focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-phi-accent/50 group-hover:opacity-100"
                 >
-                    <XMarkIcon className="size-3.5" />
+                    <IconXFilled className="size-3.5" />
                 </button>
             ) : null}
         </div>

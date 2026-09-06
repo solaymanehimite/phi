@@ -1,13 +1,13 @@
 import { useCallback, useMemo, useState } from "react";
 import { useClose } from "@headlessui/react";
 import {
-    CheckIcon,
-    ChevronDownIcon,
-    FolderIcon,
-    MagnifyingGlassIcon,
-    PlusIcon,
-    XMarkIcon,
-} from "@heroicons/react/24/solid";
+    IconCheckFilled,
+    IconChevronDownFilled,
+    IconFolderFilled,
+    IconPlusFilled,
+    IconSearch,
+    IconXFilled,
+} from "@tabler/icons-react";
 import { Popover, PopoverContent, PopoverTrigger } from "./ui/popover";
 import { isTauriRuntime, pickDirectory } from "../lib/directories";
 import { formatCwd } from "../lib/paths";
@@ -105,7 +105,7 @@ function DirectoryPanel({
     return (
         <div className="w-full">
             <div className="-mx-2 flex items-center gap-2 border-b border-phi-border-faint px-3 pb-3 pt-1">
-                <MagnifyingGlassIcon className="size-3.5 shrink-0 text-phi-text-muted" />
+                <IconSearch className="size-3.5 shrink-0 text-phi-text-muted" />
                 <input
                     autoFocus
                     value={query}
@@ -123,7 +123,7 @@ function DirectoryPanel({
                         className="text-phi-text-muted hover:text-phi-text-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-phi-accent/40"
                         aria-label="Clear search"
                     >
-                        <XMarkIcon className="size-3.5" />
+                        <IconXFilled className="size-3.5" />
                     </button>
                 )}
             </div>
@@ -145,13 +145,13 @@ function DirectoryPanel({
                                 <span
                                     className={`shrink-0 ${selected ? "text-phi-text-secondary" : "text-phi-text-tertiary group-hover:text-phi-text-secondary"}`}
                                 >
-                                    <FolderIcon className="size-4" />
+                                    <IconFolderFilled className="size-4" />
                                 </span>
                                 <span className="min-w-0 flex-1 truncate">
                                     {project.displayCwd}
                                 </span>
                                 {selected && (
-                                    <CheckIcon className="size-4 shrink-0 text-phi-text-secondary" />
+                                    <IconCheckFilled className="size-4 shrink-0 text-phi-text-secondary" />
                                 )}
                             </button>
                         );
@@ -172,7 +172,7 @@ function DirectoryPanel({
                     className="group flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left text-[13px] text-phi-text-secondary hover:bg-phi-overlay-strong hover:text-phi-text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-phi-accent/40"
                 >
                     <span className="shrink-0 text-phi-text-tertiary group-hover:text-phi-text-secondary">
-                        <PlusIcon className="size-4" />
+                        <IconPlusFilled className="size-4" />
                     </span>
                     New project
                 </button>
@@ -227,11 +227,11 @@ export function DirectoryPicker({
                 className="group inline-flex max-w-full min-w-0 items-center gap-1.5 rounded-md px-1.5 py-1 text-left text-phi-text-secondary transition-colors hover:bg-phi-overlay-hover hover:text-phi-text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-phi-accent/40 disabled:pointer-events-none disabled:opacity-60"
                 aria-label={`Change project${cwd ? `, currently ${cwd}` : ", no project selected"}`}
             >
-                <FolderIcon className="size-4 shrink-0 text-phi-text-secondary" />
+                <IconFolderFilled className="size-4 shrink-0 text-phi-text-secondary" />
                 <span className="min-w-0 truncate text-[12.5px] font-medium">
                     {label}
                 </span>
-                <ChevronDownIcon className="size-3.5 shrink-0 text-phi-text-muted transition-transform group-data-open:rotate-180" />
+                <IconChevronDownFilled className="size-3.5 shrink-0 text-phi-text-muted transition-transform group-data-open:rotate-180" />
             </PopoverTrigger>
             <PopoverContent
                 anchor={{ to: "bottom start", gap: 8 }}

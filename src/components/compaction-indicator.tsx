@@ -1,5 +1,5 @@
 import { memo } from "react";
-import { ArrowsInLineVertical } from "@phosphor-icons/react";
+import { IconFold } from "@tabler/icons-react";
 import { Button } from "./ui/button";
 
 type Props = {
@@ -77,9 +77,8 @@ export const CompactionIndicator = memo(function CompactionIndicator({
       }}
     >
       <div className="min-w-0 flex items-center gap-2.5">
-        <ArrowsInLineVertical
+        <IconFold
           aria-hidden
-          weight="fill"
           className="size-5 shrink-0 text-phi-text-tertiary"
         />
         <span className="phi-shimmer truncate font-medium tracking-tight text-phi-text-secondary">

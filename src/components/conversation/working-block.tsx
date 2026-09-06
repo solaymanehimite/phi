@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import type { WorkItem } from "../../types/work";
-import { ChevronDownIcon } from "../ui/icons";
+import { IconChevronDownFilled } from "@tabler/icons-react";
 import { ToolLine } from "./tool-line";
 import { Orb } from "@aicss/react";
 
@@ -49,7 +49,7 @@ export function WorkingBlock({ items, isStreaming, variant, animateOnMount }: Pr
                 {!isStreamingVariant ? (
                     // history variant — keep chevron on left
                     <>
-                        <ChevronDownIcon
+                        <IconChevronDownFilled
                             className={`size-3 shrink-0 text-phi-text-muted transition-transform duration-200 ${open ? "rotate-0" : "-rotate-90"}`}
                             aria-hidden
                         />
@@ -59,7 +59,7 @@ export function WorkingBlock({ items, isStreaming, variant, animateOnMount }: Pr
                     <>
                         {isStreaming && <Orb variant="S3" />}
                         <span className="font-medium tracking-wide">{title}</span>
-                        <ChevronDownIcon
+                        <IconChevronDownFilled
                             className={`size-3 shrink-0 text-phi-text-muted transition-all duration-200 ${open ? "rotate-0" : "-rotate-90"} opacity-0 group-hover:opacity-100 group-focus-visible:opacity-100`}
                             aria-hidden
                         />

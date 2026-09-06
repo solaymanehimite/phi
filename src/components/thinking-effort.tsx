@@ -1,5 +1,5 @@
 import { memo, useCallback, useMemo } from "react";
-import { ChevronDownIcon } from "@heroicons/react/24/solid";
+import { IconChevronDownFilled } from "@tabler/icons-react";
 import { Popover, PopoverContent, PopoverTrigger } from "./ui/popover";
 import type { ModelInfo, ThinkingLevel } from "../types/session";
 import { THINKING_LEVELS } from "./model-selector";
@@ -98,7 +98,7 @@ export const ThinkingEffortSelector = memo(function ThinkingEffortSelector({
                 <span className="min-w-0 truncate text-[12.5px] font-medium capitalize">
                     {current}
                 </span>
-                <ChevronDownIcon className="size-3.5 shrink-0 text-phi-text-muted transition-transform group-data-open:rotate-180" />
+                <IconChevronDownFilled className="size-3.5 shrink-0 text-phi-text-muted transition-transform group-data-open:rotate-180" />
             </PopoverTrigger>
 
             <PopoverContent

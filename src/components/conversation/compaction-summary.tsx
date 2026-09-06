@@ -1,6 +1,5 @@
 import { memo, useId, useMemo, useState } from "react";
-import { BarsArrowDownIcon } from "@heroicons/react/24/solid";
-import { ChevronDownIcon } from "../ui/icons";
+import { IconChevronDownFilled, IconFoldDown } from "@tabler/icons-react";
 import { Markdown } from "./markdown";
 
 type Props = {
@@ -75,12 +74,12 @@ export const CompactionSummary = memo(function CompactionSummary({ summary }: Pr
           onClick={() => setOpen((v) => !v)}
           className="group inline-flex items-center justify-center gap-2 rounded-full px-3 py-1.5 text-center text-[13px] leading-none text-phi-text-muted transition-colors hover:bg-phi-overlay hover:text-phi-text-tertiary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-phi-accent/20"
         >
-          <BarsArrowDownIcon
+          <IconFoldDown
             className="size-3.5 shrink-0 text-phi-text-muted group-hover:text-phi-text-tertiary"
             aria-hidden
           />
           <span className="font-medium tracking-wide">Compaction summary</span>
-          <ChevronDownIcon
+          <IconChevronDownFilled
             className={`size-3.5 shrink-0 text-phi-text-muted transition-all duration-200 ${open ? "rotate-0" : "-rotate-90"} opacity-0 group-hover:opacity-100 group-focus-visible:opacity-100`}
             aria-hidden
           />

@@ -10,15 +10,16 @@ import { Sidebar } from "./components/sidebar";
 import { SearchSessionsButton, SessionCommand, type CommandAction } from "./components/session-command";
 import { SETTINGS_TAB_ID, Tabs } from "./components/tabs";
 import {
-    ChatBubbleLeftIcon,
-    Cog6ToothIcon,
-    MoonIcon,
-    PlusIcon,
-    RectangleStackIcon,
-    SunIcon,
-} from "@heroicons/react/24/solid";
+    IconArrowDown,
+    IconLayoutSidebarFilled,
+    IconLayoutSidebarLeftCollapse,
+    IconMessageCircleFilled,
+    IconMoonFilled,
+    IconPlusFilled,
+    IconSettingsFilled,
+    IconSunFilled,
+} from "@tabler/icons-react";
 import { Button } from "./components/ui/button";
-import { ArrowDownIcon, PanelLeftIcon } from "./components/ui/icons";
 import { useSessions } from "./hooks/useSessions";
 import { useChat } from "./hooks/useChat";
 import { useCompaction } from "./hooks/useCompaction";
@@ -55,7 +56,7 @@ const ScrollToBottomButton = memo(function ScrollToBottomButton() {
             data-visible={visible ? "true" : "false"}
             className="absolute bottom-4 left-1/2 z-10 inline-flex size-8 -translate-x-1/2 items-center justify-center rounded-full border border-phi-border-strong bg-phi-bg-elevated text-phi-text-secondary shadow-[0_4px_16px_var(--color-phi-shadow-strong)] transition-all duration-200 hover:bg-phi-overlay-hover hover:text-phi-text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-phi-accent/40 data-[visible=false]:pointer-events-none data-[visible=false]:translate-y-2 data-[visible=false]:opacity-0"
         >
-            <ArrowDownIcon />
+            <IconArrowDown className="size-4" />
         </button>
     );
 });
@@ -514,33 +515,33 @@ export default function App() {
                 label: `New chat in ${currentProjectDisplay || currentProjectCwd}`,
                 hint: "⌘N",
                 keywords: ["new chat", "create", currentProjectCwd, currentProjectDisplay],
-                icon: <PlusIcon className={iconClass} />,
+                icon: <IconPlusFilled className={iconClass} />,
             });
         }
         list.push({
             id: "new-chat",
             label: "New chat",
             keywords: ["new chat", "blank", "empty"],
-            icon: <ChatBubbleLeftIcon className={iconClass} />,
+            icon: <IconMessageCircleFilled className={iconClass} />,
         });
         list.push({
             id: "open-settings",
             label: "Open settings",
             hint: "⌘,",
             keywords: ["settings", "preferences", "config", "appearance", "models", "providers"],
-            icon: <Cog6ToothIcon className={iconClass} />,
+            icon: <IconSettingsFilled className={iconClass} />,
         });
         list.push({
             id: "toggle-theme",
             label: `Toggle theme (currently ${effectiveTheme})`,
             keywords: ["theme", "dark", "light", "appearance", "toggle"],
-            icon: effectiveTheme === "dark" ? <SunIcon className={iconClass} /> : <MoonIcon className={iconClass} />,
+            icon: effectiveTheme === "dark" ? <IconSunFilled className={iconClass} /> : <IconMoonFilled className={iconClass} />,
         });
         list.push({
             id: "toggle-sidebar",
             label: sidebarOpen ? "Hide sidebar" : "Show sidebar",
             keywords: ["sidebar", "toggle", "panel", "hide", "show"],
-            icon: <RectangleStackIcon className={iconClass} />,
+            icon: <IconLayoutSidebarFilled className={iconClass} />,
         });
         return list;
     }, [currentProjectCwd, currentProjectDisplay, effectiveTheme, sidebarOpen]);
@@ -846,7 +847,7 @@ export default function App() {
                                             title={sidebarOpen ? "Close sidebar" : "Open sidebar"}
                                             onClick={() => setSidebarOpen((open) => !open)}
                                         >
-                                            <PanelLeftIcon />
+                                            <IconLayoutSidebarLeftCollapse className="size-4" />
                                         </Button>
                                     </div>
                                 }

@@ -1,17 +1,17 @@
 import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import {
-    ArrowDownIcon,
-    ArrowUpIcon,
-    BeakerIcon,
-    BoltIcon,
-    ChevronDownIcon,
-    MapIcon,
-    CpuChipIcon,
-    MagnifyingGlassIcon,
-    SparklesIcon,
-    StarIcon,
-} from "@heroicons/react/24/solid";
-import { StarIcon as StarOutlineIcon } from "@heroicons/react/24/outline";
+    IconArrowDown,
+    IconArrowUp,
+    IconBoltFilled,
+    IconChevronDownFilled,
+    IconCpu,
+    IconFlaskFilled,
+    IconMap,
+    IconSearch,
+    IconSparklesFilled,
+    IconStar,
+    IconStarFilled,
+} from "@tabler/icons-react";
 import { Popover, PopoverContent, PopoverTrigger } from "./ui/popover";
 import type { ModelInfo, ThinkingLevel } from "../types/session";
 import { useEffectiveTheme } from "../hooks/useTheme";
@@ -31,13 +31,13 @@ export const THINKING_LEVELS = CANONICAL_LEVELS;
 
 const FAVORITES_KEY = "phi-favorite-models";
 
-const PROVIDER_ICONS: Record<string, typeof StarIcon> = {
-    openai: BeakerIcon,
-    anthropic: CpuChipIcon,
-    google: SparklesIcon,
-    xai: BoltIcon,
-    kimi: MapIcon,
-    "kimi-coding": MapIcon,
+const PROVIDER_ICONS: Record<string, typeof IconStarFilled> = {
+    openai: IconFlaskFilled,
+    anthropic: IconCpu,
+    google: IconSparklesFilled,
+    xai: IconBoltFilled,
+    kimi: IconMap,
+    "kimi-coding": IconMap,
 };
 
 function prettyProvider(id: string): string {
@@ -64,7 +64,7 @@ function ProviderImg({
 }) {
     const theme = useEffectiveTheme();
     const url = providerIconUrl(provider, theme);
-    const Icon = PROVIDER_ICONS[provider] ?? StarIcon;
+    const Icon = PROVIDER_ICONS[provider] ?? IconStarFilled;
     if (url) {
         return (
             <img
@@ -319,7 +319,7 @@ export const ModelSelector = memo(function ModelSelector({
                                 : (selected?.name ??
                                     (list.length === 0 ? "No models" : "Select model"))}
                         </span>
-                        <ChevronDownIcon className="size-3.5 shrink-0 text-phi-text-muted transition-transform group-data-open:rotate-180" />
+                        <IconChevronDownFilled className="size-3.5 shrink-0 text-phi-text-muted transition-transform group-data-open:rotate-180" />
                     </PopoverTrigger>
 
                     <PopoverContent
@@ -346,7 +346,7 @@ export const ModelSelector = memo(function ModelSelector({
                                             title="Favorites"
                                             className={railBtn(activeCategory === "favorites")}
                                         >
-                                            <StarIcon className={`size-5 ${activeCategory === "favorites" ? "text-[#f0b429]" : ""}`} />
+                                            <IconStarFilled className={`size-5 ${activeCategory === "favorites" ? "text-[#f0b429]" : ""}`} />
                                         </button>
                                     </div>
                                     <div
@@ -357,7 +357,7 @@ export const ModelSelector = memo(function ModelSelector({
                                         {providerIds.map((pid) => {
                                             const isActive = activeCategory === pid;
                                             const url = providerIconUrl(pid, theme);
-                                            const Icon = PROVIDER_ICONS[pid] ?? StarIcon;
+                                            const Icon = PROVIDER_ICONS[pid] ?? IconStarFilled;
                                             return (
                                                 <button
                                                     key={pid}
@@ -401,7 +401,7 @@ export const ModelSelector = memo(function ModelSelector({
                                 <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
                                     {/* search — same height as the star cell so separators line up */}
                                     <div className="flex h-[52px] shrink-0 items-center gap-2 border-b border-phi-border-faint px-3.5">
-                                        <MagnifyingGlassIcon className="size-4 shrink-0 text-phi-text-tertiary" />
+                                        <IconSearch className="size-4 shrink-0 text-phi-text-tertiary" />
                                         <input
                                             autoFocus
                                             value={query}
@@ -480,7 +480,7 @@ export const ModelSelector = memo(function ModelSelector({
                                                                         {formatCost(
                                                                             model.cost.input,
                                                                         )}{" "}
-                                                                        <ArrowDownIcon className="size-[11px]" />
+                                                                        <IconArrowDown className="size-[11px]" />
                                                                     </span>
                                                                     <span>
                                                                         ·
@@ -489,7 +489,7 @@ export const ModelSelector = memo(function ModelSelector({
                                                                         {formatCost(
                                                                             model.cost.output,
                                                                         )}{" "}
-                                                                        <ArrowUpIcon className="size-[11px]" />
+                                                                        <IconArrowUp className="size-[11px]" />
                                                                     </span>
                                                                 </span>
                                                             </span>
@@ -519,9 +519,9 @@ export const ModelSelector = memo(function ModelSelector({
                                                                     className="grid shrink-0 place-items-center rounded p-0.5"
                                                                 >
                                                                     {isFav ? (
-                                                                        <StarIcon className="size-4 text-[#f0b429]" />
+                                                                        <IconStarFilled className="size-4 text-[#f0b429]" />
                                                                     ) : (
-                                                                        <StarOutlineIcon className="size-4 text-phi-text-tertiary" />
+                                                                        <IconStar className="size-4 text-phi-text-tertiary" />
                                                                     )}
                                                                 </span>
                                                             </span>

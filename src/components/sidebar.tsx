@@ -1,14 +1,13 @@
 import {
-    ArrowPathIcon,
-    ChevronDownIcon,
-    ChevronUpIcon,
-    Cog6ToothIcon,
-    EllipsisHorizontalIcon,
-    PaperAirplaneIcon,
-    PencilIcon,
-    PlusIcon,
-    TrashIcon,
-} from "@heroicons/react/24/solid";
+    IconChevronDownFilled,
+    IconDotsFilled,
+    IconPencilFilled,
+    IconPlusFilled,
+    IconRefresh,
+    IconSendFilled,
+    IconSettingsFilled,
+    IconTrashFilled,
+} from "@tabler/icons-react";
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
@@ -148,7 +147,7 @@ export const Sidebar = memo(function Sidebar({
 
             <div className="shrink-0 px-2 pt-2">
                 <Button className="w-full justify-start" onClick={onNewChat}>
-                    <PlusIcon className="size-4" />
+                    <IconPlusFilled className="size-4" />
                     New chat
                 </Button>
             </div>
@@ -212,7 +211,7 @@ export const Sidebar = memo(function Sidebar({
                         onClick={scrollUp}
                         className={`pointer-events-auto inline-flex items-center justify-center text-phi-text-tertiary transition-all duration-200 hover:text-phi-text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-phi-accent/40 ${canScrollUp ? "translate-y-0 opacity-100" : "pointer-events-none -translate-y-1 opacity-0"}`}
                     >
-                        <ChevronUpIcon className="size-3.5" />
+                        <IconChevronDownFilled className="size-3.5 rotate-180" />
                     </button>
                 </div>
 
@@ -230,7 +229,7 @@ export const Sidebar = memo(function Sidebar({
                         onClick={scrollDown}
                         className={`pointer-events-auto inline-flex items-center justify-center text-phi-text-tertiary transition-all duration-200 hover:text-phi-text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-phi-accent/40 ${canScrollDown ? "translate-y-0 opacity-100" : "pointer-events-none translate-y-1 opacity-0"}`}
                     >
-                        <ChevronDownIcon className="size-3.5" />
+                        <IconChevronDownFilled className="size-3.5" />
                     </button>
                 </div>
             </div>
@@ -242,7 +241,7 @@ export const Sidebar = memo(function Sidebar({
                     aria-label="Open settings"
                     className="inline-flex h-7 w-7 items-center justify-center rounded-lg text-phi-text-tertiary hover:bg-phi-overlay-hover hover:text-phi-text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-phi-accent/40"
                 >
-                    <Cog6ToothIcon className="size-4" />
+                    <IconSettingsFilled className="size-4" />
                 </button>
             </div>
         </aside>
@@ -441,7 +440,7 @@ const SessionRow = memo(function SessionRow({
             {renaming ? (
                 <div className="flex min-w-0 flex-1 items-center gap-2.5 truncate rounded-lg px-1.5 py-1 pr-8">
                     {isStreaming ? (
-                        <ArrowPathIcon className="size-4 shrink-0 animate-spin text-phi-text-secondary" />
+                        <IconRefresh className="size-4 shrink-0 animate-spin text-phi-text-secondary" />
                     ) : null}
                     <Input
                         autoFocus
@@ -459,11 +458,11 @@ const SessionRow = memo(function SessionRow({
                     className="flex min-w-0 flex-1 items-center gap-2.5 truncate rounded-lg px-1.5 py-1 pr-8 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-phi-accent/40"
                 >
                     {isStreaming ? (
-                        <ArrowPathIcon className="size-4 shrink-0 animate-spin text-phi-text-secondary" />
+                        <IconRefresh className="size-4 shrink-0 animate-spin text-phi-text-secondary" />
                     ) : null}
                     <span className="min-w-0 flex-1 truncate text-left">{title}</span>
                     {hasDraft && (
-                        <PaperAirplaneIcon
+                        <IconSendFilled
                             className="size-3 shrink-0 text-phi-text-muted"
                             aria-label="Draft"
                             title="Draft"
@@ -482,17 +481,17 @@ const SessionRow = memo(function SessionRow({
                         aria-label="Session actions"
                         className="pointer-events-none group-hover:pointer-events-auto"
                     >
-                        <EllipsisHorizontalIcon className="size-3.5" />
+                        <IconDotsFilled className="size-3.5" />
                     </DropdownMenuTrigger>
                     <DropdownMenuContent>
                         <DropdownMenuItem
-                            icon={<PencilIcon className="size-[15px]" />}
+                            icon={<IconPencilFilled className="size-[15px]" />}
                             onClick={handleStartRename}
                         >
                             Rename
                         </DropdownMenuItem>
                         <DropdownMenuItem
-                            icon={<TrashIcon className="size-[15px]" />}
+                            icon={<IconTrashFilled className="size-[15px]" />}
                             onClick={handleDelete}
                         >
                             Delete

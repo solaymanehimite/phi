@@ -1,9 +1,9 @@
 import { Popover, PopoverContent, PopoverTrigger } from "../ui/popover";
 import {
-    CheckIcon,
-    PaintBrushIcon,
-    Square2StackIcon,
-} from "@heroicons/react/24/solid";
+    IconBrush,
+    IconCheckFilled,
+    IconCopyFilled,
+} from "@tabler/icons-react";
 import { useEffect, useMemo, useState, useSyncExternalStore } from "react";
 import { HexColorInput, HexColorPicker } from "react-colorful";
 
@@ -325,7 +325,7 @@ export function ThemeEditor({ className = "" }: ThemeEditorProps) {
                 aria-label="Open advanced color settings"
                 className="inline-flex size-9 items-center justify-center rounded-full border border-phi-border-strong bg-phi-bg-elevated text-phi-text-tertiary shadow-[0_4px_16px_var(--color-phi-shadow-strong)] transition-colors hover:bg-phi-overlay-hover hover:text-phi-text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-phi-accent/40"
             >
-                <PaintBrushIcon className="size-4" />
+                <IconBrush className="size-4" />
             </PopoverTrigger>
 
             <PopoverContent
@@ -392,9 +392,9 @@ export function ThemeEditor({ className = "" }: ThemeEditorProps) {
                         className="flex w-full items-center justify-center gap-2 rounded-xl bg-phi-bg-inverse text-phi-text-inverse px-3 py-2 text-[13px] font-medium hover:bg-phi-white transition"
                     >
                         {copied ? (
-                            <CheckIcon className="size-3.5" />
+                            <IconCheckFilled className="size-3.5" />
                         ) : (
-                            <Square2StackIcon className="size-3.5" />
+                            <IconCopyFilled className="size-3.5" />
                         )}
                         {copied ? "Copied!" : "Copy CSS"}
                     </button>

@@ -11,8 +11,7 @@ import {
     type ClipboardEvent,
 } from "react";
 import { Button } from "./ui/button";
-import { ArrowUpIcon, StopIcon } from "./ui/icons";
-import { PaperClipIcon, XMarkIcon } from "@heroicons/react/24/solid";
+import { IconArrowUp, IconPaperclip, IconPlayerStopFilled, IconXFilled } from "@tabler/icons-react";
 import { SlashMenu } from "./composer/slash-menu";
 import { AtMenu } from "./composer/at-menu";
 import { useSlashCommands } from "../hooks/useSlashCommands";
@@ -670,7 +669,7 @@ export const Composer = memo(function Composer({
             {isDragging && (
                 <div className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center rounded-[17px] rounded-b-none bg-phi-bg-surface/80 backdrop-blur-[1px] border-x-2 border-t-2 border-dashed border-phi-accent/60">
                     <div className="flex items-center gap-2 rounded-full bg-phi-bg-elevated px-4 py-2 text-[13px] font-medium text-phi-text-primary shadow-lg border border-phi-border">
-                        <PaperClipIcon className="size-4" />
+                        <IconPaperclip className="size-4" />
                         Drop images to attach
                     </div>
                 </div>
@@ -720,7 +719,7 @@ export const Composer = memo(function Composer({
                                 onClick={() => removeImage(img.id)}
                                 className="absolute right-1 top-1 inline-grid size-5 place-items-center rounded-full bg-phi-scrim text-phi-white opacity-0 backdrop-blur transition-opacity hover:bg-phi-scrim-strong group-hover:opacity-100 focus-visible:opacity-100 focus-visible:outline-none"
                             >
-                                <XMarkIcon className="size-3" />
+                                <IconXFilled className="size-3" />
                             </button>
                         </div>
                     ))}
@@ -778,7 +777,7 @@ export const Composer = memo(function Composer({
                         disabled={!!disabled || isStreaming || !!isCompacting}
                         className="disabled:opacity-40"
                     >
-                        <PaperClipIcon className="size-4" />
+                        <IconPaperclip className="size-4" />
                     </Button>
                 </div>
 
@@ -790,7 +789,7 @@ export const Composer = memo(function Composer({
                         title="Stop"
                         className="!bg-phi-error !text-phi-white hover:!bg-phi-error/80"
                     >
-                        <StopIcon />
+                        <IconPlayerStopFilled className="size-4" />
                     </Button>
                 ) : (
                     <Button
@@ -800,7 +799,7 @@ export const Composer = memo(function Composer({
                         aria-label="Send message"
                         title="Send message"
                     >
-                        <ArrowUpIcon />
+                        <IconArrowUp className="size-4" />
                     </Button>
                 )}
             </div>

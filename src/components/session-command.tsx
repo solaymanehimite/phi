@@ -1,11 +1,9 @@
-import { MagnifyingGlassIcon } from "@heroicons/react/24/solid";
+import { IconMessageCircleFilled, IconSearch } from "@tabler/icons-react";
 import { Command } from "cmdk";
 import { memo, useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import type { SessionGroup } from "../hooks/useSessions";
 import type { SessionInfo } from "../types/session";
 import { Button } from "./ui/button";
-import { ChatIcon } from "./ui/icons";
-
 type SearchSessionsButtonProps = {
     onClick: () => void;
     className?: string;
@@ -30,7 +28,7 @@ export function SearchSessionsButton({
             title={`Commands & sessions (${shortcut} / ${shortcut === "⌘K" ? "Ctrl K" : "⌘K"})`}
             className={`size-8 ${className}`}
         >
-            <MagnifyingGlassIcon className="size-4" />
+            <IconSearch className="size-4" />
         </Button>
     );
 }
@@ -98,7 +96,7 @@ const ActionGroup = memo(function ActionGroup({
                     className="flex min-h-11 cursor-pointer items-center gap-3 rounded-lg px-3 py-2 text-left text-[13px] text-phi-text-secondary outline-none data-[selected=true]:bg-phi-overlay-active data-[selected=true]:text-phi-text-primary"
                 >
                     {action.icon ?? (
-                        <ChatIcon className="size-5 shrink-0 text-current" />
+                        <IconMessageCircleFilled className="size-5 shrink-0 text-current" />
                     )}
                     <span className="min-w-0 flex-1 truncate">{action.label}</span>
                     {action.hint && (
@@ -209,7 +207,7 @@ const PaletteDialog = memo(function PaletteDialog({
             shouldFilter={false}
         >
             <div className="flex items-center gap-3 border-b border-phi-border-subtle px-4">
-                <MagnifyingGlassIcon className="size-4 shrink-0 text-phi-text-muted" />
+                <IconSearch className="size-4 shrink-0 text-phi-text-muted" />
                 <Command.Input
                     autoFocus
                     value={search}
@@ -269,7 +267,7 @@ const PaletteDialog = memo(function PaletteDialog({
                                             onSelect={() => onSelect(session.path)}
                                             className="flex min-h-11 cursor-pointer items-center gap-3 rounded-lg px-3 py-2 text-left text-[13px] text-phi-text-secondary outline-none data-[selected=true]:bg-phi-overlay-active data-[selected=true]:text-phi-text-primary"
                                         >
-                                            <ChatIcon className="size-4 shrink-0 text-phi-text-muted" />
+                                            <IconMessageCircleFilled className="size-4 shrink-0 text-phi-text-muted" />
                                             <span className="min-w-0 flex-1 truncate">
                                                 {title}
                                             </span>
