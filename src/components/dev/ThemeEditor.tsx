@@ -1,11 +1,47 @@
 import { Popover, PopoverContent, PopoverTrigger } from "../ui/popover";
 import {
     CheckIcon,
-    Square2StackIcon,
     PaintBrushIcon,
+    Square2StackIcon,
 } from "@heroicons/react/24/solid";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, useSyncExternalStore } from "react";
 import { HexColorInput, HexColorPicker } from "react-colorful";
+
+const THEME_EDITOR_ENABLED_KEY = "phi:theme-editor-enabled";
+const themeEditorEnabledListeners = new Set<() => void>();
+
+function readThemeEditorEnabled(): boolean {
+    try {
+        return localStorage.getItem(THEME_EDITOR_ENABLED_KEY) === "true";
+    } catch {
+        return false;
+    }
+}
+
+function subscribeThemeEditorEnabled(listener: () => void) {
+    themeEditorEnabledListeners.add(listener);
+    const onStorage = (event: StorageEvent) => {
+        if (event.key === THEME_EDITOR_ENABLED_KEY) listener();
+    };
+    window.addEventListener("storage", onStorage);
+    return () => {
+        themeEditorEnabledListeners.delete(listener);
+        window.removeEventListener("storage", onStorage);
+    };
+}
+
+export function useThemeEditorEnabled(): boolean {
+    return useSyncExternalStore(subscribeThemeEditorEnabled, readThemeEditorEnabled, () => false);
+}
+
+export function setThemeEditorEnabled(enabled: boolean) {
+    try {
+        localStorage.setItem(THEME_EDITOR_ENABLED_KEY, String(enabled));
+    } catch {
+        // The setting still applies to the current session when storage is unavailable.
+    }
+    for (const listener of themeEditorEnabledListeners) listener();
+}
 
 type Token = {
     name: string;
@@ -202,10 +238,36 @@ function getAlpha(original: string): string | null {
 
 type ThemeEditorProps = {
     className?: string;
-    iconClassName?: string;
 };
 
-export function ThemeEditor({ className = "", iconClassName = "" }: ThemeEditorProps) {
+export function ThemeEditorToggle() {
+    const enabled = useThemeEditorEnabled();
+
+    return (
+        <button
+            type="button"
+            role="switch"
+            aria-checked={enabled}
+            aria-label="Enable advanced settings"
+            onClick={() => setThemeEditorEnabled(!enabled)}
+            className="flex min-h-[60px] w-full cursor-pointer items-center justify-between gap-4 rounded-lg bg-phi-bg-surface px-3 py-3 text-left hover:bg-phi-overlay-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-phi-accent/40"
+        >
+            <span className="min-w-0">
+                <span className="block text-[13px] font-medium text-phi-text-primary">Advanced Settings</span>
+                <span className="mt-0.5 block truncate text-[12px] text-phi-text-muted">Show the floating color editor in chats</span>
+            </span>
+            <span
+                aria-hidden
+                style={enabled ? { backgroundColor: "#2f7bff" } : undefined}
+                className={`relative inline-flex h-6 w-10 shrink-0 items-center rounded-full p-0.5 motion-safe:transition-colors motion-safe:duration-200 motion-safe:ease-out ${enabled ? "" : "bg-phi-overlay-active"}`}
+            >
+                <span className={`size-5 rounded-full bg-phi-white shadow-sm motion-safe:transition-transform motion-safe:duration-200 motion-safe:ease-out ${enabled ? "translate-x-4" : "translate-x-0"}`} />
+            </span>
+        </button>
+    );
+}
+
+export function ThemeEditor({ className = "" }: ThemeEditorProps) {
     const [values, setValues] = useState<Record<string, string>>({});
     const [active, setActive] = useState<string | null>(null);
     const [copied, setCopied] = useState(false);
@@ -258,12 +320,12 @@ export function ThemeEditor({ className = "", iconClassName = "" }: ThemeEditorP
     }, []);
 
     return (
-        <Popover className="relative z-50">
+        <Popover className={`relative z-50 ${className}`}>
             <PopoverTrigger
-                aria-label="Open theme editor"
-                className={`inline-flex h-8 w-8 items-center justify-center rounded-lg text-phi-text-tertiary transition-colors hover:bg-phi-overlay-hover hover:text-phi-text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-phi-accent/40 data-open:bg-phi-overlay-active ${className}`}
+                aria-label="Open advanced color settings"
+                className="inline-flex size-9 items-center justify-center rounded-full border border-phi-border-strong bg-phi-bg-elevated text-phi-text-tertiary shadow-[0_4px_16px_var(--color-phi-shadow-strong)] transition-colors hover:bg-phi-overlay-hover hover:text-phi-text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-phi-accent/40"
             >
-                <PaintBrushIcon className={`size-3.5 ${iconClassName}`} />
+                <PaintBrushIcon className="size-4" />
             </PopoverTrigger>
 
             <PopoverContent

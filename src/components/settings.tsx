@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useMemo, useState, type ComponentType } from "react";
 import { useTheme, type Theme } from "../hooks/useTheme";
-import { ChevronDownIcon, Cog6ToothIcon, KeyIcon } from "@heroicons/react/24/solid";
+import { ChevronDownIcon, KeyIcon } from "@heroicons/react/24/solid";
 import { Palette } from "@phosphor-icons/react";
 import { Highlight, type PrismTheme } from "prism-react-renderer";
 import { CODE_THEMES, setCodeTheme, useCodeTheme, type CodeThemeChoice, type CodeThemeId } from "./code-theme";
+import { ThemeEditorToggle } from "./dev/ThemeEditor";
 import { listProviders, upsertProvider, deleteProvider, testProvider, type ProviderRow } from "../lib/api";
 
 
@@ -15,7 +16,7 @@ function AppearanceSectionIcon({ className }: { className?: string }) {
 
 const sections: { id: SettingsSection; label: string; description: string; icon: ComponentType<{ className?: string }> }[] = [
   { id: "appearance", label: "Appearance", description: "Theme and colors", icon: AppearanceSectionIcon },
-  { id: "providers", label: "Providers / Auth", description: "Models and API keys", icon: KeyIcon },
+  { id: "providers", label: "Auth", description: "Models and API keys", icon: KeyIcon },
 ];
 
 export function SettingsPanel({
@@ -36,10 +37,6 @@ export function SettingsPanel({
     <div className="flex min-h-0 flex-1">
       {/* Secondary sidebar — lives inside the main panel so the app sidebar never changes */}
       <aside className="flex w-[188px] shrink-0 flex-col border-r border-phi-border py-5 sm:w-[220px]">
-        <div className="flex shrink-0 items-center gap-2 px-4 pb-3">
-          <Cog6ToothIcon className="size-4 shrink-0 text-phi-text-secondary" />
-          <span className="text-[13px] font-semibold leading-none text-phi-text-primary">Settings</span>
-        </div>
         <nav aria-label="Settings sections" className="space-y-0.5 px-2">
           {sections.map((item) => {
             const Icon = item.icon;
@@ -89,42 +86,34 @@ function CodeThemeSection() {
   ];
   // Keep the select valid when the stored choice belongs to the other mode.
   const allOptions = useMemo(() => {
-    if (choice !== "auto" && !options.some((o) => o.id === choice)) {
+    if (choice !== "auto" && !options.some((option) => option.id === choice)) {
       return [...options, { id: choice, label: CODE_THEMES[choice as CodeThemeId].label }];
     }
     return options;
   }, [options, choice]);
   const previewTheme: PrismTheme = choice === "auto" ? activeTheme : CODE_THEMES[choice as CodeThemeId].theme;
   const currentLabel = choice === "auto" ? "Auto" : CODE_THEMES[choice as CodeThemeId].label;
+
   return (
-    <div>
-      <h3 className="text-[12px] font-semibold tracking-wide text-phi-text-muted">Themes</h3>
-      <p className="mt-1 text-[11px] text-phi-text-muted">
-        Showing {effective === "light" ? "light" : "dark"} code themes for the current appearance. Syntax highlighting for code blocks and file outputs.
-      </p>
-      <label className="mt-3 block">
-        <span className="mb-1 block text-[11px] font-medium text-phi-text-secondary">Code theme</span>
-        <span className="relative block">
+    <div className="overflow-hidden rounded-2xl border border-phi-border">
+      <div className="relative">
+        <CodeThemePreview theme={previewTheme} />
+        <label className="absolute right-3 top-3 inline-flex h-7 w-[9.5rem]">
+          <span className="sr-only">Code theme</span>
           <select
             value={choice}
-            onChange={(e) => setCodeTheme(e.target.value as CodeThemeChoice)}
-            className="w-full appearance-none rounded-lg border border-phi-input-border bg-phi-input-bg py-1.5 pl-2 pr-8 text-[12px] text-phi-text-primary outline-none focus:border-phi-input-border-focus"
+            onChange={(event) => setCodeTheme(event.target.value as CodeThemeChoice)}
+            title={`Code theme: ${currentLabel}`}
+            className="h-7 w-full appearance-none rounded-lg border border-phi-border-strong bg-phi-bg-elevated py-0 pl-2.5 pr-7 text-[11px] font-medium text-phi-text-secondary shadow-[0_2px_8px_var(--color-phi-shadow)] outline-none transition-colors hover:border-phi-accent/50 hover:text-phi-text-primary focus-visible:border-phi-accent/70 focus-visible:ring-1 focus-visible:ring-phi-accent/40"
           >
-            {allOptions.map((o) => (
-              <option key={o.id} value={o.id}>
-                {o.label}
+            {allOptions.map((option) => (
+              <option key={option.id} value={option.id}>
+                {option.label}
               </option>
             ))}
           </select>
           <ChevronDownIcon aria-hidden className="pointer-events-none absolute right-2 top-1/2 size-3.5 -translate-y-1/2 text-phi-text-muted" />
-        </span>
-      </label>
-      <div className="mt-3 overflow-hidden rounded-2xl border border-phi-border">
-        <CodeThemePreview theme={previewTheme} />
-        <div className="flex items-center justify-between bg-phi-bg-surface px-4 py-2.5">
-          <span className="text-[13px] font-medium text-phi-text-primary">{currentLabel}</span>
-          <span className="text-[11px] text-phi-text-muted">{choice === "auto" ? "Follows app" : effective === "light" ? "Light" : "Dark"}</span>
-        </div>
+        </label>
       </div>
     </div>
   );
@@ -215,29 +204,6 @@ function SchemePreviewPane({ light }: { light: boolean }) {
 
 function AppearanceTab() {
   const { theme, setTheme } = useTheme();
-  const [playgroundOpen, setPlaygroundOpen] = useState(false);
-  const [previewTokens, setPreviewTokens] = useState<Record<string, string>>({});
-  const [exportJson, setExportJson] = useState<string | null>(null);
-  const resetPreview = useCallback(() => {
-    for (const k of Object.keys(previewTokens)) document.documentElement.style.removeProperty(k);
-    setPreviewTokens({});
-    setExportJson(null);
-  }, [previewTokens]);
-  useEffect(() => () => resetPreview(), [resetPreview]);
-  const handleExport = useCallback(() => {
-    const obj: Record<string, string> = {};
-    for (const [k, v] of Object.entries(previewTokens)) obj[k] = v;
-    if (Object.keys(obj).length === 0) {
-      // fallback to computed styles
-      const styles = getComputedStyle(document.documentElement);
-      // sample few tokens
-      const sample = ["--color-phi-bg-app", "--color-phi-text-primary", "--color-phi-accent"];
-      for (const s of sample) obj[s] = styles.getPropertyValue(s).trim();
-    }
-    const json = JSON.stringify(obj, null, 2);
-    setExportJson(json);
-    navigator.clipboard.writeText(json).catch(() => {});
-  }, [previewTokens]);
 
   return (
     <div className="space-y-6">
@@ -265,69 +231,9 @@ function AppearanceTab() {
 
       <CodeThemeSection />
 
-      <div className="rounded-xl border border-phi-border bg-phi-bg-surface p-3">
-        <button onClick={() => setPlaygroundOpen((v) => !v)} className="flex w-full items-center justify-between text-left">
-          <span className="text-[13px] font-medium text-phi-text-primary">Advanced → Theme Playground</span>
-          <span className="text-[11px] text-phi-text-muted">{playgroundOpen ? "Close" : "Open"}</span>
-        </button>
-        {playgroundOpen && (
-          <div className="mt-3 space-y-3">
-            <div className="rounded-lg border border-phi-warning-border bg-phi-warning-bg px-3 py-2 text-[11px] text-phi-warning-text">
-              Preview — resets on reload. Mutates currently-applied tokens via <code className="rounded bg-phi-overlay px-1">document.documentElement.style</code>.
-            </div>
-            <PlaygroundEditor onChange={(k, v) => setPreviewTokens((p) => ({ ...p, [k]: v }))} />
-            <div className="flex gap-2">
-              <button onClick={resetPreview} className="rounded-lg border border-phi-border bg-phi-overlay px-3 py-1.5 text-[12px] font-medium text-phi-text-secondary hover:bg-phi-overlay-hover">Reset</button>
-              <button onClick={handleExport} className="rounded-lg bg-phi-bg-inverse px-3 py-1.5 text-[12px] font-medium text-phi-text-inverse hover:bg-phi-white">Export JSON & Copy</button>
-            </div>
-            {exportJson && (
-              <pre className="max-h-40 overflow-auto rounded-lg border border-phi-border bg-phi-bg-app p-2 font-mono text-[11px] text-phi-text-secondary">{exportJson}</pre>
-            )}
-          </div>
-        )}
-      </div>
+      <ThemeEditorToggle />
     </div>
   );
-}
-
-function PlaygroundEditor({ onChange }: { onChange: (k: string, v: string) => void }) {
-  const tokens = useMemo(() => [
-    "--color-phi-bg-app", "--color-phi-bg-main", "--color-phi-bg-surface", "--color-phi-bg-elevated",
-    "--color-phi-text-primary", "--color-phi-text-secondary", "--color-phi-text-muted",
-    "--color-phi-accent", "--color-phi-border", "--color-phi-overlay",
-  ], []);
-  const [values, setValues] = useState<Record<string, string>>({});
-  useEffect(() => {
-    const obj: Record<string, string> = {};
-    for (const t of tokens) obj[t] = getComputedStyle(document.documentElement).getPropertyValue(t).trim();
-    setValues(obj);
-  }, [tokens]);
-  const set = (k: string, v: string) => {
-    document.documentElement.style.setProperty(k, v);
-    setValues((p) => ({ ...p, [k]: v }));
-    onChange(k, v);
-  };
-  return (
-    <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-      {tokens.map((t) => (
-        <label key={t} className="flex items-center gap-2 rounded-lg border border-phi-border bg-phi-bg-app px-2 py-1.5">
-          <span className="min-w-0 flex-1 truncate font-mono text-[10px] text-phi-text-muted">{t}</span>
-          <input type="color" value={toHex(values[t] || "#000000")} onChange={(e) => set(t, e.target.value)} className="size-6 rounded border border-phi-border bg-transparent" />
-          <input value={values[t] || ""} onChange={(e) => set(t, e.target.value)} className="w-24 rounded border border-phi-border bg-phi-bg-surface px-1 py-0.5 font-mono text-[10px] text-phi-text-secondary" />
-        </label>
-      ))}
-    </div>
-  );
-}
-
-function toHex(v: string): string {
-  const s = v.trim();
-  if (s.startsWith("#")) return s.slice(0, 7);
-  const nums = s.match(/\d+/g);
-  if (!nums || nums.length < 3) return "#000000";
-  const [r, g, b] = nums.slice(0, 3).map(Number);
-  const h = (n: number) => Math.max(0, Math.min(255, n)).toString(16).padStart(2, "0");
-  return `#${h(r)}${h(g)}${h(b)}`;
 }
 
 function ProvidersTab({ onChanged }: { onChanged?: () => void }) {

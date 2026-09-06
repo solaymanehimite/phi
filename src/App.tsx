@@ -22,6 +22,7 @@ import { brandingUrl } from "./lib/themed-assets";
 import { useHealth } from "./hooks/useHealth";
 import { FatalState } from "./components/fatal";
 import { SettingsPanel, type SettingsSection } from "./components/settings";
+import { ThemeEditor, useThemeEditorEnabled } from "./components/dev/ThemeEditor";
 import { useShortcuts } from "./hooks/useShortcuts";
 import { clearDraftFor } from "./hooks/useDraft";
 import { InlineErrorBlock, type InlineError } from "./components/inline-error";
@@ -169,6 +170,7 @@ export default function App() {
     const models = useModels();
     useTheme();
     const effectiveTheme = useEffectiveTheme();
+    const themeEditorEnabled = useThemeEditorEnabled();
     const healthHook = useHealth(3000);
     const [settingsActive, setSettingsActive] = useState(false);
     const [settingsSection, setSettingsSection] = useState<SettingsSection>("appearance");
@@ -845,6 +847,11 @@ export default function App() {
                                 </section>
                                 )}
                             </div>
+                            {!settingsActive && themeEditorEnabled && (
+                                <div className="absolute bottom-4 right-4 z-40">
+                                    <ThemeEditor />
+                                </div>
+                            )}
                         </main>
                     </div>
                 );
