@@ -5,6 +5,9 @@ import type { SessionGroup } from "../hooks/useSessions";
 import type { SessionInfo } from "../types/session";
 import type { ProjectOption } from "../lib/projects";
 import { Button } from "./ui/button";
+import { EmptyState } from "./ui/empty-state";
+import { MenuLabel } from "./ui/menu";
+import { Hint } from "./ui/hint";
 type SearchSessionsButtonProps = {
     onClick: () => void;
     className?: string;
@@ -84,13 +87,7 @@ const ActionGroup = memo(function ActionGroup({
 }) {
     if (actions.length === 0) return null;
     return (
-        <Command.Group
-            heading={
-                <div className="px-2 pb-1 pt-1 text-[10px] font-semibold tracking-[0.12em] text-phi-text-muted">
-                    Actions
-                </div>
-            }
-        >
+        <Command.Group heading={<MenuLabel>Actions</MenuLabel>}>
             {actions.map((action) => (
                 <Command.Item
                     key={action.id}
@@ -103,11 +100,7 @@ const ActionGroup = memo(function ActionGroup({
                         <IconMessageCircleFilled className="size-5 shrink-0 text-current" />
                     )}
                     <span className="min-w-0 flex-1 truncate">{action.label}</span>
-                    {action.hint && (
-                        <span className="shrink-0 text-[11px] text-phi-text-faint">
-                            {action.hint}
-                        </span>
-                    )}
+                    {action.hint && <Hint>{action.hint}</Hint>}
                 </Command.Item>
             ))}
         </Command.Group>
@@ -246,11 +239,7 @@ const PaletteDialog = memo(function PaletteDialog({
                     </>
                 ) : (
                     <>
-                        {empty && (
-                            <div className="px-3 py-8 text-center text-[12px] text-phi-text-muted">
-                                No results found.
-                            </div>
-                        )}
+                        {empty && <EmptyState compact title="No results found." />}
                         <ActionGroup actions={filteredActions} onAction={onAction} />
                         {filteredGroups.map(({ group, sessions }) => (
                             <Command.Group

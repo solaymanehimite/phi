@@ -72,11 +72,6 @@ export function SettingsPanel({
   );
 }
 
-/** @deprecated Use SettingsPanel (settings is now a tab, not a page). Kept for compat — onClose is ignored. */
-export function SettingsPage({ onProvidersChanged }: { onClose: () => void; onProvidersChanged?: () => void }) {
-  return <SettingsPanel onProvidersChanged={onProvidersChanged} />;
-}
-
 function CodeThemeSection() {
   const { effective } = useTheme();
   const { choice, theme: activeTheme } = useCodeTheme();

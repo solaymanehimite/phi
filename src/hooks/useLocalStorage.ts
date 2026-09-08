@@ -112,20 +112,3 @@ export function useLocalStorage<T>(
   return [storedValue, setStoredValue];
 }
 
-/**
- * Helper: JSON Set serializer pairing for `Set<string>` collapsed-state use case.
- * Keeps call-sites tidy.
- */
-export function setStringSerializer() {
-  return {
-    serialize: (v: Set<string>) => JSON.stringify([...v]),
-    deserialize: (s: string): Set<string> => {
-      try {
-        const parsed = JSON.parse(s);
-        return new Set(Array.isArray(parsed) ? parsed : []);
-      } catch {
-        return new Set();
-      }
-    },
-  } satisfies UseLocalStorageOptions<Set<string>>;
-}

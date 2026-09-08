@@ -14,11 +14,7 @@ import {
 import { Alert } from "./ui/alert";
 import { Button, buttonClass, type ButtonVariant } from "./ui/button";
 import { InlineCode } from "./ui/code";
-import {
-    CollapsibleContent,
-    CollapsibleTrigger,
-    GroupCollapsibleTrigger,
-} from "./ui/collapsible";
+import { GroupCollapsibleTrigger } from "./ui/collapsible";
 import { DialogOverlay, DialogPanel, DialogTitle } from "./ui/dialog";
 import {
     DropdownMenu,
@@ -30,21 +26,20 @@ import { EmptyState } from "./ui/empty-state";
 import { Input } from "./ui/input";
 import { Menu, MenuEmpty, MenuItem, MenuLabel } from "./ui/menu";
 import { NavItem } from "./ui/nav-item";
-import { Hint, Pill } from "./ui/pill";
+import { Hint } from "./ui/hint";
 import { Popover, PopoverContent, PopoverTrigger } from "./ui/popover";
 import { Select } from "./ui/select";
-import { SidebarItem } from "./ui/sidebar-item";
-import { Surface, SurfaceContent, Well } from "./ui/surface";
+import { Well } from "./ui/surface";
 import { Switch } from "./ui/switch";
 
 const SECTIONS = [
     { id: "buttons", label: "Buttons" },
     { id: "inputs", label: "Inputs" },
     { id: "alerts", label: "Alerts" },
-    { id: "pills", label: "Pills & hints" },
+    { id: "pills", label: "Hint" },
     { id: "code", label: "Inline code" },
-    { id: "surfaces", label: "Surfaces & wells" },
-    { id: "collapsibles", label: "Collapsibles" },
+    { id: "surfaces", label: "Well" },
+    { id: "collapsibles", label: "Group collapsible" },
     { id: "menus", label: "Menus" },
     { id: "dropdowns", label: "Dropdowns" },
     { id: "popovers", label: "Popovers" },
@@ -97,11 +92,9 @@ const BUTTON_VARIANTS: ButtonVariant[] = [
 export function UiDemoPanel() {
     const [switchOn, setSwitchOn] = useState(true);
     const [switchOff, setSwitchOff] = useState(false);
-    const [collapsibleOpen, setCollapsibleOpen] = useState(true);
     const [groupCollapsed, setGroupCollapsed] = useState(false);
     const [dialogOpen, setDialogOpen] = useState(false);
     const [selectValue, setSelectValue] = useState("phi-dark");
-    const [pillActive, setPillActive] = useState("all");
     const [navActive, setNavActive] = useState("chats");
     const [menuActive, setMenuActive] = useState(1);
 
@@ -135,9 +128,14 @@ export function UiDemoPanel() {
                         </p>
                         <div className="mt-3 flex flex-wrap gap-1.5 sm:hidden">
                             {SECTIONS.map((s) => (
-                                <Pill key={s.id} onClick={() => scrollTo(s.id)}>
+                                <button
+                                    key={s.id}
+                                    type="button"
+                                    onClick={() => scrollTo(s.id)}
+                                    className="rounded-full border border-phi-border-faint px-2.5 py-1 text-[11px] font-medium text-phi-text-tertiary"
+                                >
                                     {s.label}
-                                </Pill>
+                                </button>
                             ))}
                         </div>
                     </div>
@@ -238,28 +236,12 @@ export function UiDemoPanel() {
 
                         <DemoSection
                             id="pills"
-                            title="Pill + Hint"
-                            description="Filter pills (model rail, effort presets) and the muted count chip used at the right of palette rows."
+                            title="Hint"
+                            description="The muted count chip used at the right of palette rows."
                         >
-                            <div className="flex flex-col gap-4">
-                                <div>
-                                    <RowLabel>Active / inactive</RowLabel>
-                                    <div className="flex flex-wrap gap-1.5">
-                                        {["all", "favorites", "recent"].map((id) => (
-                                            <Pill key={id} active={pillActive === id} onClick={() => setPillActive(id)}>
-                                                {id === "all" ? "All models" : id === "favorites" ? <><IconCheckFilled className="size-3.5" /> Favorites</> : "Recent"}
-                                            </Pill>
-                                        ))}
-                                        <Pill disabled>Disabled</Pill>
-                                    </div>
-                                </div>
-                                <div>
-                                    <RowLabel>Hint chip</RowLabel>
-                                    <div className="flex items-center gap-3 rounded-lg border border-phi-border bg-phi-overlay px-3 py-2 text-[13px] text-phi-text-secondary">
-                                        <span className="min-w-0 flex-1 truncate">claude-opus-4-6</span>
-                                        <Hint>anthropic · 12</Hint>
-                                    </div>
-                                </div>
+                            <div className="flex items-center gap-3 rounded-lg border border-phi-border bg-phi-overlay px-3 py-2 text-[13px] text-phi-text-secondary">
+                                <span className="min-w-0 flex-1 truncate">claude-opus-4-6</span>
+                                <Hint>anthropic · 12</Hint>
                             </div>
                         </DemoSection>
 
@@ -277,16 +259,10 @@ export function UiDemoPanel() {
 
                         <DemoSection
                             id="surfaces"
-                            title="Surface / SurfaceContent / Well"
-                            description="Raised card (thinking blocks), its bordered body row, and the sunken well for tool output, diffs, code."
+                            title="Well"
+                            description="The sunken well for tool output, diffs, code."
                         >
                             <div className="flex flex-col gap-3">
-                                <Surface>
-                                    <div className="px-3 py-2 text-[12px] font-medium text-phi-text-secondary">Surface header row</div>
-                                    <SurfaceContent>
-                                        <p className="text-[12px] leading-5 text-phi-text-tertiary">SurfaceContent — bordered body under a header or trigger.</p>
-                                    </SurfaceContent>
-                                </Surface>
                                 <Well className="px-3 py-2.5">
                                     <p className="font-mono text-[12px] leading-5 text-phi-text-secondary">$ pi sessions list --cwd ~/projects/phi</p>
                                     <p className="font-mono text-[12px] leading-5 text-phi-text-muted">3 sessions · newest first</p>
@@ -296,21 +272,10 @@ export function UiDemoPanel() {
 
                         <DemoSection
                             id="collapsibles"
-                            title="Collapsible"
-                            description="Row trigger + bordered body (thinking blocks) and the sidebar group trigger with animated chevron."
+                            title="Group collapsible"
+                            description="The sidebar group trigger with animated chevron."
                         >
                             <div className="flex flex-col gap-3">
-                                <Surface>
-                                    <CollapsibleTrigger open={collapsibleOpen} onClick={() => setCollapsibleOpen((v) => !v)}>
-                                        <span className="text-[12.5px] font-medium text-phi-text-secondary">Thought for 12s</span>
-                                        <Hint>reasoning</Hint>
-                                    </CollapsibleTrigger>
-                                    {collapsibleOpen && (
-                                        <CollapsibleContent>
-                                            <p className="text-[13px] leading-6 text-phi-text-tertiary">Considering which files reference the session store…</p>
-                                        </CollapsibleContent>
-                                    )}
-                                </Surface>
                                 <div className="rounded-lg border border-phi-border">
                                     <GroupCollapsibleTrigger collapsed={groupCollapsed} onClick={() => setGroupCollapsed((v) => !v)}>
                                         <span className="flex-1">Phi — ~/Dev/ship/Phi</span>
@@ -404,7 +369,7 @@ export function UiDemoPanel() {
 
                         <DemoSection
                             id="nav"
-                            title="NavItem + SidebarItem"
+                            title="NavItem"
                             description="One hover, one active, one focus ring — shared by sidebar, settings rail, and this page."
                         >
                             <div className="flex max-w-sm flex-col gap-0.5">
@@ -429,10 +394,6 @@ export function UiDemoPanel() {
                                         ) : undefined}
                                     </NavItem>
                                 ))}
-                                <div className="mt-2 border-t border-phi-border-faint pt-2">
-                                    <RowLabel>Deprecated — SidebarItem (use NavItem)</RowLabel>
-                                    <SidebarItem label="Legacy row" onClick={() => {}} />
-                                </div>
                             </div>
                         </DemoSection>
 

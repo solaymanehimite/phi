@@ -1,6 +1,7 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { IconCheckFilled, IconCopyFilled, IconXFilled } from "@tabler/icons-react";
 import { Button } from "../ui/button";
+import { Well } from "../ui/surface";
 import { Highlight, type PrismTheme, type Token, type TokenInputProps, type TokenOutputProps } from "prism-react-renderer";
 import type { WorkItem } from "../../types/work";
 import { InlineShell, LazyHighlightedCode, detectLanguage, grammarFor, useCodeTheme } from "../code-theme";
@@ -123,7 +124,7 @@ function DiffOutput({ diff, isError, language }: { diff: string; isError: boolea
     // render identical-layout plain text until scrolled near the viewport.
     const { ref, inView } = useInView<HTMLDivElement>();
     return (
-        <div ref={ref} className={`phi-diff max-h-64 overflow-auto rounded-md bg-phi-bg-sunken py-1 font-mono text-[11px] leading-5 ${isError ? "text-phi-error-text" : "text-phi-text-primary"}`}>
+        <Well ref={ref} className={`phi-diff max-h-64 overflow-auto py-1 font-mono text-[11px] leading-5 ${isError ? "text-phi-error-text" : "text-phi-text-primary"}`}>
             {!inView ? entries.map((entry, index) => (
                 <div key={`${index}-${entry.kind}`} className={`phi-diff-line relative flex min-w-max items-stretch px-1.5 ${entry.kind === "remove" ? "phi-diff-remove" : entry.kind === "add" ? "phi-diff-add" : entry.text.trim() === "..." ? "phi-diff-truncation" : ""}`}>
                     <span aria-hidden="true" className={`mr-1.5 w-[3px] shrink-0 ${entry.kind === "remove" ? "bg-phi-error" : entry.kind === "add" ? "bg-phi-thinking-low" : "bg-transparent"}`} />
@@ -148,7 +149,7 @@ function DiffOutput({ diff, isError, language }: { diff: string; isError: boolea
                     </div>
                 );
             })}
-        </div>
+        </Well>
     );
 }
 
@@ -215,7 +216,7 @@ export function ToolLine({ item }: ToolLineProps) {
                             {!hasOpened ? null : item.name === "edit" && result?.diff ? (
                                 <DiffOutput diff={result.diff} isError={isError} language={isError ? undefined : outputLanguage} />
                             ) : (
-                                <pre className={`max-h-64 overflow-auto whitespace-pre-wrap break-words rounded-md bg-phi-bg-sunken px-1.5 py-2 pr-9 font-mono text-[11px] leading-5 ${isError ? "text-phi-error-text" : "text-phi-text-primary"}`}>{output ? <LazyHighlightedCode code={output} language={isError ? undefined : outputLanguage} /> : "No output"}</pre>
+                                <Well as="pre" className={`max-h-64 overflow-auto whitespace-pre-wrap break-words px-1.5 py-2 pr-9 font-mono text-[11px] leading-5 ${isError ? "text-phi-error-text" : "text-phi-text-primary"}`}>{output ? <LazyHighlightedCode code={output} language={isError ? undefined : outputLanguage} /> : "No output"}</Well>
                             )}
                             {copyText && <span className="absolute right-1.5 top-1.5"><Button type="button" variant="mini" aria-label="Copy output" title={copied ? "Copied" : "Copy output"} onClick={() => void copy(copyText)}>{copied ? <IconCheckFilled className="size-3.5" /> : <IconCopyFilled className="size-3.5" />}</Button></span>}
                         </div>

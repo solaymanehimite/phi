@@ -1,51 +1,5 @@
 import { IconChevronDownFilled } from "@tabler/icons-react";
-import type { ButtonHTMLAttributes, HTMLAttributes, ReactNode } from "react";
-
-type CollapsibleTriggerProps = ButtonHTMLAttributes<HTMLButtonElement> & {
-    open: boolean;
-    children: ReactNode;
-};
-
-export function CollapsibleTrigger({
-    open,
-    children,
-    className = "",
-    ...props
-}: CollapsibleTriggerProps) {
-    return (
-        <button
-            type="button"
-            className={`flex w-full items-center gap-2 px-3 py-2 text-left ${className}`}
-            {...props}
-        >
-            <span
-                className={`text-[11px] text-phi-text-muted transition-transform ${open ? "rotate-90" : ""}`}
-            >
-                ▸
-            </span>
-            {children}
-        </button>
-    );
-}
-
-type CollapsibleContentProps = HTMLAttributes<HTMLDivElement> & {
-    children: ReactNode;
-};
-
-export function CollapsibleContent({
-    children,
-    className = "",
-    ...props
-}: CollapsibleContentProps) {
-    return (
-        <div
-            className={`border-t border-phi-border-faint px-3 py-2.5 ${className}`}
-            {...props}
-        >
-            {children}
-        </div>
-    );
-}
+import type { ButtonHTMLAttributes, ReactNode } from "react";
 
 type GroupCollapsibleTriggerProps = ButtonHTMLAttributes<HTMLButtonElement> & {
     collapsed: boolean;

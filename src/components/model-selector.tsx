@@ -541,5 +541,3 @@ export const ModelSelector = memo(function ModelSelector({
     );
 });
 
-// Moved to ui/pill — re-exported here for compat.
-export { Pill as ComposerPill } from "./ui/pill";
