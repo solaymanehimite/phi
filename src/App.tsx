@@ -20,6 +20,8 @@ import {
     IconSunFilled,
 } from "@tabler/icons-react";
 import { Button } from "./components/ui/button";
+import { Alert } from "./components/ui/alert";
+import { InlineCode } from "./components/ui/code";
 import { useSessions } from "./hooks/useSessions";
 import { useProjects, type NewProjectInput } from "./hooks/useProjects";
 import { normalizeProjectPath, resolveProjectOptions, sessionsForProject, type Project } from "./lib/projects";
@@ -121,7 +123,7 @@ const ChatViewport = memo(function ChatViewport({
     if (error && messages.length === 0) {
         return (
             <div className="mx-auto flex w-full max-w-3xl flex-1 flex-col overflow-y-auto px-6 pt-6">
-                <div className="mx-auto mt-6 max-w-xl rounded-lg border border-phi-error-border bg-phi-error-bg px-4 py-3 text-[13px] text-phi-error-text">{error}</div>
+                <Alert variant="error" className="mx-auto mt-6 max-w-xl text-[13px]">{error}</Alert>
             </div>
         );
     }
@@ -162,7 +164,7 @@ const ChatViewport = memo(function ChatViewport({
                     ))}
                     {inlineError && <InlineErrorBlock error={inlineError} onContinue={onContinue} onDismiss={onDismiss!} />}
                     {error && !isStreaming && !inlineError && (
-                        <div className="mx-auto mt-3 w-full max-w-3xl rounded-lg border border-phi-error-border bg-phi-error-bg px-3 py-2 text-[13px] text-phi-error-text">{error}</div>
+                        <Alert variant="error" className="mx-auto mt-3 w-full max-w-3xl text-[13px]">{error}</Alert>
                     )}
                 </div>
             </StickToBottom.Content>
@@ -955,17 +957,17 @@ export default function App() {
                                     <div className="shrink-0 px-4 sm:px-7">
                                         {(modelError) && (
                                             <div className="mx-auto mb-2 w-full max-w-3xl">
-                                                <div className="flex items-center justify-between gap-2 rounded-lg border border-phi-error-border bg-phi-error-bg px-3 py-2 text-[12.5px] text-phi-error-text">
+                                                <Alert variant="error" className="flex items-center justify-between gap-2 !text-[12.5px]">
                                                     <span className="truncate">{modelError}</span>
                                                     <button onClick={() => setModelError(null)} className="shrink-0 text-[11px] underline opacity-80 hover:opacity-100">Dismiss</button>
-                                                </div>
+                                                </Alert>
                                             </div>
                                         )}
                                         {!modelError && !models.loading && models.models.length === 0 && !models.error && (
                                             <div className="mx-auto mb-2 w-full max-w-3xl">
-                                                <div className="rounded-lg border border-phi-warning-border bg-phi-warning-bg px-3 py-2 text-[12.5px] text-phi-warning-text">
-                                                    No models available — check auth (run <code className="rounded bg-phi-overlay px-1">pi auth</code>) or configure API keys. The model selector will populate after auth.
-                                                </div>
+                                                <Alert variant="warning" className="!text-[12.5px]">
+                                                    No models available — check auth (run <InlineCode>pi auth</InlineCode>) or configure API keys. The model selector will populate after auth.
+                                                </Alert>
                                             </div>
                                         )}
                                         <div className="mx-auto pl-6 mb-1 flex w-full max-w-3xl min-w-0 items-center gap-1" ref={directoryPickerRef}>

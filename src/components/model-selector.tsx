@@ -13,6 +13,8 @@ import {
     IconStarFilled,
 } from "@tabler/icons-react";
 import { Popover, PopoverContent, PopoverTrigger } from "./ui/popover";
+import { Alert } from "./ui/alert";
+import { InlineCode } from "./ui/code";
 import type { ModelInfo, ThinkingLevel } from "../types/session";
 import { useEffectiveTheme } from "../hooks/useTheme";
 import { providerIconUrl } from "../lib/themed-assets";
@@ -346,7 +348,7 @@ export const ModelSelector = memo(function ModelSelector({
                                             title="Favorites"
                                             className={railBtn(activeCategory === "favorites")}
                                         >
-                                            <IconStarFilled className={`size-5 ${activeCategory === "favorites" ? "text-[#f0b429]" : ""}`} />
+                                            <IconStarFilled className={`size-5 ${activeCategory === "favorites" ? "text-phi-warning" : ""}`} />
                                         </button>
                                     </div>
                                     <div
@@ -391,7 +393,7 @@ export const ModelSelector = memo(function ModelSelector({
                                     {indicatorY != null && (
                                         <span
                                             aria-hidden="true"
-                                            className={`absolute right-0 top-0 h-6 w-[3px] rounded-full bg-[#2f81f7] motion-safe:transition-[transform,opacity] motion-safe:duration-200 motion-safe:ease-out ${isRailActive ? "opacity-100" : "opacity-0"}`}
+                                            className={`absolute right-0 top-0 h-6 w-[3px] rounded-full bg-phi-accent motion-safe:transition-[transform,opacity] motion-safe:duration-200 motion-safe:ease-out ${isRailActive ? "opacity-100" : "opacity-0"}`}
                                             style={{ transform: `translateY(${indicatorY}px)` }}
                                         />
                                     )}
@@ -411,18 +413,16 @@ export const ModelSelector = memo(function ModelSelector({
                                         />
                                     </div>
                                     {error && (
-                                        <div className="mx-3.5 mb-2 mt-2 rounded-md border border-phi-error-border bg-phi-error-bg px-2.5 py-1.5 text-[11.5px] leading-snug text-phi-error-text">
+                                        <Alert variant="error" className="mx-3.5 mb-2 mt-2 !rounded-md !text-[11.5px] !leading-snug">
                                             {error}
-                                        </div>
+                                        </Alert>
                                     )}
                                     {!loading && !error && list.length === 0 && (
-                                        <div className="mx-3.5 mb-2 mt-2 rounded-md border border-phi-warning-border bg-phi-warning-bg px-2.5 py-2 text-[11.5px] leading-snug text-phi-warning-text">
+                                        <Alert variant="warning" className="mx-3.5 mb-2 mt-2 !rounded-md !text-[11.5px] !leading-snug">
                                             No models available — check auth (run{" "}
-                                            <code className="rounded bg-phi-overlay px-1 py-0.5">
-                                                pi auth
-                                            </code>
+                                            <InlineCode>pi auth</InlineCode>
                                             ) or add an API key for your provider.
-                                        </div>
+                                        </Alert>
                                     )}
 
                                     <div className="min-h-0 flex-1 overflow-y-auto px-2.5 py-2">
@@ -519,7 +519,7 @@ export const ModelSelector = memo(function ModelSelector({
                                                                     className="grid shrink-0 place-items-center rounded p-0.5"
                                                                 >
                                                                     {isFav ? (
-                                                                        <IconStarFilled className="size-4 text-[#f0b429]" />
+                                                                        <IconStarFilled className="size-4 text-phi-warning" />
                                                                     ) : (
                                                                         <IconStar className="size-4 text-phi-text-tertiary" />
                                                                     )}
@@ -541,23 +541,5 @@ export const ModelSelector = memo(function ModelSelector({
     );
 });
 
-// kept for potential reuse — not used in composer after remarks
-export function ComposerPill({
-    children,
-    active,
-    className = "",
-    ...props
-}: React.ButtonHTMLAttributes<HTMLButtonElement> & { active?: boolean }) {
-    return (
-        <button
-            type="button"
-            className={`inline-flex h-7 items-center gap-1.5 rounded-full border px-2.5 text-[12px] font-medium transition focus:outline-none focus-visible:ring-2 focus-visible:ring-phi-accent/30 ${active
-                    ? "border-phi-accent/20 bg-phi-accent/10 text-phi-accent"
-                    : "border-phi-border-faint bg-phi-bg-sunken text-phi-text-tertiary hover:bg-phi-overlay-strong hover:text-phi-text-secondary"
-                } ${className}`}
-            {...props}
-        >
-            {children}
-        </button>
-    );
-}
+// Moved to ui/pill — re-exported here for compat.
+export { Pill as ComposerPill } from "./ui/pill";

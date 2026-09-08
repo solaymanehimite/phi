@@ -1,4 +1,5 @@
 import { useCallback, useState } from "react";
+import { Button } from "./ui/button";
 
 export type InlineErrorReason = "Abort" | "Interruption" | "Auth" | "Rate limit" | "Provider down" | "Error";
 
@@ -48,20 +49,22 @@ export function InlineErrorBlock({ error, onContinue, onDismiss, archived }: Pro
         <div className={`mt-0.5 break-words text-[12px] leading-5 ${archived ? "text-phi-text-muted" : "text-phi-error-text/90"}`}>{error.message}</div>
         {!archived && (
           <div className="mt-2 flex items-center gap-2">
-            <button
+            <Button
               onClick={onContinue}
               disabled={!error.canContinue || !onContinue}
               title={!error.canContinue ? "Cannot continue this stop reason" : undefined}
-              className="inline-flex h-7 items-center rounded-md bg-phi-bg-inverse px-3 text-[12px] font-medium text-phi-text-inverse hover:bg-phi-white disabled:opacity-40 disabled:cursor-not-allowed"
+              variant="primary"
+              size="xs"
+              className="!rounded-md"
             >
               Continue
-            </button>
-            <button onClick={onDismiss} className="inline-flex h-7 items-center rounded-md border border-phi-border bg-transparent px-3 text-[12px] font-medium text-phi-text-secondary hover:bg-phi-overlay">
+            </Button>
+            <Button onClick={onDismiss} variant="secondary" size="xs" className="!rounded-md !border-phi-border !bg-transparent">
               Dismiss
-            </button>
-            <button onClick={handleCopy} className="inline-flex h-7 items-center rounded-md border border-transparent px-2 text-[12px] text-phi-text-muted hover:text-phi-text-secondary">
+            </Button>
+            <Button onClick={handleCopy} variant="ghost" size="xs" className="!text-phi-text-muted hover:!text-phi-text-secondary">
               {copied ? "Copied!" : "Copy error"}
-            </button>
+            </Button>
           </div>
         )}
       </div>

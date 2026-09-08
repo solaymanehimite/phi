@@ -61,7 +61,7 @@ export function GroupCollapsibleTrigger({
     return (
         <button
             type="button"
-            className={`flex w-full items-center gap-1.5 rounded px-2 py-1 text-left text-[11px] font-medium tracking-wide text-phi-text-secondary hover:bg-phi-border-faint hover:text-phi-text-primary ${className}`}
+            className={`flex w-full items-center gap-1.5 rounded px-2 py-1 text-left text-[11px] font-medium tracking-wide text-phi-text-secondary hover:bg-phi-overlay-hover hover:text-phi-text-primary ${className}`}
             {...props}
         >
             <IconChevronDownFilled

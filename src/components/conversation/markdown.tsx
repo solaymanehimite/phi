@@ -3,6 +3,8 @@ import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { IconCheckFilled, IconCopyFilled } from "@tabler/icons-react";
 import { LazyHighlightedCode } from "../code-theme";
+import { Button } from "../ui/button";
+import { InlineCode } from "../ui/code";
 
 // Single shared instance so remarkGfm isn't recreated per render
 const remarkPlugins = [remarkGfm] as const;
@@ -49,11 +51,12 @@ function CopyButton({ text }: { text: string }) {
   }, [text]);
 
   return (
-    <button
-      type="button"
+    <Button
       onClick={onCopy}
       aria-label={copied ? "Copied" : "Copy code"}
-      className="absolute right-2 top-2 z-10 inline-flex items-center gap-1 rounded-md border border-phi-border bg-phi-bg-elevated px-2 py-1 text-[11px] font-medium leading-none tracking-wide text-phi-text-tertiary shadow-[0_1px_2px_var(--color-phi-shadow)] transition hover:border-phi-border-strong hover:bg-phi-overlay-hover hover:text-phi-text-secondary active:bg-phi-overlay-active"
+      variant="secondary"
+      size="xs"
+      className="absolute right-2 top-2 z-10 !gap-1 !text-[11px] !leading-none shadow-[0_1px_2px_var(--color-phi-shadow)]"
     >
       {copied ? (
         <IconCheckFilled className="size-3 text-phi-thinking-low" />
@@ -61,7 +64,7 @@ function CopyButton({ text }: { text: string }) {
         <IconCopyFilled className="size-3" />
       )}
       <span>{copied ? "Copied" : "Copy"}</span>
-    </button>
+    </Button>
   );
 }
 
@@ -92,14 +95,7 @@ const mdComponents = {
     const isInline = inline ?? (!String(className ?? "").startsWith("language-") && !String(children).includes("\n"));
     // ReactMarkdown v10 uses `inline` boolean correctly; fallback heuristic for edge cases
     if (isInline && !String(className ?? "").includes("language-")) {
-      return (
-        <code
-          className="rounded bg-phi-overlay-code px-1 py-0.5 text-[13px] font-mono font-normal text-phi-text-primary break-words"
-          {...props}
-        >
-          {children}
-        </code>
-      );
+      return <InlineCode {...props}>{children}</InlineCode>;
     }
     const code = String(children).replace(/\n$/, "");
     const langMatch = /language-([\w+-]+)/.exec(String(className ?? ""));
@@ -107,9 +103,13 @@ const mdComponents = {
   },
 } as const;
 
+// No `prose-invert` — typography tokens are explicit so light theme keeps
+// dark text on light surfaces. Every prose element maps to a phi token.
+const PROSE = "prose max-w-full min-w-0 text-[14px] leading-6 text-phi-text-secondary prose-p:my-2 prose-p:text-phi-text-secondary prose-headings:mt-4 prose-headings:mb-2 prose-headings:text-phi-text-primary prose-headings:tracking-[-0.01em] prose-h1:text-[22px] prose-h2:text-[18px] prose-h3:text-[15px] prose-strong:text-phi-text-primary prose-em:text-phi-text-secondary prose-code:rounded prose-code:bg-phi-overlay-code prose-code:px-1 prose-code:py-0.5 prose-code:text-[13px] prose-code:font-mono prose-code:font-normal prose-code:text-phi-text-primary prose-code:break-words prose-code:before:content-none prose-code:after:content-none prose-a:text-phi-accent prose-a:underline-offset-2 hover:prose-a:underline prose-li:marker:text-phi-text-muted prose-li:text-phi-text-secondary prose-ul:my-2 prose-ol:my-2 prose-blockquote:border-phi-border-strong prose-blockquote:text-phi-text-tertiary prose-hr:border-phi-border prose-table:text-phi-text-secondary prose-th:text-phi-text-primary prose-td:text-phi-text-secondary prose-thead:border-phi-border-strong prose-tr:border-phi-border";
+
 function MarkdownChunk({ text }: { text: string }) {
   return (
-    <div className="prose prose-invert max-w-full min-w-0 text-[14px] leading-6 prose-p:my-2 prose-p:text-phi-text-secondary prose-headings:mt-4 prose-headings:mb-2 prose-headings:text-phi-text-primary prose-headings:tracking-[-0.01em] prose-h1:text-[22px] prose-h2:text-[18px] prose-h3:text-[15px] prose-strong:text-phi-text-primary prose-em:text-phi-text-secondary prose-code:rounded prose-code:bg-phi-overlay-code prose-code:px-1 prose-code:py-0.5 prose-code:text-[13px] prose-code:font-mono prose-code:font-normal prose-code:text-phi-text-primary prose-code:break-words prose-code:before:content-none prose-code:after:content-none prose-a:text-phi-accent prose-a:underline-offset-2 hover:prose-a:underline prose-li:marker:text-phi-text-muted prose-ul:my-2 prose-ol:my-2">
+    <div className={PROSE}>
       <ReactMarkdown remarkPlugins={remarkPlugins as any} components={mdComponents}>
         {text}
       </ReactMarkdown>
@@ -161,7 +161,7 @@ export const Markdown = memo(function Markdown({ text }: { text: string }) {
   }
 
   return (
-    <div className="prose prose-invert max-w-full min-w-0 text-[14px] leading-6 prose-p:my-2 prose-p:text-phi-text-secondary prose-headings:mt-4 prose-headings:mb-2 prose-headings:text-phi-text-primary prose-headings:tracking-[-0.01em] prose-h1:text-[22px] prose-h2:text-[18px] prose-h3:text-[15px] prose-strong:text-phi-text-primary prose-em:text-phi-text-secondary prose-code:rounded prose-code:bg-phi-overlay-code prose-code:px-1 prose-code:py-0.5 prose-code:text-[13px] prose-code:font-mono prose-code:font-normal prose-code:text-phi-text-primary prose-code:break-words prose-code:before:content-none prose-code:after:content-none prose-a:text-phi-accent prose-a:underline-offset-2 hover:prose-a:underline prose-li:marker:text-phi-text-muted prose-ul:my-2 prose-ol:my-2">
+    <div className={PROSE}>
       <ReactMarkdown remarkPlugins={remarkPlugins as any} components={mdComponents}>
         {trimmed}
       </ReactMarkdown>

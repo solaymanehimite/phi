@@ -1,5 +1,7 @@
 import { useCallback, useState } from "react";
 import { Button } from "./ui/button";
+import { Alert } from "./ui/alert";
+import { InlineCode } from "./ui/code";
 
 type FatalProps = {
   error?: string | null;
@@ -24,11 +26,11 @@ export function FatalState({ error, home, port, agentDir, onRetry }: FatalProps)
         </div>
         <h1 className="text-[20px] font-semibold tracking-tight text-phi-text-primary">Cannot reach Phi sidecar</h1>
         <p className="text-[13px] leading-5 text-phi-text-tertiary">
-          The local sidecar at <code className="rounded bg-phi-overlay px-1 py-0.5 font-mono text-[11px] text-phi-text-secondary">127.0.0.1:{port ?? 3001}</code> is unreachable. Check that <code className="rounded bg-phi-overlay px-1 py-0.5 font-mono text-[11px]">bun run dev:server</code> is running.
+          The local sidecar at <InlineCode className="text-[11px]">127.0.0.1:{port ?? 3001}</InlineCode> is unreachable. Check that <InlineCode className="text-[11px]">bun run dev:server</InlineCode> is running.
         </p>
-        {error && <p className="rounded-lg border border-phi-error-border bg-phi-error-bg px-3 py-2 text-left text-[12px] text-phi-error-text">{error}</p>}
+        {error && <Alert variant="error" className="text-left">{error}</Alert>}
         <div className="flex items-center justify-center gap-2 pt-2">
-          <Button onClick={handleRetry} variant="primary" className="!h-8 !w-auto !px-4 !text-[13px] !bg-phi-bg-inverse !text-phi-text-inverse hover:!bg-phi-white">
+          <Button onClick={handleRetry} variant="primary" size="sm" className="!w-auto">
             {retrying ? "Retrying…" : "Retry"}
           </Button>
           <Button onClick={() => setShowDiag((v) => !v)} variant="ghost">

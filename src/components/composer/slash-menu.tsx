@@ -1,5 +1,6 @@
 import { memo } from "react";
 import type { SlashCommand } from "../../lib/api";
+import { Menu, MenuEmpty, MenuItem } from "../ui/menu";
 
 type SlashMenuProps = {
   commands: SlashCommand[];
@@ -11,47 +12,42 @@ type SlashMenuProps = {
 export const SlashMenu = memo(function SlashMenu({ commands, selectedIndex, onSelect, onHover }: SlashMenuProps) {
   if (commands.length === 0) {
     return (
-      <div className="rounded-xl border border-phi-border-faint bg-phi-bg-elevated p-1 text-sm/6 text-phi-white shadow-xl">
-        <div className="rounded-lg px-3 py-1 text-[13px] text-phi-text-muted">
-          No commands match
-        </div>
-      </div>
+      <Menu>
+        <MenuEmpty>No commands match</MenuEmpty>
+      </Menu>
     );
   }
   return (
-    <div
+    <Menu
       role="listbox"
       aria-label="Slash commands"
-      className="max-h-[min(280px,40vh)] overflow-y-auto rounded-xl border border-phi-border-faint bg-phi-bg-elevated p-1 text-sm/6 text-phi-white shadow-xl transition duration-100 ease-out"
+      className="max-h-[min(280px,40vh)] overflow-y-auto transition duration-100 ease-out"
     >
       {commands.map((cmd, idx) => {
         const active = idx === selectedIndex;
         const label = cmd.source === "skill" ? cmd.name.replace(/^skill:/, "") : cmd.name;
         return (
-          <button
+          <MenuItem
             key={`${cmd.source}:${cmd.name}`}
             role="option"
             aria-selected={active}
+            active={active}
             onMouseEnter={() => onHover(idx)}
             onMouseDown={(e) => {
               // prevent textarea blur before click
               e.preventDefault();
               onSelect(cmd);
             }}
-            className={`group flex w-full items-center gap-3 rounded-lg px-3 py-1.5 text-left text-[13px] focus:outline-none ${
-              active
-                ? "bg-phi-overlay-strong text-phi-text-primary"
-                : "text-phi-text-secondary hover:bg-phi-overlay-strong"
-            }`}
+            className="gap-3 px-3"
           >
             <span className="shrink-0 text-[13px] font-medium tracking-tight">{label}</span>
             {cmd.argumentHint ? (
               <span className="shrink-0 text-[11px] text-phi-text-faint">{cmd.argumentHint}</span>
             ) : null}
             <span className="min-w-0 flex-1 truncate text-[12px] text-phi-text-muted">{cmd.description ?? ""}</span>
-          </button>
+          </MenuItem>
         );
       })}
-    </div>
+    </Menu>
   );
 });

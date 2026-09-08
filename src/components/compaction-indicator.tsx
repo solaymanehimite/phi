@@ -46,21 +46,25 @@ export const CompactionIndicator = memo(function CompactionIndicator({
         </div>
         <div className="flex shrink-0 items-center gap-1.5">
           {canRetry && onRetry && (
-            <button
+            <Button
               type="button"
               onClick={onRetry}
-              className="rounded-md border border-phi-error-border bg-phi-bg-elevated px-2.5 py-1 text-[11px] font-medium text-phi-error-text hover:bg-phi-overlay"
+              variant="secondary"
+              size="xs"
+              className="!border-phi-error-border !bg-phi-bg-elevated !text-[11px] !text-phi-error-text"
             >
               Retry
-            </button>
+            </Button>
           )}
-          <button
+          <Button
             type="button"
             onClick={onDismissError}
-            className="rounded-md px-2 py-1 text-[11px] text-phi-text-muted hover:bg-phi-overlay"
+            variant="ghost"
+            size="xs"
+            className="!text-[11px] !text-phi-text-muted"
           >
             Dismiss
-          </button>
+          </Button>
         </div>
       </div>
     );
@@ -92,8 +96,9 @@ export const CompactionIndicator = memo(function CompactionIndicator({
       <Button
         type="button"
         variant="ghost"
+        size="xs"
         onClick={onAbort}
-        className="!h-7 !rounded-full !px-2.5 !text-[11px] !text-phi-text-secondary hover:!bg-phi-overlay hover:!text-phi-text-primary"
+        className="!rounded-full !text-[11px] !text-phi-text-secondary hover:!text-phi-text-primary"
       >
         Abort
       </Button>

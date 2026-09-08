@@ -1,5 +1,6 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { IconCheckFilled, IconCopyFilled, IconXFilled } from "@tabler/icons-react";
+import { Button } from "../ui/button";
 import { Highlight, type PrismTheme, type Token, type TokenInputProps, type TokenOutputProps } from "prism-react-renderer";
 import type { WorkItem } from "../../types/work";
 import { InlineShell, LazyHighlightedCode, detectLanguage, grammarFor, useCodeTheme } from "../code-theme";
@@ -192,7 +193,7 @@ export function ToolLine({ item }: ToolLineProps) {
                 aria-expanded={open}
                 className="group flex min-h-7 w-full min-w-0 items-center gap-2 rounded-xl px-1.5 text-left text-[12px] transition-colors hover:bg-phi-overlay-hover focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-phi-accent/50"
             >
-                <span className={`relative grid size-4 shrink-0 place-items-center rounded-full ${finished ? (isError ? "bg-phi-error text-phi-bg-app" : "bg-phi-thinking-low text-phi-bg-app") : "border border-phi-text-muted text-transparent"}`}>
+                <span className={`relative grid size-4 shrink-0 place-items-center rounded-full ${finished ? (isError ? "bg-phi-error text-phi-white" : "bg-phi-thinking-low text-phi-white") : "border border-phi-text-muted text-transparent"}`}>
                     {finished && <StatusIcon className="size-2.5" aria-hidden="true" />}
                 </span>
                 <span className={`shrink-0 font-medium ${isError ? "text-phi-error" : "text-phi-text-secondary"}`}>{label}</span>
@@ -216,7 +217,7 @@ export function ToolLine({ item }: ToolLineProps) {
                             ) : (
                                 <pre className={`max-h-64 overflow-auto whitespace-pre-wrap break-words rounded-md bg-phi-bg-sunken px-1.5 py-2 pr-9 font-mono text-[11px] leading-5 ${isError ? "text-phi-error-text" : "text-phi-text-primary"}`}>{output ? <LazyHighlightedCode code={output} language={isError ? undefined : outputLanguage} /> : "No output"}</pre>
                             )}
-                            {copyText && <button type="button" aria-label="Copy output" title={copied ? "Copied" : "Copy output"} onClick={() => void copy(copyText)} className="absolute right-1.5 top-1.5 grid size-5 place-items-center text-phi-text-muted opacity-70 transition-opacity hover:text-phi-text-primary hover:opacity-100 focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-phi-accent/60">{copied ? <IconCheckFilled className="size-3.5" /> : <IconCopyFilled className="size-3.5" />}</button>}
+                            {copyText && <span className="absolute right-1.5 top-1.5"><Button type="button" variant="mini" aria-label="Copy output" title={copied ? "Copied" : "Copy output"} onClick={() => void copy(copyText)}>{copied ? <IconCheckFilled className="size-3.5" /> : <IconCopyFilled className="size-3.5" />}</Button></span>}
                         </div>
                     </div>
                 </div>

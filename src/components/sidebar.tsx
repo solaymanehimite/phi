@@ -11,6 +11,8 @@ import {
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
+import { Alert } from "./ui/alert";
+import { EmptyState } from "./ui/empty-state";
 import {
     DropdownMenu,
     DropdownMenuContent,
@@ -168,23 +170,13 @@ export const Sidebar = memo(function Sidebar({
                             Loading sessions…
                         </p>
                     ) : error ? (
-                        <div className="mx-2 rounded-lg border border-phi-error-border bg-phi-error-bg px-3 py-2 text-[12px] leading-4 text-phi-error-text">
-                            {error}
-                        </div>
+                        <Alert variant="error" className="mx-2 leading-4">{error}</Alert>
                     ) : projectGroups.length === 0 ? (
-                        <div className="px-2 py-8 text-center">
-                            <p className="text-[12.5px] font-medium text-phi-text-secondary">
-                                No projects yet
-                            </p>
-                            <p className="mx-auto mt-1 max-w-[200px] text-[11.5px] leading-4 text-phi-text-muted">
-                                Create one from the project picker to start chatting in a directory.
-                            </p>
-                            {orphanCount > 0 && (
-                                <p className="mx-auto mt-2 max-w-[200px] text-[11px] leading-4 text-phi-text-faint">
-                                    {orphanCount} session{orphanCount === 1 ? "" : "s"} outside projects — press ⌘K to find {orphanCount === 1 ? "it" : "them"}.
-                                </p>
-                            )}
-                        </div>
+                        <EmptyState
+                            title="No projects yet"
+                            description="Create one from the project picker to start chatting in a directory."
+                            detail={orphanCount > 0 ? `${orphanCount} session${orphanCount === 1 ? "" : "s"} outside projects — press ⌘K to find ${orphanCount === 1 ? "it" : "them"}.` : undefined}
+                        />
                     ) : (
                         <div>
                             <p className="px-2 pb-1 text-[11px] font-medium tracking-wide text-phi-text-faint">
@@ -248,14 +240,15 @@ export const Sidebar = memo(function Sidebar({
             </div>
 
             <div className="mt-auto flex shrink-0 items-center px-3 pb-4 pt-2">
-                <button
+                <Button
+                    variant="icon"
                     onClick={onOpenSettings}
                     title="Settings (Cmd+,)"
                     aria-label="Open settings"
-                    className="inline-flex h-7 w-7 items-center justify-center rounded-lg text-phi-text-tertiary hover:bg-phi-overlay-hover hover:text-phi-text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-phi-accent/40"
+                    className="!size-7"
                 >
                     <IconSettingsFilled className="size-4" />
-                </button>
+                </Button>
             </div>
         </aside>
     );

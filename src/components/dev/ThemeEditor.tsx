@@ -1,4 +1,5 @@
 import { Popover, PopoverContent, PopoverTrigger } from "../ui/popover";
+import { Button } from "../ui/button";
 import {
     IconBrush,
     IconCheckFilled,
@@ -258,7 +259,7 @@ export function ThemeEditorToggle() {
             </span>
             <span
                 aria-hidden
-                style={enabled ? { backgroundColor: "#2f7bff" } : undefined}
+                style={enabled ? { backgroundColor: "var(--color-phi-accent)" } : undefined}
                 className={`relative inline-flex h-6 w-10 shrink-0 items-center rounded-full p-0.5 motion-safe:transition-colors motion-safe:duration-200 motion-safe:ease-out ${enabled ? "" : "bg-phi-overlay-active"}`}
             >
                 <span className={`size-5 rounded-full bg-phi-white shadow-sm motion-safe:transition-transform motion-safe:duration-200 motion-safe:ease-out ${enabled ? "translate-x-4" : "translate-x-0"}`} />
@@ -323,9 +324,7 @@ export function ThemeEditor({ className = "" }: ThemeEditorProps) {
         <Popover className={`relative z-50 ${className}`}>
             <PopoverTrigger
                 aria-label="Open advanced color settings"
-                // Ghost by default; hover washes accent. Rounded-[4px] is concentric
-                // with the main panel's rounded-xl (12px) minus the 8px inset.
-                className="inline-flex size-9 items-center justify-center rounded-[4px] bg-transparent text-phi-text-muted transition-colors hover:bg-phi-accent/10 hover:text-phi-text-brand focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-phi-accent/40"
+                className="inline-grid size-8 shrink-0 place-items-center rounded-lg text-phi-text-tertiary transition-colors hover:bg-phi-overlay hover:text-phi-text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-phi-accent/40"
             >
                 <IconBrush className="size-4" />
             </PopoverTrigger>
@@ -389,9 +388,11 @@ export function ThemeEditor({ className = "" }: ThemeEditorProps) {
                 </div>
 
                 <div className="border-t border-phi-border-faint p-2">
-                    <button
+                    <Button
                         onClick={copyCss}
-                        className="flex w-full items-center justify-center gap-2 rounded-xl bg-phi-bg-inverse text-phi-text-inverse px-3 py-2 text-[13px] font-medium hover:bg-phi-white transition"
+                        variant="primary"
+                        size="sm"
+                        className="w-full !rounded-xl !py-2"
                     >
                         {copied ? (
                             <IconCheckFilled className="size-3.5" />
@@ -399,7 +400,7 @@ export function ThemeEditor({ className = "" }: ThemeEditorProps) {
                             <IconCopyFilled className="size-3.5" />
                         )}
                         {copied ? "Copied!" : "Copy CSS"}
-                    </button>
+                    </Button>
                 </div>
             </PopoverContent>
         </Popover>

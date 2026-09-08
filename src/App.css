@@ -33,7 +33,7 @@
   --color-phi-icon-active: var(--color-phi-text-primary);
 
   /* Accent */
-  --color-phi-accent: #d6a85f;
+  --color-phi-accent: #2f7bff;
 
   /* Borders — 2 core */
   --color-phi-border: rgb(242 240 255 / 0.06);
@@ -110,7 +110,7 @@ html[data-theme="light"] {
   --color-phi-icon: var(--color-phi-text-tertiary);
   --color-phi-icon-active: var(--color-phi-text-primary);
 
-  --color-phi-accent: #b47a1f;
+  --color-phi-accent: #2f7bff;
 
   --color-phi-border: rgb(10 10 15 / 0.08);
   --color-phi-border-strong: rgb(10 10 15 / 0.14);
@@ -178,7 +178,7 @@ html[data-theme="light"] {
     --color-phi-icon: var(--color-phi-text-tertiary);
     --color-phi-icon-active: var(--color-phi-text-primary);
 
-    --color-phi-accent: #b47a1f;
+    --color-phi-accent: #2f7bff;
 
     --color-phi-border: rgb(10 10 15 / 0.08);
     --color-phi-border-strong: rgb(10 10 15 / 0.14);
@@ -246,7 +246,7 @@ html[data-theme="light"] {
   position: fixed;
   inset: 0;
   z-index: 50;
-  background: rgb(0 0 0 / 0.58);
+  background: var(--color-phi-scrim);
 }
 
 .session-command-content {
@@ -635,25 +635,25 @@ html[data-theme="light"] .phi-tab-active {
     min-height: 1.25rem;
   }
   .phi-diff-remove {
-    background: rgb(239 68 68 / 0.2);
+    background: color-mix(in srgb, var(--color-phi-error) 20%, transparent);
     color: var(--color-phi-error-text);
   }
   .phi-diff-add {
-    background: rgb(34 197 94 / 0.2);
+    background: color-mix(in srgb, var(--color-phi-thinking-low) 20%, transparent);
     color: var(--color-phi-thinking-low);
   }
   .phi-diff-truncation {
-    color: #60a5fa;
+    color: var(--color-phi-accent);
   }
   .phi-diff-word-remove {
     border-radius: 3px;
-    background: rgb(239 68 68 / 0.32);
+    background: color-mix(in srgb, var(--color-phi-error) 32%, transparent);
     color: var(--color-phi-error-text);
     padding: 0 2px;
   }
   .phi-diff-word-add {
     border-radius: 3px;
-    background: rgb(34 197 94 / 0.32);
+    background: color-mix(in srgb, var(--color-phi-thinking-low) 32%, transparent);
     color: var(--color-phi-thinking-low);
     padding: 0 2px;
   }

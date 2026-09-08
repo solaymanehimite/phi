@@ -1,6 +1,7 @@
 import { memo } from "react";
 import { IconFileFilled, IconFolderFilled } from "@tabler/icons-react";
 import type { ProjectFile } from "../../lib/api";
+import { Menu, MenuEmpty, MenuItem } from "../ui/menu";
 
 type AtMenuProps = {
   files: ProjectFile[];
@@ -11,25 +12,25 @@ type AtMenuProps = {
 
 function FileIcon({ isDirectory }: { isDirectory: boolean }) {
   return isDirectory ? (
-    <IconFolderFilled className="size-[14px] shrink-0 text-phi-text-tertiary group-[.is-active]:text-phi-text-secondary" />
+    <IconFolderFilled className="size-[14px] shrink-0 text-phi-text-tertiary group-data-[active=true]:text-phi-text-secondary" />
   ) : (
-    <IconFileFilled className="size-[14px] shrink-0 text-phi-text-tertiary group-[.is-active]:text-phi-text-secondary" />
+    <IconFileFilled className="size-[14px] shrink-0 text-phi-text-tertiary group-data-[active=true]:text-phi-text-secondary" />
   );
 }
 
 export const AtMenu = memo(function AtMenu({ files, selectedIndex, onSelect, onHover }: AtMenuProps) {
   if (files.length === 0) {
     return (
-      <div className="rounded-xl border border-phi-border-faint bg-phi-bg-elevated p-1 text-sm/6 text-phi-white shadow-xl">
-        <div className="rounded-lg px-3 py-1.5 text-[13px] text-phi-text-muted">No files match</div>
-      </div>
+      <Menu>
+        <MenuEmpty>No files match</MenuEmpty>
+      </Menu>
     );
   }
   return (
-    <div
+    <Menu
       role="listbox"
       aria-label="Files"
-      className="max-h-[min(300px,42vh)] overflow-y-auto rounded-xl border border-phi-border-faint bg-phi-bg-elevated p-1 text-sm/6 text-phi-white shadow-xl transition duration-100 ease-out"
+      className="max-h-[min(300px,42vh)] overflow-y-auto transition duration-100 ease-out"
     >
       {files.map((f, idx) => {
         const active = idx === selectedIndex;
@@ -38,27 +39,26 @@ export const AtMenu = memo(function AtMenu({ files, selectedIndex, onSelect, onH
         const dir = slash !== -1 ? f.path.slice(0, slash + 1) : "";
         const name = f.isDirectory ? `${f.name}/` : f.name;
         return (
-          <button
+          <MenuItem
             key={f.path + (f.isDirectory ? "/" : "")}
             role="option"
             aria-selected={active}
+            active={active}
             onMouseEnter={() => onHover(idx)}
             onMouseDown={(e) => {
               e.preventDefault();
               onSelect(f);
             }}
-            className={`group flex w-full items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-left text-[13px] focus:outline-none ${
-              active ? "is-active bg-phi-overlay-strong text-phi-text-primary" : "text-phi-text-secondary hover:bg-phi-overlay-strong"
-            }`}
+            className="gap-2.5 px-2.5"
           >
             <FileIcon isDirectory={f.isDirectory} />
             <span className="min-w-0 flex-1 truncate">
               {dir ? <span className="text-phi-text-muted">{dir}</span> : null}
               <span className={`font-medium ${active ? "text-phi-text-primary" : "text-phi-text-secondary"}`}>{name}</span>
             </span>
-          </button>
+          </MenuItem>
         );
       })}
-    </div>
+    </Menu>
   );
 });

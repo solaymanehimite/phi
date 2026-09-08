@@ -144,7 +144,7 @@ export const ThinkingEffortSelector = memo(function ThinkingEffortSelector({
                                         return (
                                             <span
                                                 key={i}
-                                                className="phi-pixel block size-[3px] rounded-[1px] bg-white"
+                                                className="phi-pixel block size-[3px] rounded-[1px] bg-phi-white"
                                                 style={
                                                     {
                                                         "--phi-px-min": (maxOp * 0.15).toFixed(2),
@@ -164,7 +164,7 @@ export const ThinkingEffortSelector = memo(function ThinkingEffortSelector({
                             {availableLevels.map((lvl) => (
                                 <span
                                     key={lvl}
-                                    className="h-[8px] w-[3px] rounded-full bg-white/40"
+                                    className="h-[8px] w-[3px] rounded-full bg-phi-white/40"
                                 />
                             ))}
                         </div>

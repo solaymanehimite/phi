@@ -13,6 +13,8 @@ import {
     IconXFilled,
 } from "@tabler/icons-react";
 import { Popover, PopoverContent, PopoverTrigger } from "./ui/popover";
+import { Button } from "./ui/button";
+import { Input } from "./ui/input";
 import type { NewProjectInput } from "../hooks/useProjects";
 import { basenameOfPath, formatProjectPath, type Project, type ProjectOption } from "../lib/projects";
 import { formatCwd } from "../lib/paths";
@@ -82,14 +84,9 @@ function ProjectForm({
     return (
         <form onSubmit={handleSubmit} className="w-full">
             <div className="-mx-2 flex items-center gap-1 border-b border-phi-border-faint px-2 pb-2 pt-1">
-                <button
-                    type="button"
-                    onClick={onBack}
-                    aria-label="Back to projects"
-                    className="inline-flex size-7 items-center justify-center rounded-lg text-phi-text-muted hover:bg-phi-overlay-hover hover:text-phi-text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-phi-accent/40"
-                >
+                <Button variant="icon" size="sm" onClick={onBack} aria-label="Back to projects" className="!size-7">
                     <IconChevronLeft className="size-4" />
-                </button>
+                </Button>
                 <p className="min-w-0 flex-1 truncate text-[13px] font-semibold text-phi-text-primary">
                     {title}
                 </p>
@@ -102,7 +99,7 @@ function ProjectForm({
                 >
                     Name
                 </label>
-                <input
+                <Input
                     id="new-project-name"
                     ref={nameInputRef}
                     value={name}
@@ -111,7 +108,8 @@ function ProjectForm({
                     aria-label="Project name"
                     spellCheck={false}
                     autoComplete="off"
-                    className="mx-1 w-[calc(100%-8px)] rounded-md border border-phi-input-border bg-phi-input-bg px-2 py-1.5 text-[13px] text-phi-text-primary outline-none placeholder:text-phi-text-muted focus:border-phi-input-border-focus"
+                    variant="default"
+                    className="mx-1 w-[calc(100%-8px)] !text-[13px]"
                 />
 
                 <span
@@ -150,7 +148,7 @@ function ProjectForm({
                         )}
                     </div>
                 ) : (
-                    <input
+                    <Input
                         id="new-project-path"
                         value={path}
                         onChange={(event) => setPath(event.target.value)}
@@ -158,7 +156,8 @@ function ProjectForm({
                         aria-label="Project path"
                         spellCheck={false}
                         autoComplete="off"
-                        className="mx-1 w-[calc(100%-8px)] rounded-md border border-phi-input-border bg-phi-input-bg px-2 py-1.5 text-[12px] text-phi-text-primary outline-none placeholder:text-phi-text-muted focus:border-phi-input-border-focus"
+                        variant="default"
+                        className="mx-1 w-[calc(100%-8px)]"
                     />
                 )}
                 {browseError && (
@@ -169,20 +168,18 @@ function ProjectForm({
             </div>
 
             <div className="-mx-2 flex items-center justify-end gap-1.5 border-t border-phi-border-faint px-2 pt-2">
-                <button
-                    type="button"
-                    onClick={onBack}
-                    className="rounded-md px-2.5 py-1.5 text-[12.5px] font-medium text-phi-text-secondary hover:bg-phi-overlay-hover hover:text-phi-text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-phi-accent/40"
-                >
+                <Button variant="ghost" size="xs" onClick={onBack} className="!text-[12.5px]">
                     Cancel
-                </button>
-                <button
+                </Button>
+                <Button
                     type="submit"
+                    variant="primary"
+                    size="xs"
                     disabled={!canSubmit}
-                    className="rounded-md bg-phi-bg-inverse px-3 py-1.5 text-[12.5px] font-medium text-phi-text-inverse hover:bg-phi-white disabled:cursor-default disabled:bg-phi-bg-disabled disabled:text-phi-text-disabled focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-phi-white/40"
+                    className="!rounded-md !text-[12.5px]"
                 >
                     {submitLabel}
-                </button>
+                </Button>
             </div>
         </form>
     );

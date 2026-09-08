@@ -1,4 +1,5 @@
 import { memo } from "react";
+import { Alert } from "../ui/alert";
 import { Markdown } from "./markdown";
 import { WorkingBlock } from "./working-block";
 import type { WorkItem } from "../../types/work";
@@ -37,11 +38,7 @@ export const Streaming = memo(function Streaming({
                 />
             )}
             {text && isStreaming && <Markdown text={text} />}
-            {error && (
-                <div className="rounded-lg border border-phi-error-border bg-phi-error-bg px-3 py-2 text-[13px] text-phi-error-text">
-                    {error}
-                </div>
-            )}
+            {error && <Alert variant="error" className="text-[13px]">{error}</Alert>}
         </div>
     );
 });

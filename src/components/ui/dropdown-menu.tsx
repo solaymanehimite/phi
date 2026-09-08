@@ -32,7 +32,7 @@ export function DropdownMenuContent({
         <MenuItems
             transition
             anchor="bottom end"
-            className={`z-20 w-40 origin-top-right rounded-xl border border-phi-border-faint bg-phi-bg-elevated p-1 text-sm/6 text-phi-white shadow-xl transition duration-100 ease-out [--anchor-gap:4px] focus:outline-none data-closed:scale-95 data-closed:opacity-0 ${className}`}
+            className={`z-20 w-40 origin-top-right rounded-xl border border-phi-border-faint bg-phi-bg-elevated p-1 text-sm/6 text-phi-text-primary shadow-xl transition duration-100 ease-out [--anchor-gap:4px] focus:outline-none data-closed:scale-95 data-closed:opacity-0 ${className}`}
             {...props}
         >
             {children}

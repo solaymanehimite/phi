@@ -784,10 +784,9 @@ export const Composer = memo(function Composer({
                 {isStreaming ? (
                     <Button
                         type="submit"
-                        variant="primary"
+                        variant="danger"
                         aria-label="Stop"
                         title="Stop"
-                        className="!bg-phi-error !text-phi-white hover:!bg-phi-error/80"
                     >
                         <IconPlayerStopFilled className="size-4" />
                     </Button>

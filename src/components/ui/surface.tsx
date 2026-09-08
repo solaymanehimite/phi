@@ -19,3 +19,15 @@ export function SurfaceContent({ children, className = "", ...props }: SurfacePr
     </div>
   );
 }
+
+/**
+ * Sunken well — tool output, diffs, code blocks. Single source for the
+ * recessed `bg-sunken` container repeated across conversation + markdown.
+ */
+export function Well({ children, className = "", ...props }: SurfaceProps) {
+  return (
+    <div className={`rounded-md bg-phi-bg-sunken ${className}`} {...props}>
+      {children}
+    </div>
+  );
+}

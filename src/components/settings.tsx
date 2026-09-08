@@ -1,6 +1,15 @@
 import { useCallback, useEffect, useMemo, useState, type ComponentType } from "react";
 import { useTheme, type Theme } from "../hooks/useTheme";
-import { IconChevronDownFilled, IconKeyFilled, IconPaletteFilled } from "@tabler/icons-react";
+import { IconCheckFilled, IconChevronDownFilled, IconKeyFilled, IconPaletteFilled } from "@tabler/icons-react";
+import { useClose } from "@headlessui/react";
+import { Alert } from "./ui/alert";
+import { Button, buttonClass } from "./ui/button";
+import { DialogOverlay, DialogPanel, DialogTitle } from "./ui/dialog";
+import { InlineCode } from "./ui/code";
+import { Input } from "./ui/input";
+import { MenuItem } from "./ui/menu";
+import { NavItem } from "./ui/nav-item";
+import { Popover, PopoverContent, PopoverTrigger } from "./ui/popover";
 import { Highlight, type PrismTheme } from "prism-react-renderer";
 import { CODE_THEMES, setCodeTheme, useCodeTheme, type CodeThemeChoice, type CodeThemeId } from "./code-theme";
 import { ThemeEditorToggle } from "./dev/ThemeEditor";
@@ -31,23 +40,23 @@ export function SettingsPanel({
   return (
     <div className="flex min-h-0 flex-1">
       {/* Secondary sidebar — lives inside the main panel so the app sidebar never changes */}
-      <aside className="flex w-[188px] shrink-0 flex-col border-r border-phi-border py-5 sm:w-[220px]">
+      <aside className="flex w-[188px] shrink-0 flex-col border-r border-phi-border pb-5 pt-2 sm:w-[220px]">
         <nav aria-label="Settings sections" className="space-y-0.5 px-2">
-          {sections.map((item) => {
-            const Icon = item.icon;
-            const selected = item.id === section;
-            return (
-              <button key={item.id} onClick={() => setSection(item.id)} aria-current={selected ? "page" : undefined} className={`flex h-8 w-full items-center gap-2.5 rounded-lg px-2 py-1 text-left text-[13px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-phi-accent/40 ${selected ? "bg-phi-overlay-active text-phi-text-primary" : "text-phi-text-tertiary hover:bg-phi-overlay-hover hover:text-phi-text-primary"}`}>
-                <Icon className="size-4 shrink-0" />
-                <span className="truncate">{item.label}</span>
-              </button>
-            );
-          })}
+          {sections.map((item) => (
+            <NavItem
+              key={item.id}
+              active={item.id === section}
+              label={item.label}
+              icon={item.icon}
+              onClick={() => setSection(item.id)}
+              ariaCurrent={item.id === section ? "page" : undefined}
+            />
+          ))}
         </nav>
       </aside>
 
       <div className="flex min-w-0 flex-1 flex-col">
-        <header className="shrink-0 px-6 py-5">
+        <header className="shrink-0 px-6 pb-5 pt-12">
           <div className="mx-auto w-full max-w-3xl">
             <h1 className="text-[20px] font-semibold tracking-[-0.02em] text-phi-text-primary">{active.label}</h1>
             <p className="mt-1 text-[12px] text-phi-text-muted">{active.description}</p>
@@ -93,29 +102,55 @@ function CodeThemeSection() {
     <div className="overflow-hidden rounded-2xl border border-phi-border">
       <div className="relative">
         <CodeThemePreview theme={previewTheme} />
-        <label className="absolute right-3 top-3 inline-flex h-7 w-[9.5rem]">
-          <span className="sr-only">Code theme</span>
-          <select
-            value={choice}
-            onChange={(event) => setCodeTheme(event.target.value as CodeThemeChoice)}
-            title={`Code theme: ${currentLabel}`}
-            className="h-7 w-full appearance-none rounded-lg border border-phi-border-strong bg-phi-bg-elevated py-0 pl-2.5 pr-7 text-[11px] font-medium text-phi-text-secondary shadow-[0_2px_8px_var(--color-phi-shadow)] outline-none transition-colors hover:border-phi-accent/50 hover:text-phi-text-primary focus-visible:border-phi-accent/70 focus-visible:ring-1 focus-visible:ring-phi-accent/40"
+        <Popover className="absolute right-3 top-3">
+          <PopoverTrigger
+            className={buttonClass("outline", "xs", "group w-[9.5rem] !text-[11px]")}
+            aria-label={`Code theme, currently ${currentLabel}`}
           >
-            {allOptions.map((option) => (
-              <option key={option.id} value={option.id}>
-                {option.label}
-              </option>
-            ))}
-          </select>
-          <IconChevronDownFilled aria-hidden className="pointer-events-none absolute right-2 top-1/2 size-3.5 -translate-y-1/2 text-phi-text-muted" />
-        </label>
+            <span className="min-w-0 flex-1 truncate text-left">{currentLabel}</span>
+            <IconChevronDownFilled className="size-3.5 shrink-0 text-phi-text-muted transition-transform group-data-open:rotate-180" />
+          </PopoverTrigger>
+          {/* rounded-xl panel + rounded-lg rows = identical to dropdown menus */}
+          <PopoverContent anchor={{ to: "bottom end", gap: 8 }} className="w-48 !rounded-xl p-1">
+            <CodeThemeMenu options={allOptions} choice={choice} />
+          </PopoverContent>
+        </Popover>
       </div>
     </div>
   );
 }
 
-const CODE_THEME_SAMPLE = `// themed preview
-import { useState } from "react";
+function CodeThemeMenu({
+  options,
+  choice,
+}: {
+  options: { id: CodeThemeChoice; label: string }[];
+  choice: CodeThemeChoice;
+}) {
+  const close = useClose();
+  return (
+    <>
+      {options.map((option) => {
+        const selected = option.id === choice;
+        return (
+          <MenuItem
+            key={option.id}
+            active={selected}
+            onClick={() => {
+              setCodeTheme(option.id);
+              close();
+            }}
+          >
+            <span className="min-w-0 flex-1 truncate">{option.label}</span>
+            {selected && <IconCheckFilled className="size-3.5 shrink-0 text-phi-accent" />}
+          </MenuItem>
+        );
+      })}
+    </>
+  );
+}
+
+const CODE_THEME_SAMPLE = `import { useState } from "react";
 
 type Status = "idle" | "loading" | "done";
 
@@ -143,6 +178,9 @@ function CodeThemePreview({ theme }: { theme: PrismTheme }) {
   );
 }
 
+// Miniature app mock — inner swatches are intentionally fixed light/dark
+// values (they depict each scheme, not the current theme). Only the
+// selection ring uses the live accent token.
 function SchemePreview({ mode }: { mode: Theme }) {
   if (mode === "system") {
     return (
@@ -170,7 +208,7 @@ function SchemePreviewPane({ light }: { light: boolean }) {
         mutedLine: "bg-[#d9d9df]",
         composer: "border-black/10 bg-white",
         composerLine: "bg-[#e9e9ed]",
-        accent: "bg-[#c79a43]",
+        accent: "bg-[#2f7bff]",
       }
     : {
         pane: "bg-black",
@@ -178,7 +216,7 @@ function SchemePreviewPane({ light }: { light: boolean }) {
         mutedLine: "bg-[#2e2e34]",
         composer: "border-white/10 bg-[#17171c]",
         composerLine: "bg-[#2a2a30]",
-        accent: "bg-[#d6a85f]",
+        accent: "bg-[#2f7bff]",
       };
 
   return (
@@ -213,7 +251,7 @@ function AppearanceTab() {
                 <button
                   onClick={() => setTheme(t)}
                   aria-pressed={selected}
-                  className={`block w-full rounded-2xl border p-2 transition ${selected ? "border-[#2f7bff] ring-1 ring-[#2f7bff]" : "border-phi-border hover:border-phi-border-strong"} bg-[#101014]`}
+                  className={`block w-full rounded-2xl border bg-phi-bg-surface p-2 transition ${selected ? "border-phi-accent ring-1 ring-phi-accent" : "border-phi-border hover:border-phi-border-strong"}`}
                 >
                   <SchemePreview mode={t} />
                 </button>
@@ -279,23 +317,23 @@ function ProvidersTab({ onChanged }: { onChanged?: () => void }) {
 
   return (
     <div className="space-y-4">
-      {error && <div className="rounded-lg border border-phi-error-border bg-phi-error-bg px-3 py-2 text-[12px] text-phi-error-text">{error}</div>}
+      {error && <Alert variant="error">{error}</Alert>}
 
       {dialogOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" role="presentation" onMouseDown={(e) => { if (e.target === e.currentTarget) setDialogOpen(false); }}>
-          <div className="w-full max-w-md rounded-xl border border-phi-border bg-phi-bg-surface p-4 shadow-xl" role="dialog" aria-modal="true" aria-labelledby="add-provider-title">
+        <DialogOverlay role="presentation" onMouseDown={(e) => { if (e.target === e.currentTarget) setDialogOpen(false); }}>
+          <DialogPanel aria-labelledby="add-provider-title">
             <div className="flex items-center justify-between">
-              <h4 id="add-provider-title" className="text-[14px] font-semibold text-phi-text-primary">Add provider</h4>
-              <button onClick={() => setDialogOpen(false)} className="text-[12px] text-phi-text-muted hover:text-phi-text-primary">Cancel</button>
+              <DialogTitle id="add-provider-title">Add provider</DialogTitle>
+              <Button variant="ghost" size="xs" onClick={() => setDialogOpen(false)} className="!text-[12px]">Cancel</Button>
             </div>
             <div className="mt-4 grid grid-cols-1 gap-2">
-              <input autoFocus placeholder="Label (e.g. OpenAI)" value={form.label} onChange={(e) => setForm((p) => ({ ...p, label: e.target.value }))} className="rounded-lg border border-phi-input-border bg-phi-input-bg px-2 py-1.5 text-[12px] text-phi-text-primary placeholder:text-phi-text-muted outline-none focus:border-phi-input-border-focus" />
-              <input placeholder="Base URL https://api.openai.com/v1" value={form.baseUrl} onChange={(e) => setForm((p) => ({ ...p, baseUrl: e.target.value }))} className="rounded-lg border border-phi-input-border bg-phi-input-bg px-2 py-1.5 text-[12px] text-phi-text-primary placeholder:text-phi-text-muted outline-none focus:border-phi-input-border-focus" />
-              <input placeholder="API key" type="password" value={form.apiKey} onChange={(e) => setForm((p) => ({ ...p, apiKey: e.target.value }))} className="rounded-lg border border-phi-input-border bg-phi-input-bg px-2 py-1.5 text-[12px] text-phi-text-primary placeholder:text-phi-text-muted outline-none focus:border-phi-input-border-focus" />
+              <Input autoFocus placeholder="Label (e.g. OpenAI)" value={form.label} onChange={(e) => setForm((p) => ({ ...p, label: e.target.value }))} variant="default" />
+              <Input placeholder="Base URL https://api.openai.com/v1" value={form.baseUrl} onChange={(e) => setForm((p) => ({ ...p, baseUrl: e.target.value }))} variant="default" />
+              <Input placeholder="API key" type="password" value={form.apiKey} onChange={(e) => setForm((p) => ({ ...p, apiKey: e.target.value }))} variant="default" />
             </div>
-            <button onClick={() => void handleSave()} disabled={saving} className="mt-4 rounded-lg bg-phi-bg-inverse px-3 py-1.5 text-[12px] font-medium text-phi-text-inverse hover:bg-phi-white disabled:opacity-50">{saving ? "Saving…" : "Save (tests connection)"}</button>
-          </div>
-        </div>
+            <Button onClick={() => void handleSave()} disabled={saving} variant="primary" size="sm" className="mt-4 !w-auto">{saving ? "Saving…" : "Save (tests connection)"}</Button>
+          </DialogPanel>
+        </DialogOverlay>
       )}
 
       <div className="space-y-2">
@@ -314,8 +352,8 @@ function ProvidersTab({ onChanged }: { onChanged?: () => void }) {
                   {testResult[p.id] && <div className={`mt-1 text-[11px] ${testResult[p.id] === "OK" ? "text-phi-thinking-low" : "text-phi-error-text"}`}>{testResult[p.id]}</div>}
                 </div>
                 <div className="flex items-center gap-1">
-                  <button onClick={() => void handleTest(p.id)} disabled={testing === p.id} className="rounded-md border border-phi-border px-2 py-1 text-[11px] font-medium text-phi-text-secondary hover:bg-phi-overlay disabled:opacity-50">{testing === p.id ? "Testing…" : "Test connection"}</button>
-                  <button onClick={() => void handleDelete(p.id)} className="rounded-md border border-phi-error-border bg-phi-error-bg px-2 py-1 text-[11px] font-medium text-phi-error-text hover:bg-phi-error-bg">Delete</button>
+                  <Button onClick={() => void handleTest(p.id)} disabled={testing === p.id} variant="secondary" size="xs" className="!text-[11px]">{testing === p.id ? "Testing…" : "Test connection"}</Button>
+                  <Button onClick={() => void handleDelete(p.id)} variant="secondary" size="xs" className="!border-phi-error-border !bg-phi-error-bg !text-[11px] !text-phi-error-text hover:!bg-phi-error-bg">Delete</Button>
                 </div>
               </div>
             ))}
