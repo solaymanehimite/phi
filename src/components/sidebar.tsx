@@ -11,27 +11,29 @@ import {
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
-import { GroupCollapsibleTrigger } from "./ui/collapsible";
 import {
     DropdownMenu,
     DropdownMenuContent,
     DropdownMenuItem,
     DropdownMenuTrigger,
 } from "./ui/dropdown-menu";
-import type { SessionGroup } from "../hooks/useSessions";
+import { GroupCollapsibleTrigger } from "./ui/collapsible";
+import { formatProjectPath, type ProjectGroup } from "../lib/projects";
 import type { SessionInfo } from "../types/session";
 import { useHasDraft } from "../hooks/useHasDraft";
 import { useEffectiveTheme } from "../hooks/useTheme";
 import { brandingUrl } from "../lib/themed-assets";
 
 type SidebarProps = {
-    groups: SessionGroup[];
+    projectGroups: ProjectGroup[];
+    /** Sessions whose cwd matches no project — hidden from the sidebar, still searchable via Cmd+K. */
+    orphanCount?: number;
     activeFile: string | null;
     onSelect: (file: string) => void;
     onNewChat: () => void;
     onOpenSettings?: () => void;
     collapsed: Set<string>;
-    onToggleGroup: (cwd: string) => void;
+    onToggleGroup: (key: string) => void;
     onRename: (file: string, name: string) => Promise<void>;
     onDelete: (file: string) => Promise<void>;
     loading: boolean;
@@ -73,7 +75,8 @@ function BrandLogo({ className = "" }: { className?: string }) {
 }
 
 export const Sidebar = memo(function Sidebar({
-    groups,
+    projectGroups,
+    orphanCount = 0,
     activeFile,
     onSelect,
     onNewChat,
@@ -113,7 +116,7 @@ export const Sidebar = memo(function Sidebar({
             window.removeEventListener("resize", updateScrollEdges);
             ro.disconnect();
         };
-    }, [groups, collapsed, loading, updateScrollEdges]);
+    }, [projectGroups, collapsed, loading, updateScrollEdges]);
 
     const scrollByPage = useCallback((direction: 1 | -1) => {
         const el = scrollRef.current;
@@ -168,21 +171,31 @@ export const Sidebar = memo(function Sidebar({
                         <div className="mx-2 rounded-lg border border-phi-error-border bg-phi-error-bg px-3 py-2 text-[12px] leading-4 text-phi-error-text">
                             {error}
                         </div>
-                    ) : groups.length === 0 ? (
-                        <p className="px-2 py-6 text-center text-[12px] text-phi-text-muted">
-                            No sessions yet
-                        </p>
+                    ) : projectGroups.length === 0 ? (
+                        <div className="px-2 py-8 text-center">
+                            <p className="text-[12.5px] font-medium text-phi-text-secondary">
+                                No projects yet
+                            </p>
+                            <p className="mx-auto mt-1 max-w-[200px] text-[11.5px] leading-4 text-phi-text-muted">
+                                Create one from the project picker to start chatting in a directory.
+                            </p>
+                            {orphanCount > 0 && (
+                                <p className="mx-auto mt-2 max-w-[200px] text-[11px] leading-4 text-phi-text-faint">
+                                    {orphanCount} session{orphanCount === 1 ? "" : "s"} outside projects — press ⌘K to find {orphanCount === 1 ? "it" : "them"}.
+                                </p>
+                            )}
+                        </div>
                     ) : (
                         <div>
                             <p className="px-2 pb-1 text-[11px] font-medium tracking-wide text-phi-text-faint">
                                 Projects
                             </p>
                             <div className="space-y-0.5">
-                            {groups.map((group) => (
+                            {projectGroups.map((group) => (
                                 <GroupSection
-                                    key={group.cwd}
+                                    key={group.project.id}
                                     group={group}
-                                    collapsed={collapsed.has(group.cwd)}
+                                    collapsed={collapsed.has(group.project.path)}
                                     activeFile={activeFile}
                                     runningFiles={runningFiles}
                                     onToggleGroup={onToggleGroup}
@@ -259,20 +272,21 @@ const GroupSection = memo(function GroupSection({
     onDelete,
     onPrefetch,
 }: {
-    group: SessionGroup;
+    group: ProjectGroup;
     collapsed: boolean;
     activeFile: string | null;
     runningFiles: ReadonlySet<string>;
-    onToggleGroup: (cwd: string) => void;
+    onToggleGroup: (key: string) => void;
     onSelect: (file: string) => void;
     onRename: (file: string, name: string) => Promise<void>;
     onDelete: (file: string) => Promise<void>;
     onPrefetch?: (file: string) => void;
 }) {
     const handleToggle = useCallback(
-        () => onToggleGroup(group.cwd),
-        [onToggleGroup, group.cwd],
+        () => onToggleGroup(group.project.path),
+        [onToggleGroup, group.project.path],
     );
+    const { project } = group;
 
     return (
         <div>
@@ -281,10 +295,11 @@ const GroupSection = memo(function GroupSection({
                 onClick={handleToggle}
                 className="h-8 rounded-lg"
                 aria-expanded={!collapsed}
-                title={group.displayCwd}
+                aria-label={`${project.name}, ${group.sessions.length} session${group.sessions.length === 1 ? "" : "s"}`}
+                title={`${project.name} — ${formatProjectPath(project.path)}`}
             >
                 <span className="shrink-0 truncate text-[12px] font-semibold tracking-wide text-current">
-                    {group.displayCwd}
+                    {project.name}
                 </span>
             </GroupCollapsibleTrigger>
 
@@ -292,23 +307,31 @@ const GroupSection = memo(function GroupSection({
                 className={`grid transition-all duration-300 ease-[cubic-bezier(0.4,0,0.2,1)] ${collapsed ? "grid-rows-[0fr] opacity-0" : "grid-rows-[1fr] opacity-100"}`}
             >
                 <div className="overflow-hidden">
-                    <nav
-                        aria-label={group.displayCwd}
-                        className="mt-1 space-y-0.5 border-l border-phi-border-faint pb-0.5 ml-[13px] pl-2"
-                    >
-                        {group.sessions.map((s) => (
-                            <SessionRowMemo
-                                key={s.path}
-                                session={s}
-                                active={s.path === activeFile}
-                                isStreaming={runningFiles.has(s.path)}
-                                onSelect={onSelect}
-                                onRename={onRename}
-                                onDelete={onDelete}
-                                onPrefetch={onPrefetch}
-                            />
-                        ))}
-                    </nav>
+                    {group.sessions.length > 0 ? (
+                        <nav
+                            aria-label={project.name}
+                            className="mt-1 space-y-0.5 border-l border-phi-border-faint pb-0.5 ml-[13px] pl-2"
+                        >
+                            {group.sessions.map((s) => (
+                                <SessionRowMemo
+                                    key={s.path}
+                                    session={s}
+                                    active={s.path === activeFile}
+                                    isStreaming={runningFiles.has(s.path)}
+                                    onSelect={onSelect}
+                                    onRename={onRename}
+                                    onDelete={onDelete}
+                                    onPrefetch={onPrefetch}
+                                />
+                            ))}
+                        </nav>
+                    ) : (
+                        !collapsed && (
+                            <p className="ml-[13px] mt-1 border-l border-phi-border-faint pb-0.5 pl-4 text-[11px] text-phi-text-faint">
+                                No sessions yet
+                            </p>
+                        )
+                    )}
                 </div>
             </div>
         </div>

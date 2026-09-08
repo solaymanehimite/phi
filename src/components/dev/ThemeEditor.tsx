@@ -323,7 +323,9 @@ export function ThemeEditor({ className = "" }: ThemeEditorProps) {
         <Popover className={`relative z-50 ${className}`}>
             <PopoverTrigger
                 aria-label="Open advanced color settings"
-                className="inline-flex size-9 items-center justify-center rounded-full border border-phi-border-strong bg-phi-bg-elevated text-phi-text-tertiary shadow-[0_4px_16px_var(--color-phi-shadow-strong)] transition-colors hover:bg-phi-overlay-hover hover:text-phi-text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-phi-accent/40"
+                // Ghost by default; hover washes accent. Rounded-[4px] is concentric
+                // with the main panel's rounded-xl (12px) minus the 8px inset.
+                className="inline-flex size-9 items-center justify-center rounded-[4px] bg-transparent text-phi-text-muted transition-colors hover:bg-phi-accent/10 hover:text-phi-text-brand focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-phi-accent/40"
             >
                 <IconBrush className="size-4" />
             </PopoverTrigger>

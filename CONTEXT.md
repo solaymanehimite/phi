@@ -10,7 +10,11 @@ _Avoid_: chat, thread, history
 
 ### Workspace
 The decoded cwd a session is bound to (e.g., `~/projects/foo`). A session never changes workspace.
-_Avoid_: project, directory, folder, cwd (in UI copy)
+_Avoid_: directory, folder, cwd (in UI copy)
+
+### Project
+A user-curated `{ name, path }` pointing at a workspace directory, stored app-local in localStorage. Sessions join a project via exact cwd match; the sidebar lists projects by name, not raw paths. A session directory with no entry appears as an implicit project using its folder name. Home (`~`) is never injected — it only appears if it has sessions.
+_Avoid_: workspace (a project points at one; it isn't one), directory, folder
 
 ### Abort
 An intentional user stop of an in-flight turn via Stop.

@@ -3,6 +3,7 @@ import { Command } from "cmdk";
 import { memo, useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import type { SessionGroup } from "../hooks/useSessions";
 import type { SessionInfo } from "../types/session";
+import type { ProjectOption } from "../lib/projects";
 import { Button } from "./ui/button";
 type SearchSessionsButtonProps = {
     onClick: () => void;
@@ -44,6 +45,7 @@ export type CommandAction = {
 
 type SessionCommandProps = {
     groups: SessionGroup[];
+    projects?: Pick<ProjectOption, "path" | "name">[];
     loading: boolean;
     error: string | null;
     actions: CommandAction[];
@@ -61,7 +63,9 @@ function sessionTitle(session: SessionInfo): string {
         : firstMessage;
 }
 
-function groupTitle(group: SessionGroup): string {
+function groupTitle(group: SessionGroup, projects?: Pick<ProjectOption, "path" | "name">[]): string {
+    const project = projects?.find((p) => p.path === group.cwd);
+    if (project) return project.name;
     if (!group.displayCwd || group.displayCwd === "(unknown)") {
         return "Other sessions";
     }
@@ -117,7 +121,7 @@ const ActionGroup = memo(function ActionGroup({
 const MAX_ROWS_WHEN_FILTERING = 80;
 const MAX_ROWS_PER_GROUP = 20;
 
-function matchesQuery(session: SessionInfo, title: string, group: SessionGroup, q: string): boolean {
+function matchesQuery(session: SessionInfo, title: string, group: SessionGroup, q: string, projectName?: string): boolean {
     if (!q) return true;
     return (
         title.toLowerCase().includes(q) ||
@@ -125,7 +129,8 @@ function matchesQuery(session: SessionInfo, title: string, group: SessionGroup, 
         (session.name ?? "").toLowerCase().includes(q) ||
         session.firstMessage.toLowerCase().includes(q) ||
         session.cwd.toLowerCase().includes(q) ||
-        group.displayCwd.toLowerCase().includes(q)
+        group.displayCwd.toLowerCase().includes(q) ||
+        (projectName?.toLowerCase().includes(q) ?? false)
     );
 }
 
@@ -133,6 +138,7 @@ const PaletteDialog = memo(function PaletteDialog({
     open,
     onOpenChange,
     groups,
+    projects,
     loading,
     error,
     actions,
@@ -142,6 +148,7 @@ const PaletteDialog = memo(function PaletteDialog({
     open: boolean;
     onOpenChange: (open: boolean) => void;
     groups: SessionGroup[];
+    projects?: Pick<ProjectOption, "path" | "name">[];
     loading: boolean;
     error: string | null;
     actions: CommandAction[];
@@ -176,13 +183,14 @@ const PaletteDialog = memo(function PaletteDialog({
         for (const group of groups) {
             if (total >= cap) break;
             const perGroupCap = Math.min(MAX_ROWS_PER_GROUP, cap - total);
+            const projectName = projects?.find((p) => p.path === group.cwd)?.name;
             const sessions: SessionInfo[] = [];
             for (const session of group.sessions) {
                 if (sessions.length >= perGroupCap) break;
                 // Titles are derived; computing inline avoids a pre-pass over
                 // thousands of sessions when there is no query.
                 const title = query ? sessionTitle(session) : "";
-                if (query && !matchesQuery(session, title, group, query)) continue;
+                if (query && !matchesQuery(session, title, group, query, projectName)) continue;
                 sessions.push(session);
                 total += 1;
                 if (total >= cap) break;
@@ -190,7 +198,7 @@ const PaletteDialog = memo(function PaletteDialog({
             if (sessions.length > 0) out.push({ group, sessions });
         }
         return out;
-    }, [groups, query]);
+    }, [groups, projects, query]);
 
     const empty = !loading && !error && filteredActions.length === 0 && filteredGroups.length === 0;
 
@@ -250,7 +258,7 @@ const PaletteDialog = memo(function PaletteDialog({
                                 value={group.cwd}
                                 heading={
                                     <div className="flex items-center justify-between gap-3 px-2 pb-1 pt-3 text-[10px] font-semibold tracking-[0.12em] text-phi-text-muted">
-                                        <span>{groupTitle(group)}</span>
+                                        <span>{groupTitle(group, projects)}</span>
                                         <span className="min-w-0 truncate normal-case tracking-normal text-phi-text-faint">
                                             {group.displayCwd}
                                         </span>
@@ -285,6 +293,7 @@ const PaletteDialog = memo(function PaletteDialog({
 
 export function SessionCommand({
     groups,
+    projects,
     loading,
     error,
     actions,
@@ -338,6 +347,7 @@ export function SessionCommand({
                 open={open}
                 onOpenChange={handleOpenChange}
                 groups={groups}
+                projects={projects}
                 loading={loading}
                 error={error}
                 actions={actions}

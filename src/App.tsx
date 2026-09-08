@@ -21,6 +21,8 @@ import {
 } from "@tabler/icons-react";
 import { Button } from "./components/ui/button";
 import { useSessions } from "./hooks/useSessions";
+import { useProjects, type NewProjectInput } from "./hooks/useProjects";
+import { normalizeProjectPath, resolveProjectOptions, sessionsForProject, type Project } from "./lib/projects";
 import { useChat } from "./hooks/useChat";
 import { useCompaction } from "./hooks/useCompaction";
 import { useModels } from "./hooks/useModels";
@@ -188,6 +190,7 @@ export default function App() {
     const [draftThinking, setDraftThinking] = useState<import("./types/session").ThinkingLevel | undefined>(undefined);
     const [homeCwd, setHomeCwd] = useState("");
     const [newChatCwd, setNewChatCwd] = useState<string | null>(null);
+    const { projects, addProject, updateProject, removeProject } = useProjects();
     const [openTabIds, setOpenTabIds] = useState<(string | null)[]>([null]);
     const openTabIdsRef = useRef<(string | null)[]>([null]);
     // inline errors per session: tail node
@@ -323,21 +326,73 @@ export default function App() {
             .then((res) => {
                 if (!cancelled && res.home) {
                     setHomeCwd(res.home);
-                    setNewChatCwd((current) => current ?? res.home);
                 }
             })
             .catch(() => {});
         return () => { cancelled = true; };
     }, []);
 
+    // Every session directory is a project: explicit entries first, then
+    // implicit ones (folder name, no icon) for directories without an entry.
+    const projectOptions = useMemo(
+        () => resolveProjectOptions(projects, sessions.groups.map((g) => g.cwd), homeCwd || undefined),
+        [projects, sessions.groups, homeCwd],
+    );
+
+    // Default the new-chat picker to the first project once any exist.
+    // Home stays a silent send fallback — it is never listed as a project.
+    useEffect(() => {
+        if (newChatCwd !== null) return;
+        if (projectOptions.length === 0) return;
+        setNewChatCwd(projectOptions[0].path);
+    }, [newChatCwd, projectOptions]);
+
+    const handleCreateProject = useCallback((input: NewProjectInput): Project => {
+        const project = addProject(input, homeCwd || undefined);
+        setNewChatCwd(project.path);
+        return project;
+    }, [addProject, homeCwd]);
+
+    const handleUpdateProject = useCallback((id: string, input: NewProjectInput) => {
+        const prev = projects.find((p) => p.id === id);
+        updateProject(id, input, homeCwd || undefined);
+        if (prev && newChatCwd === prev.path) {
+            setNewChatCwd(normalizeProjectPath(input.path, homeCwd || undefined) || prev.path);
+        }
+    }, [newChatCwd, projects, updateProject, homeCwd]);
+
+    const handleRemoveProject = useCallback((id: string) => {
+        const removed = projects.find((p) => p.id === id);
+        removeProject(id);
+        if (removed && newChatCwd === removed.path) {
+            const remaining = projects.filter((p) => p.id !== id);
+            setNewChatCwd(remaining[0]?.path ?? null);
+        }
+    }, [newChatCwd, projects, removeProject]);
+
+    // Sidebar sections: every project (even empty) with its sessions, newest first.
+    const projectGroups = useMemo(
+        () => projectOptions.map((project) => ({
+            project,
+            sessions: sessionsForProject(sessions.sessions, project.path),
+        })),
+        [projectOptions, sessions.sessions],
+    );
+    const orphanCount = useMemo(() => {
+        const paths = new Set(projectOptions.map((p) => p.path));
+        return sessions.sessions.filter((s) => !paths.has(s.cwd)).length;
+    }, [projectOptions, sessions.sessions]);
+
     const activeTitle = useMemo(() => chat.data?.sessionName || chat.data?.header?.id || chat.activeFile?.split("/").pop() || "New chat", [chat.data?.sessionName, chat.data?.header?.id, chat.activeFile]);
     const activeCwd = chat.data?.cwd || chat.data?.header?.cwd;
 
     // Current project for the command menu — active session cwd wins, then the
-    // new-chat picker cwd, then home. Short name is the last path segment.
+    // new-chat picker cwd, then home. Prefers the project name when known.
     const currentProjectCwd = activeCwd || newChatCwd || homeCwd || "";
     const currentProjectDisplay = useMemo(() => {
         if (!currentProjectCwd) return "";
+        const project = projectOptions.find((p) => p.path === currentProjectCwd);
+        if (project) return project.name;
         if (homeCwd && (currentProjectCwd === homeCwd || currentProjectCwd.startsWith(`${homeCwd}/`))) {
             const rest = currentProjectCwd.slice(homeCwd.length).replace(/^\//, "");
             if (!rest) return "~";
@@ -345,7 +400,7 @@ export default function App() {
         }
         const trimmed = currentProjectCwd.endsWith("/") ? currentProjectCwd.slice(0, -1) : currentProjectCwd;
         return trimmed.split("/").pop() || trimmed;
-    }, [currentProjectCwd, homeCwd]);
+    }, [currentProjectCwd, homeCwd, projects]);
 
     const ctxModel: any = (chat.data?.context as any)?.model;
     const ctxModelKey = ctxModel ? `${ctxModel.provider}/${ctxModel.modelId ?? ctxModel.id}` : undefined;
@@ -807,7 +862,7 @@ export default function App() {
     }
 
     return (
-        <SessionCommand groups={sessions.groups} loading={sessions.loading} error={sessions.error} actions={commandActions} onAction={handleCommandAction} onSelect={(file) => void handleSelect(file)}>
+        <SessionCommand groups={sessions.groups} projects={projectOptions} loading={sessions.loading} error={sessions.error} actions={commandActions} onAction={handleCommandAction} onSelect={(file) => void handleSelect(file)}>
             {(openSearch) => {
                 // inject openSearch into shortcuts
                 // we need to expose via ref hack: set onOpenSearch dynamic
@@ -820,7 +875,8 @@ export default function App() {
                             aria-hidden={!sidebarOpen}
                         >
                             <Sidebar
-                                groups={sessions.groups}
+                                projectGroups={projectGroups}
+                                orphanCount={orphanCount}
                                 activeFile={settingsActive ? SETTINGS_TAB_ID : chat.activeFile}
                                 onSelect={handleSelect}
                                 onNewChat={handleNewChat}
@@ -873,7 +929,10 @@ export default function App() {
                                                     aria-hidden="true"
                                                     className="phi-empty-logo"
                                                 />
-                                                {!sessions.loading && sessions.groups.length === 0 && !sessions.error && (
+                                                {!sessions.loading && !sessions.error && projectOptions.length === 0 && (
+                                                    <p className="mt-6 text-[12px] text-phi-text-muted">No projects yet — create one from the picker below to start chatting.</p>
+                                                )}
+                                                {!sessions.loading && !sessions.error && projectOptions.length > 0 && sessions.groups.length === 0 && (
                                                     <p className="mt-6 text-[12px] text-phi-text-muted">No sessions found — run `pi` in a project to create one.</p>
                                                 )}
                                             </div>
@@ -911,7 +970,7 @@ export default function App() {
                                         )}
                                         <div className="mx-auto pl-6 mb-1 flex w-full max-w-3xl min-w-0 items-center gap-1" ref={directoryPickerRef}>
                                             {!chat.activeFile && (
-                                                <DirectoryPicker cwd={(newChatCwd ?? homeCwd) || null} homeCwd={homeCwd} projects={sessions.groups.map(({ cwd, displayCwd }) => ({ cwd, displayCwd }))} onChange={setNewChatCwd} disabled={chat.isStreaming || (chat.activeFile ? compaction.isCompacting(chat.activeFile) : false)} />
+                                                <DirectoryPicker cwd={newChatCwd} projects={projectOptions} onChange={setNewChatCwd} onCreateProject={handleCreateProject} onUpdateProject={handleUpdateProject} onRemoveProject={handleRemoveProject} homeCwd={homeCwd} disabled={chat.isStreaming || (chat.activeFile ? compaction.isCompacting(chat.activeFile) : false)} />
                                             )}
                                             <ModelSelector models={models.models} value={selectedModelKey} thinkingLevel={thinkingLevel} onSelect={handleSelectModel} onThinkingChange={handleThinkingChange} disabled={chat.isStreaming || (chat.activeFile ? compaction.isCompacting(chat.activeFile) : false)} isStreaming={chat.isStreaming} loading={models.loading} error={models.error} />
                                             <ThinkingEffortSelector models={models.models} modelKey={selectedModelKey} value={thinkingLevel} onChange={handleThinkingChange} disabled={chat.isStreaming || (chat.activeFile ? compaction.isCompacting(chat.activeFile) : false)} />
