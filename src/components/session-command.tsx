@@ -1,6 +1,13 @@
 import { IconMessageCircleFilled, IconSearch } from "@tabler/icons-react";
 import { Command } from "cmdk";
-import { memo, useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
+import {
+    memo,
+    useCallback,
+    useEffect,
+    useMemo,
+    useState,
+    type ReactNode,
+} from "react";
 import type { SessionGroup } from "../hooks/useSessions";
 import type { SessionInfo } from "../types/session";
 import type { ProjectOption } from "../lib/projects";
@@ -19,7 +26,7 @@ export function SearchSessionsButton({
 }: SearchSessionsButtonProps) {
     const shortcut =
         typeof navigator !== "undefined" &&
-        /Mac|iPod|iPhone|iPad/.test(navigator.platform)
+            /Mac|iPod|iPhone|iPad/.test(navigator.platform)
             ? "⌘K"
             : "Ctrl K";
 
@@ -66,7 +73,10 @@ function sessionTitle(session: SessionInfo): string {
         : firstMessage;
 }
 
-function groupTitle(group: SessionGroup, projects?: Pick<ProjectOption, "path" | "name">[]): string {
+function groupTitle(
+    group: SessionGroup,
+    projects?: Pick<ProjectOption, "path" | "name">[],
+): string {
     const project = projects?.find((p) => p.path === group.cwd);
     if (project) return project.name;
     if (!group.displayCwd || group.displayCwd === "(unknown)") {
@@ -87,7 +97,7 @@ const ActionGroup = memo(function ActionGroup({
 }) {
     if (actions.length === 0) return null;
     return (
-        <Command.Group heading={<MenuLabel>Actions</MenuLabel>}>
+        <Command.Group>
             {actions.map((action) => (
                 <Command.Item
                     key={action.id}
@@ -114,7 +124,13 @@ const ActionGroup = memo(function ActionGroup({
 const MAX_ROWS_WHEN_FILTERING = 80;
 const MAX_ROWS_PER_GROUP = 20;
 
-function matchesQuery(session: SessionInfo, title: string, group: SessionGroup, q: string, projectName?: string): boolean {
+function matchesQuery(
+    session: SessionInfo,
+    title: string,
+    group: SessionGroup,
+    q: string,
+    projectName?: string,
+): boolean {
     if (!q) return true;
     return (
         title.toLowerCase().includes(q) ||
@@ -156,14 +172,16 @@ const PaletteDialog = memo(function PaletteDialog({
 
     useEffect(() => {
         if (!open) setSearch("");
-    }, [open ]);
+    }, [open]);
 
     const query = search.trim().toLowerCase();
 
     const filteredActions = useMemo(() => {
         if (!query) return actions;
         return actions.filter((a) =>
-            `${a.label} ${a.id} ${(a.keywords ?? []).join(" ")}`.toLowerCase().includes(query),
+            `${a.label} ${a.id} ${(a.keywords ?? []).join(" ")}`
+                .toLowerCase()
+                .includes(query),
         );
     }, [actions, query]);
 
@@ -183,7 +201,8 @@ const PaletteDialog = memo(function PaletteDialog({
                 // Titles are derived; computing inline avoids a pre-pass over
                 // thousands of sessions when there is no query.
                 const title = query ? sessionTitle(session) : "";
-                if (query && !matchesQuery(session, title, group, query, projectName)) continue;
+                if (query && !matchesQuery(session, title, group, query, projectName))
+                    continue;
                 sessions.push(session);
                 total += 1;
                 if (total >= cap) break;
@@ -193,7 +212,11 @@ const PaletteDialog = memo(function PaletteDialog({
         return out;
     }, [groups, projects, query]);
 
-    const empty = !loading && !error && filteredActions.length === 0 && filteredGroups.length === 0;
+    const empty =
+        !loading &&
+        !error &&
+        filteredActions.length === 0 &&
+        filteredGroups.length === 0;
 
     return (
         <Command.Dialog
@@ -245,14 +268,7 @@ const PaletteDialog = memo(function PaletteDialog({
                             <Command.Group
                                 key={group.cwd}
                                 value={group.cwd}
-                                heading={
-                                    <div className="flex items-center justify-between gap-3 px-2 pb-1 pt-3 text-[10px] font-semibold tracking-[0.12em] text-phi-text-muted">
-                                        <span>{groupTitle(group, projects)}</span>
-                                        <span className="min-w-0 truncate normal-case tracking-normal text-phi-text-faint">
-                                            {group.displayCwd}
-                                        </span>
-                                    </div>
-                                }
+                                heading={<MenuLabel>{groupTitle(group, projects)}</MenuLabel>}
                             >
                                 {sessions.map((session) => {
                                     const title = sessionTitle(session);
@@ -265,9 +281,7 @@ const PaletteDialog = memo(function PaletteDialog({
                                             className="flex min-h-11 cursor-pointer items-center gap-3 rounded-lg px-3 py-2 text-left text-[13px] text-phi-text-secondary outline-none data-[selected=true]:bg-phi-overlay-active data-[selected=true]:text-phi-text-primary"
                                         >
                                             <IconMessageCircleFilled className="size-4 shrink-0 text-phi-text-muted" />
-                                            <span className="min-w-0 flex-1 truncate">
-                                                {title}
-                                            </span>
+                                            <span className="min-w-0 flex-1 truncate">{title}</span>
                                         </Command.Item>
                                     );
                                 })}

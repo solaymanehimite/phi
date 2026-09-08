@@ -92,7 +92,7 @@ export const ThinkingEffortSelector = memo(function ThinkingEffortSelector({
         <Popover className="relative">
             <PopoverTrigger
                 disabled={disabled}
-                className="group inline-flex max-w-full min-w-0 items-center gap-1.5 rounded-md px-1.5 py-1 text-left text-phi-text-secondary hover:bg-phi-overlay-hover hover:text-phi-text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-phi-accent/40 disabled:pointer-events-none disabled:opacity-60"
+                className="group inline-flex max-w-full min-w-0 items-center gap-1.5 rounded-md pl-2 pr-1.5 py-1 text-left text-phi-text-secondary hover:bg-phi-overlay-hover hover:text-phi-text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-phi-accent/40 disabled:pointer-events-none disabled:opacity-60"
                 aria-label={`Change thinking effort, currently ${current}`}
             >
                 <span className="min-w-0 truncate text-[12.5px] font-medium capitalize">
@@ -135,28 +135,28 @@ export const ThinkingEffortSelector = memo(function ThinkingEffortSelector({
                                 className={`phi-max-fill absolute inset-0 rounded transition-opacity duration-1000 ease-out ${isMax ? "opacity-100" : "opacity-0"}`}
                             />
                             <div
-                                    aria-hidden="true"
-                                    className={`pointer-events-none absolute right-[8px] top-1/2 z-[6] grid -translate-y-1/2 grid-rows-4 grid-flow-col gap-[2px] ${isXhigh ? "opacity-100 transition-opacity duration-200 ease-out" : "opacity-0"}`}
-                                >
-                                    {Array.from({ length: 32 }, (_, i) => {
-                                        const col = Math.floor(i / 4);
-                                        const maxOp = 0.15 + (col / 7) * 0.8;
-                                        return (
-                                            <span
-                                                key={i}
-                                                className="phi-pixel block size-[3px] rounded-[1px] bg-phi-white"
-                                                style={
-                                                    {
-                                                        "--phi-px-min": (maxOp * 0.15).toFixed(2),
-                                                        "--phi-px-max": maxOp.toFixed(2),
-                                                        animationDuration: `${(0.9 + ((i * 53) % 70) / 100).toFixed(2)}s`,
-                                                        animationDelay: `${(((i * 29) % 50) / 100).toFixed(2)}s`,
-                                                    } as React.CSSProperties
-                                                }
-                                            />
-                                        );
-                                    })}
-                                </div>
+                                aria-hidden="true"
+                                className={`pointer-events-none absolute right-[8px] top-1/2 z-[6] grid -translate-y-1/2 grid-rows-4 grid-flow-col gap-[2px] ${isXhigh ? "opacity-100 transition-opacity duration-200 ease-out" : "opacity-0"}`}
+                            >
+                                {Array.from({ length: 32 }, (_, i) => {
+                                    const col = Math.floor(i / 4);
+                                    const maxOp = 0.15 + (col / 7) * 0.8;
+                                    return (
+                                        <span
+                                            key={i}
+                                            className="phi-pixel block size-[3px] rounded-[1px] bg-phi-white"
+                                            style={
+                                                {
+                                                    "--phi-px-min": (maxOp * 0.15).toFixed(2),
+                                                    "--phi-px-max": maxOp.toFixed(2),
+                                                    animationDuration: `${(0.9 + ((i * 53) % 70) / 100).toFixed(2)}s`,
+                                                    animationDelay: `${(((i * 29) % 50) / 100).toFixed(2)}s`,
+                                                } as React.CSSProperties
+                                            }
+                                        />
+                                    );
+                                })}
+                            </div>
                         </div>
                     </div>
                     {availableLevels.length > 1 && (
