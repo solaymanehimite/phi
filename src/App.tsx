@@ -8,9 +8,10 @@ import { Conversation } from "./components/conversation/conversation";
 import { Streaming } from "./components/conversation/streaming";
 import { Sidebar } from "./components/sidebar";
 import { SearchSessionsButton, SessionCommand, type CommandAction } from "./components/session-command";
-import { SETTINGS_TAB_ID, Tabs } from "./components/tabs";
+import { SETTINGS_TAB_ID, Tabs, UI_DEMO_TAB_ID } from "./components/tabs";
 import {
     IconArrowDown,
+    IconComponents,
     IconLayoutSidebarFilled,
     IconLayoutSidebarLeftCollapse,
     IconMessageCircleFilled,
@@ -35,6 +36,7 @@ import { brandingUrl } from "./lib/themed-assets";
 import { useHealth } from "./hooks/useHealth";
 import { FatalState } from "./components/fatal";
 import { SettingsPanel, type SettingsSection } from "./components/settings";
+import { UiDemoPanel } from "./components/ui-demo";
 import { ThemeEditor, useThemeEditorEnabled } from "./components/dev/ThemeEditor";
 import { useShortcuts } from "./hooks/useShortcuts";
 import { clearDraftFor } from "./hooks/useDraft";
@@ -186,6 +188,7 @@ export default function App() {
     const themeEditorEnabled = useThemeEditorEnabled();
     const healthHook = useHealth(3000);
     const [settingsActive, setSettingsActive] = useState(false);
+    const [uiDemoActive, setUiDemoActive] = useState(false);
     const [settingsSection, setSettingsSection] = useState<SettingsSection>("appearance");
     const [modelError, setModelError] = useState<string | null>(null);
     const [draftModelKey, setDraftModelKey] = useState<string | undefined>(undefined);
@@ -319,7 +322,19 @@ export default function App() {
             openTabIdsRef.current = next;
             setOpenTabIds(next);
         }
+        setUiDemoActive(false);
         setSettingsActive(true);
+    }, []);
+
+    const openUiDemoTab = useCallback(() => {
+        const current = openTabIdsRef.current;
+        if (!current.includes(UI_DEMO_TAB_ID)) {
+            const next = [...current, UI_DEMO_TAB_ID];
+            openTabIdsRef.current = next;
+            setOpenTabIds(next);
+        }
+        setSettingsActive(false);
+        setUiDemoActive(true);
     }, []);
 
     useEffect(() => {
@@ -528,6 +543,7 @@ export default function App() {
 
     const handleSelect = useCallback(async (file: string) => {
         setSettingsActive(false);
+        setUiDemoActive(false);
         openSessionTab(file);
         if (file === chat.activeFile) { focusComposer(); return; }
         if (chat.hasCache(file)) {
@@ -548,10 +564,11 @@ export default function App() {
         } finally { focusComposer(); }
     }, [openSessionTab, sessions.switchTo, chat.openFile, chat.hydrateFromSwitch, chat.hydrateFromCache, chat.hasCache, chat.revalidate, chat.activeFile, chat.prepareSwitch, focusComposer]);
 
-    const handleNewChat = useCallback(() => { setSettingsActive(false); ensureNewChatTab(); chat.clear(); focusComposer(); }, [chat.clear, ensureNewChatTab, focusComposer]);
+    const handleNewChat = useCallback(() => { setSettingsActive(false); setUiDemoActive(false); ensureNewChatTab(); chat.clear(); focusComposer(); }, [chat.clear, ensureNewChatTab, focusComposer]);
 
     const handleNewChatInProject = useCallback((cwd: string) => {
         setSettingsActive(false);
+        setUiDemoActive(false);
         if (cwd) setNewChatCwd(cwd);
         ensureNewChatTab();
         chat.clear();
@@ -589,6 +606,12 @@ export default function App() {
             icon: <IconSettingsFilled className={iconClass} />,
         });
         list.push({
+            id: "open-ui-demo",
+            label: "Open UI demo",
+            keywords: ["ui demo", "components", "design system", "showcase", "storybook", "styleguide"],
+            icon: <IconComponents className={iconClass} />,
+        });
+        list.push({
             id: "toggle-theme",
             label: `Toggle theme (currently ${effectiveTheme})`,
             keywords: ["theme", "dark", "light", "appearance", "toggle"],
@@ -615,6 +638,9 @@ export default function App() {
             case "open-settings":
                 openSettingsTab();
                 break;
+            case "open-ui-demo":
+                openUiDemoTab();
+                break;
             case "toggle-theme":
                 handleToggleTheme();
                 break;
@@ -622,64 +648,77 @@ export default function App() {
                 setSidebarOpen((open) => !open);
                 break;
         }
-    }, [currentProjectCwd, handleNewChat, handleNewChatInProject, handleToggleTheme, openSettingsTab]);
+    }, [currentProjectCwd, handleNewChat, handleNewChatInProject, handleToggleTheme, openSettingsTab, openUiDemoTab]);
 
     const handleCloseTab = useCallback((id: string | null) => {
         const current = openTabIdsRef.current;
-        // Settings behaves like any other tab.
-        if (id === SETTINGS_TAB_ID) {
-            if (!current.includes(SETTINGS_TAB_ID)) return;
-            const next = current.filter((tabId) => tabId !== SETTINGS_TAB_ID);
+        // Settings + UI demo behave like any other tab.
+        if (id === SETTINGS_TAB_ID || id === UI_DEMO_TAB_ID) {
+            if (!current.includes(id)) return;
+            const next = current.filter((tabId) => tabId !== id);
             openTabIdsRef.current = next;
             setOpenTabIds(next);
-            if (settingsActive) {
+            const wasActive = (id === SETTINGS_TAB_ID && settingsActive) || (id === UI_DEMO_TAB_ID && uiDemoActive);
+            if (wasActive) {
                 setSettingsActive(false);
-                // The backend may point at a session whose tab was closed while settings was front.
+                setUiDemoActive(false);
+                // The backend may point at a session whose tab was closed while a special tab was front.
                 const backend = chat.activeFile;
                 if (!next.includes(backend)) {
-                    const fallback = next.find((tabId) => tabId !== SETTINGS_TAB_ID) ?? null;
+                    const fallback = next.find((tabId) => tabId !== SETTINGS_TAB_ID && tabId !== UI_DEMO_TAB_ID) ?? null;
                     if (fallback === null) handleNewChat();
                     else void handleSelect(fallback);
                 }
             }
             return;
         }
-        // Session tabs — always keep at least one chat tab (settings doesn't count).
-        const chatTabs = current.filter((tabId) => tabId !== SETTINGS_TAB_ID);
+        // Session tabs — always keep at least one chat tab (special tabs don't count).
+        const chatTabs = current.filter((tabId) => tabId !== SETTINGS_TAB_ID && tabId !== UI_DEMO_TAB_ID);
         if (id === null && chatTabs.length <= 1 && chatTabs.includes(null)) return;
         const index = current.indexOf(id);
         if (index < 0) return;
         const filtered = current.filter((tabId) => tabId !== id);
         const nextActiveId = filtered[index] ?? filtered[index - 1] ?? null;
         let next = filtered;
-        if (!next.some((tabId) => tabId !== SETTINGS_TAB_ID)) {
+        if (!next.some((tabId) => tabId !== SETTINGS_TAB_ID && tabId !== UI_DEMO_TAB_ID)) {
             next = [...next, null];
         }
         openTabIdsRef.current = next.length > 0 ? next : [null];
         setOpenTabIds(openTabIdsRef.current);
-        const isUiActive = !settingsActive && (id === chat.activeFile || (id === null && chat.activeFile === null));
+        const isUiActive = !settingsActive && !uiDemoActive && (id === chat.activeFile || (id === null && chat.activeFile === null));
         if (!isUiActive) return;
         if (nextActiveId === SETTINGS_TAB_ID) {
             setSettingsActive(true);
+            setUiDemoActive(false);
+            return;
+        }
+        if (nextActiveId === UI_DEMO_TAB_ID) {
+            setSettingsActive(false);
+            setUiDemoActive(true);
             return;
         }
         if (nextActiveId === null) handleNewChat();
         else void handleSelect(nextActiveId);
-    }, [chat.activeFile, handleNewChat, handleSelect, settingsActive]);
+    }, [chat.activeFile, handleNewChat, handleSelect, settingsActive, uiDemoActive]);
 
     const handleTabSelect = useCallback((id: string | null) => {
         if (id === SETTINGS_TAB_ID) {
             openSettingsTab();
             return;
         }
+        if (id === UI_DEMO_TAB_ID) {
+            openUiDemoTab();
+            return;
+        }
         if (id === null) handleNewChat();
         else void handleSelect(id);
-    }, [handleNewChat, handleSelect, openSettingsTab]);
+    }, [handleNewChat, handleSelect, openSettingsTab, openUiDemoTab]);
 
     const handleCloseActiveTab = useCallback(() => {
         if (settingsActive) handleCloseTab(SETTINGS_TAB_ID);
+        else if (uiDemoActive) handleCloseTab(UI_DEMO_TAB_ID);
         else handleCloseTab(chat.activeFile);
-    }, [settingsActive, handleCloseTab, chat.activeFile]);
+    }, [settingsActive, uiDemoActive, handleCloseTab, chat.activeFile]);
 
     const handleRename = useCallback(async (file: string, name: string) => {
         await sessions.rename(file, name);
@@ -841,6 +880,7 @@ export default function App() {
     const tabItems = useMemo(() => openTabIds.map((id) => {
         if (id === null) return { id, title: "New chat" };
         if (id === SETTINGS_TAB_ID) return { id, title: "Settings" };
+        if (id === UI_DEMO_TAB_ID) return { id, title: "UI demo" };
         const session = sessions.sessions.find((item) => item.path === id);
         const fallback = id.split("/").pop() || "Session";
         const title = session?.name?.trim() || session?.firstMessage?.trim() || (id === chat.activeFile ? activeTitle : fallback);
@@ -851,11 +891,11 @@ export default function App() {
     useShortcuts({
         onNewChat: handleNewChat,
         onCloseTab: handleCloseActiveTab,
-        onDeleteSession: () => { if (!settingsActive) void handleDeleteCurrent(); },
+        onDeleteSession: () => { if (!settingsActive && !uiDemoActive) void handleDeleteCurrent(); },
         onFocusProject: focusProjectPicker,
         onOpenSearch: () => {},
         onOpenSettings: openSettingsTab,
-        onAbort: () => { if (!settingsActive) void handleAbort(); },
+        onAbort: () => { if (!settingsActive && !uiDemoActive) void handleAbort(); },
     }, { isStreaming: chat.isStreaming });
 
     // fatal gate
@@ -879,7 +919,7 @@ export default function App() {
                             <Sidebar
                                 projectGroups={projectGroups}
                                 orphanCount={orphanCount}
-                                activeFile={settingsActive ? SETTINGS_TAB_ID : chat.activeFile}
+                                activeFile={settingsActive ? SETTINGS_TAB_ID : uiDemoActive ? UI_DEMO_TAB_ID : chat.activeFile}
                                 onSelect={handleSelect}
                                 onNewChat={handleNewChat}
                                 onOpenSettings={openSettingsTab}
@@ -911,7 +951,7 @@ export default function App() {
                                 }
                                 sidebarCollapsed={!sidebarOpen}
                                 tabs={tabItems}
-                                activeId={settingsActive ? SETTINGS_TAB_ID : chat.activeFile}
+                                activeId={settingsActive ? SETTINGS_TAB_ID : uiDemoActive ? UI_DEMO_TAB_ID : chat.activeFile}
                                 onSelect={handleTabSelect}
                                 onClose={handleCloseTab}
                             />
@@ -919,6 +959,10 @@ export default function App() {
                                 {settingsActive ? (
                                     <section className="flex min-h-0 flex-1" aria-label="Settings">
                                         <SettingsPanel section={settingsSection} onSectionChange={setSettingsSection} onProvidersChanged={() => models.refresh({ silent: true })} />
+                                    </section>
+                                ) : uiDemoActive ? (
+                                    <section className="flex min-h-0 flex-1" aria-label="UI demo">
+                                        <UiDemoPanel />
                                     </section>
                                 ) : (
                                 <section className="flex min-h-0 flex-1 flex-col">
@@ -1005,7 +1049,7 @@ export default function App() {
                                 </section>
                                 )}
                             </div>
-                            {!settingsActive && themeEditorEnabled && (
+                            {!settingsActive && !uiDemoActive && themeEditorEnabled && (
                                 <div className="absolute bottom-4 right-4 z-40">
                                     <ThemeEditor />
                                 </div>

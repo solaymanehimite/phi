@@ -17,7 +17,7 @@ export function Switch({ checked, label, className = "", ...props }: SwitchProps
         }`}
       >
         <span
-          className={`size-5 rounded-full bg-phi-white shadow-sm motion-safe:transition-transform motion-safe:duration-200 motion-safe:ease-out ${
+          className={`size-5 rounded-full bg-phi-white motion-safe:transition-transform motion-safe:duration-200 motion-safe:ease-out ${
             checked ? "translate-x-4" : "translate-x-0"
           }`}
         />

@@ -1,6 +1,6 @@
 import type { ButtonHTMLAttributes, ReactNode } from "react";
 
-export type ButtonVariant = "ghost" | "icon" | "primary" | "secondary" | "outline" | "danger" | "mini";
+export type ButtonVariant = "ghost" | "icon" | "primary" | "secondary" | "danger" | "mini";
 type ButtonSize = "icon" | "xs" | "sm" | "md";
 
 type ButtonProps = ButtonHTMLAttributes<HTMLButtonElement> & {
@@ -24,14 +24,11 @@ const variants: Record<ButtonVariant, string> = {
   // flipping to pure white (which inverts in light theme).
   primary:
     "shrink-0 rounded-[10px] bg-phi-bg-inverse text-phi-text-inverse hover:opacity-90 disabled:cursor-default disabled:bg-phi-bg-disabled disabled:text-phi-text-disabled disabled:opacity-100",
-  // Bordered action — Test connection, form secondary buttons.
+  // Bordered action — Test connection, form buttons, chip triggers (code theme
+  // picker). Opaque elevated fill so content never shows through; hover lifts
+  // the border toward accent and the text to primary.
   secondary:
-    "rounded-lg border border-phi-border bg-phi-overlay text-phi-text-secondary hover:bg-phi-overlay-hover hover:text-phi-text-primary disabled:opacity-50",
-  // Outline chip — shadcn-style bordered trigger with a solid fill
-  // (code theme picker). Opaque so code never shows through it. Hover
-  // darkens the fill and lifts the text — no accent border on hover/press.
-  outline:
-    "rounded-lg border border-phi-border-strong bg-phi-bg-elevated text-phi-text-secondary shadow-[0_2px_8px_var(--color-phi-shadow)] hover:brightness-90 hover:text-phi-text-primary disabled:opacity-50 disabled:hover:brightness-100",
+    "rounded-lg border border-phi-border-strong bg-phi-bg-elevated text-phi-text-secondary hover:border-phi-accent/60 hover:bg-phi-overlay-active hover:text-phi-text-primary disabled:opacity-50",
   // Destructive action — Stop button. White text on saturated red is correct
   // in both themes (phi-white is a fixed #fff, not theme text).
   danger:
@@ -53,7 +50,6 @@ const defaultSize: Record<ButtonVariant, ButtonSize> = {
   icon: "icon",
   primary: "icon",
   secondary: "sm",
-  outline: "xs",
   danger: "icon",
   mini: "icon",
 };

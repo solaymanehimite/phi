@@ -12,7 +12,7 @@ export function Menu({
 }: HTMLAttributes<HTMLDivElement> & { children: ReactNode }) {
   return (
     <div
-      className={`rounded-xl border border-phi-border-faint bg-phi-bg-elevated p-1 text-sm/6 text-phi-text-primary shadow-xl ${className}`}
+      className={`rounded-xl border border-phi-border-faint bg-phi-bg-elevated p-1 text-sm/6 text-phi-text-primary ${className}`}
       {...props}
     >
       {children}

@@ -25,7 +25,7 @@ export function DialogPanel({
     <div
       role="dialog"
       aria-modal="true"
-      className={`w-full max-w-md rounded-xl border border-phi-border bg-phi-bg-surface p-4 shadow-xl ${className}`}
+      className={`w-full max-w-md rounded-xl border border-phi-border bg-phi-bg-surface p-4 ${className}`}
       {...props}
     >
       {children}
