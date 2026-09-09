@@ -28,6 +28,8 @@ import { useProjects, type NewProjectInput } from "./hooks/useProjects";
 import { normalizeProjectPath, resolveProjectOptions, sessionsForProject, type Project } from "./lib/projects";
 import { useChat } from "./hooks/useChat";
 import { useCompaction } from "./hooks/useCompaction";
+import { clearQueueFor, useMessageQueue } from "./hooks/useMessageQueue";
+import { QueueIndicator } from "./components/queue-indicator";
 import { useModels } from "./hooks/useModels";
 import { createSession, health, streamContinue } from "./lib/api";
 import { CompactionIndicator } from "./components/compaction-indicator";
@@ -181,6 +183,7 @@ export default function App() {
     const sessions = useSessions();
     const chat = useChat();
     const compaction = useCompaction({ revalidate: chat.revalidate });
+    const queue = useMessageQueue(chat.activeFile);
     const lastCompactInstructionsRef = useRef<Record<string, string | undefined>>({});
     const models = useModels();
     const { theme, setTheme } = useTheme();
@@ -731,6 +734,7 @@ export default function App() {
         if (openTabIdsRef.current.includes(file)) handleCloseTab(file);
         chat.invalidateCache(file);
         chat.removeFile(file);
+        clearQueueFor(file);
         setInlineFor(file, null);
     }, [sessions.remove, handleCloseTab, chat.removeFile, chat.invalidateCache, setInlineFor]);
 
@@ -874,6 +878,86 @@ export default function App() {
         sessions.refresh({ silent: true });
         focusComposer();
     }, [chat.prompt, chat.data?.cwd, activeCwd, newChatCwd, homeCwd, sessions.addOptimistic, sessions.refresh, chat.activeFile, chat.isStreaming, chat.abort, draftModelKey, draftThinking, models.setModel, models.setThinkingLevel, promoteNewChatTab, chat.patchModel, chat.openFile, chat.refreshSilent, sessions.switchTo, focusComposer, archiveInline, setInlineFor, compaction]);
+
+    // ---- Message queueing and steering (M3) ----
+    // Synchronous mirror of the running set so interrupt can wait for the
+    // aborted turn to settle before sending the follow-up prompt.
+    const runningFilesRef = useRef(chat.runningFiles);
+    runningFilesRef.current = chat.runningFiles;
+
+    const handleQueue = useCallback((content: string, images?: { type: "image"; data: string; mimeType: string }[]) => {
+        const file = chat.activeFile;
+        if (!file) return;
+        queue.enqueue(file, content, images);
+        focusComposer();
+    }, [chat.activeFile, queue.enqueue, focusComposer]);
+
+    const handleInterrupt = useCallback(async (content: string, images?: { type: "image"; data: string; mimeType: string }[]) => {
+        const file = chat.activeFile;
+        if (!file || !chat.isStreaming) {
+            await handleSend(content, images);
+            return;
+        }
+        try { await chat.abort(file); } catch {}
+        // Wait for the aborted turn to settle so the follow-up prompt is not
+        // rejected as overlapping. Bounded poll; handleSend archives/raises otherwise.
+        const deadline = Date.now() + 4000;
+        while (runningFilesRef.current.has(file) && Date.now() < deadline) {
+            await new Promise((r) => setTimeout(r, 100));
+        }
+        await handleSend(content, images);
+    }, [chat.activeFile, chat.isStreaming, chat.abort, handleSend]);
+
+    const handleQueueRemove = useCallback((id: string) => {
+        const file = chat.activeFile;
+        if (file) queue.remove(file, id);
+        focusComposer();
+    }, [chat.activeFile, queue.remove, focusComposer]);
+
+    const handleQueueEdit = useCallback((id: string, text: string) => {
+        const file = chat.activeFile;
+        if (!file || !text.trim()) return;
+        queue.remove(file, id);
+        window.dispatchEvent(new CustomEvent("phi:load-composer", { detail: { text } }));
+    }, [chat.activeFile, queue.remove]);
+
+    const handleQueueSendNow = useCallback((id: string) => {
+        const file = chat.activeFile;
+        if (!file) return;
+        const item = queue.queueFor(file).find((q) => q.id === id);
+        if (!item) return;
+        queue.remove(file, id);
+        void handleInterrupt(item.text, item.images);
+    }, [chat.activeFile, queue.queueFor, queue.remove, handleInterrupt]);
+
+    const handleQueueClear = useCallback(() => {
+        const file = chat.activeFile;
+        if (file) queue.clear(file);
+        focusComposer();
+    }, [chat.activeFile, queue.clear, focusComposer]);
+
+    // Automatic sequential draining: when the agent finishes a turn, the head
+    // of the queue sends as a follow-up. Serialised via drainingRef so a stale
+    // isStreaming=false render can never shift two messages for one idle slot.
+    const handleSendRef = useRef(handleSend);
+    handleSendRef.current = handleSend;
+    const drainingRef = useRef(false);
+    const compactingActive = chat.activeFile ? compaction.isCompacting(chat.activeFile) : false;
+    const queuedForActive = chat.activeFile ? queue.queueFor(chat.activeFile) : [];
+    useEffect(() => {
+        const file = chat.activeFile;
+        if (!file || chat.isStreaming || chat.loading || compactingActive || queuedForActive.length === 0 || drainingRef.current) return;
+        const head = queue.shift(file);
+        if (!head) return;
+        drainingRef.current = true;
+        void (async () => {
+            try {
+                await handleSendRef.current(head.text, head.images);
+            } finally {
+                drainingRef.current = false;
+            }
+        })();
+    }, [chat.activeFile, chat.isStreaming, chat.loading, compactingActive, queuedForActive.length, queue.shift]);
 
     const messages = useMemo(() => chat.data?.context.messages ?? [], [chat.data?.context.messages]);
 
@@ -1027,6 +1111,9 @@ export default function App() {
                                             const cErr = cFile ? compaction.errors[cFile] : null;
                                             const instr = cFile ? lastCompactInstructionsRef.current[cFile] : undefined;
                                             const showIndicator = Boolean(isCompacting || cErr);
+                                            const queued = cFile ? queue.queueFor(cFile) : [];
+                                            const showQueue = queued.length > 0;
+                                            const attached = showIndicator || showQueue;
                                             return (
                                                 <div className="mx-auto flex w-full max-w-3xl flex-col gap-0">
                                                     <div
@@ -1041,7 +1128,16 @@ export default function App() {
                                                             )}
                                                         </div>
                                                     </div>
-                                                    <Composer onSend={handleSend} onAbort={handleAbort} isStreaming={chat.isStreaming} isCompacting={isCompacting} compactAttached={showIndicator} cwd={chat.activeFile ? activeCwd : (newChatCwd ?? homeCwd)} draftKey={chat.activeFile} />
+                                                    <div
+                                                        className={`grid overflow-hidden transition-[grid-template-rows,opacity] duration-300 ease-[cubic-bezier(0.4,0,0.2,1)] ${showQueue ? "grid-rows-[1fr] opacity-100" : "grid-rows-[0fr] opacity-0"}`}
+                                                    >
+                                                        <div className="min-h-0 overflow-hidden">
+                                                            {showQueue && (
+                                                                <QueueIndicator items={queued} onRemove={handleQueueRemove} onEdit={handleQueueEdit} onSendNow={handleQueueSendNow} onClear={handleQueueClear} attachedAbove={showIndicator} />
+                                                            )}
+                                                        </div>
+                                                    </div>
+                                                    <Composer onSend={handleSend} onAbort={handleAbort} onQueue={handleQueue} onInterrupt={handleInterrupt} isStreaming={chat.isStreaming} isCompacting={isCompacting} compactAttached={attached} cwd={chat.activeFile ? activeCwd : (newChatCwd ?? homeCwd)} draftKey={chat.activeFile} />
                                                 </div>
                                             );
                                         })()}

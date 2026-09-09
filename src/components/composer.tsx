@@ -11,7 +11,7 @@ import {
     type ClipboardEvent,
 } from "react";
 import { Button } from "./ui/button";
-import { IconArrowUp, IconPaperclip, IconPlayerStopFilled, IconXFilled } from "@tabler/icons-react";
+import { IconArrowUp, IconBolt, IconClockPlus, IconPaperclip, IconXFilled } from "@tabler/icons-react";
 import { SlashMenu } from "./composer/slash-menu";
 import { AtMenu } from "./composer/at-menu";
 import { useSlashCommands } from "../hooks/useSlashCommands";
@@ -27,6 +27,10 @@ export type ComposerImagePayload = {
 type ComposerProps = {
     onSend: (message: string, images?: ComposerImagePayload[]) => void;
     onAbort?: () => void;
+    /** Queue a follow-up while the agent is streaming. */
+    onQueue?: (message: string, images?: ComposerImagePayload[]) => void;
+    /** Abort the running turn and send immediately. */
+    onInterrupt?: (message: string, images?: ComposerImagePayload[]) => void;
     isStreaming?: boolean;
     isCompacting?: boolean;
     compactAttached?: boolean;
@@ -118,6 +122,8 @@ function fileToAttached(file: File): Promise<AttachedImage | null> {
 export const Composer = memo(function Composer({
     onSend,
     onAbort,
+    onQueue,
+    onInterrupt,
     isStreaming,
     isCompacting,
     compactAttached,
@@ -125,6 +131,7 @@ export const Composer = memo(function Composer({
     cwd,
     draftKey,
 }: ComposerProps) {
+    void onAbort;
     const draftStorageKey = draftKey ? `phi:draft:${draftKey}` : "phi:draft:new";
     const [message, setMessage] = useState(() => {
         try {
@@ -421,50 +428,87 @@ export const Composer = memo(function Composer({
         return () => window.removeEventListener("phi:add-to-composer", onAddPath);
     }, [draftStorageKey, message, persistDraft]);
 
+    // Queue editing hands text back to the composer for revision.
+    useEffect(() => {
+        const onLoad = (event: Event) => {
+            const text = (event as CustomEvent<{ text?: string }>).detail?.text;
+            if (typeof text !== "string") return;
+            setMessage(text);
+            persistDraft(text, draftStorageKey);
+            closeSlash();
+            closeAt();
+            requestAnimationFrame(() => {
+                const el = textareaRef.current;
+                if (!el) return;
+                el.focus();
+                el.setSelectionRange(text.length, text.length);
+                el.style.height = "auto";
+                el.style.height = `${Math.min(el.scrollHeight, 180)}px`;
+            });
+        };
+        window.addEventListener("phi:load-composer", onLoad);
+        return () => window.removeEventListener("phi:load-composer", onLoad);
+    }, [closeAt, closeSlash, draftStorageKey, persistDraft]);
+
+    const clearAfterAction = useCallback(() => {
+        setMessage("");
+        setImages([]);
+        try {
+            localStorage.removeItem(draftStorageKey);
+            window.dispatchEvent(new CustomEvent("phi:draft-change"));
+        } catch { }
+        if (draftTimerRef.current) window.clearTimeout(draftTimerRef.current);
+        closeSlash();
+        closeAt();
+        if (textareaRef.current) textareaRef.current.style.height = "auto";
+        focusTextarea();
+    }, [closeAt, closeSlash, draftStorageKey, focusTextarea]);
+
+    const buildPayload = useCallback((): ComposerImagePayload[] | undefined => {
+        return images.length
+            ? images.map(({ data, mimeType }) => ({
+                type: "image",
+                data,
+                mimeType,
+            }))
+            : undefined;
+    }, [images]);
+
     const submit = useCallback(
         (event?: FormEvent) => {
             event?.preventDefault();
             if (isCompacting) return;
-            if (isStreaming) {
-                onAbort?.();
-                focusTextarea();
-                return;
-            }
             const content = message.trim();
             if ((!content && images.length === 0) || disabled) return;
-            const payload: ComposerImagePayload[] | undefined = images.length
-                ? images.map(({ data, mimeType }) => ({
-                    type: "image",
-                    data,
-                    mimeType,
-                }))
-                : undefined;
-            onSend(content, payload);
-            setMessage("");
-            setImages([]);
-            try {
-                localStorage.removeItem(draftStorageKey);
-                window.dispatchEvent(new CustomEvent("phi:draft-change"));
-            } catch { }
-            if (draftTimerRef.current) window.clearTimeout(draftTimerRef.current);
-            closeSlash();
-            closeAt();
-            if (textareaRef.current) textareaRef.current.style.height = "auto";
-            focusTextarea();
+            // While streaming, sending queues a follow-up instead of aborting.
+            if (isStreaming) {
+                onQueue?.(content, buildPayload());
+                clearAfterAction();
+                return;
+            }
+            onSend(content, buildPayload());
+            clearAfterAction();
         },
         [
             isStreaming,
-            onAbort,
+            isCompacting,
+            onQueue,
             message,
             disabled,
             onSend,
-            images,
-            focusTextarea,
-            closeSlash,
-            closeAt,
-            draftStorageKey,
+            images.length,
+            buildPayload,
+            clearAfterAction,
         ],
     );
+
+    const interruptSend = useCallback(() => {
+        if (isCompacting) return;
+        const content = message.trim();
+        if ((!content && images.length === 0) || disabled) return;
+        onInterrupt?.(content, buildPayload());
+        clearAfterAction();
+    }, [buildPayload, clearAfterAction, disabled, images.length, isCompacting, message, onInterrupt]);
 
     const handleKeyDown = useCallback(
         (event: KeyboardEvent<HTMLTextAreaElement>) => {
@@ -531,10 +575,8 @@ export const Composer = memo(function Composer({
             }
             if (event.key === "Enter" && !event.shiftKey) {
                 event.preventDefault();
-                if (isStreaming) {
-                    onAbort?.();
-                    focusTextarea();
-                } else submit();
+                // While streaming, Enter queues a follow-up (or is a no-op when full).
+                submit();
             }
             if (event.key === "Escape" && (isSlashOpen || isAtOpen)) {
                 event.preventDefault();
@@ -551,10 +593,7 @@ export const Composer = memo(function Composer({
             slashIndex,
             acceptAt,
             acceptSlash,
-            isStreaming,
-            onAbort,
             submit,
-            focusTextarea,
             closeSlash,
             closeAt,
         ],
@@ -737,7 +776,7 @@ export const Composer = memo(function Composer({
                     isCompacting
                         ? "Compacting…"
                         : isStreaming
-                            ? "Streaming… press Stop or Enter to abort"
+                            ? "Streaming… type a follow-up, Enter to queue"
                             : "What do you want to build today?"
                 }
                 onChange={handleChange}
@@ -774,7 +813,7 @@ export const Composer = memo(function Composer({
                         aria-label="Attach images"
                         title="Attach images (drag & drop or paste too)"
                         onClick={() => fileInputRef.current?.click()}
-                        disabled={!!disabled || isStreaming || !!isCompacting}
+                        disabled={!!disabled || !!isCompacting}
                         className="disabled:opacity-40"
                     >
                         <IconPaperclip className="size-4" />
@@ -782,14 +821,27 @@ export const Composer = memo(function Composer({
                 </div>
 
                 {isStreaming ? (
-                    <Button
-                        type="submit"
-                        variant="danger"
-                        aria-label="Stop"
-                        title="Stop"
-                    >
-                        <IconPlayerStopFilled className="size-4" />
-                    </Button>
+                    <div className="flex items-center gap-1.5">
+                        <Button
+                            type="button"
+                            variant="danger"
+                            aria-label="Interrupt and send now"
+                            title="Interrupt and send now"
+                            disabled={!hasContent || !!disabled || !!isCompacting}
+                            onClick={interruptSend}
+                        >
+                            <IconBolt className="size-4" />
+                        </Button>
+                        <Button
+                            type="submit"
+                            variant="primary"
+                            disabled={!hasContent || !!disabled || !!isCompacting}
+                            aria-label="Queue as follow-up"
+                            title="Queue as follow-up (Enter)"
+                        >
+                            <IconClockPlus className="size-4" />
+                        </Button>
+                    </div>
                 ) : (
                     <Button
                         type="submit"
