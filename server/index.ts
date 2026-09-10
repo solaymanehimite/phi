@@ -923,15 +923,30 @@ app.post("/api/continue", async (req, res) => {
     const heartbeat = setInterval(() => { if (!connectionClosed) res.write(": ping\n\n"); }, 15_000);
     const off = session.subscribe((event: unknown) => sendSSE(res, event));
     res.on("close", () => { connectionClosed = true; clearInterval(heartbeat); try { off(); } catch {} });
-    // Try agent-level continue first, fallback to prompt with empty continuer
+    // Try agent-level continue first, fallback to a "Continue" nudge prompt.
+    // SDK continue() only resumes when the transcript ends on a user or
+    // tool-result message (cut mid tool-loop). After interrupting plain text
+    // streaming it ends on assistant, so continue() throws — nudge instead.
     const tryAgentContinue = async () => {
       const agent: any = session.agent;
-      if (typeof agent?.continue === "function") return agent.continue();
-      if (typeof session.continue === "function") return session.continue();
-      // fallback: re-prompt with special continue flag if SDK exposes it via prompt options
-      // We attempt a no-op prompt that tells SDK to continue (some versions accept { continue: true })
-      // If not, throw.
-      throw new ApiError("continue not supported by this SDK version", 501);
+      const continuer = typeof agent?.continue === "function"
+        ? agent.continue.bind(agent)
+        : typeof session.continue === "function"
+          ? session.continue.bind(session)
+          : null;
+      if (!continuer) throw new ApiError("continue not supported by this SDK version", 501);
+      try {
+        return await continuer();
+      } catch (err) {
+        if (!/cannot continue from message role:\s*assistant/i.test(errorMessage(err))) throw err;
+        const prompter = typeof agent?.prompt === "function"
+          ? agent.prompt.bind(agent)
+          : typeof session.prompt === "function"
+            ? session.prompt.bind(session)
+            : null;
+        if (!prompter) throw err;
+        return await prompter("Continue");
+      }
     };
     const promptPromise = tryAgentContinue();
     entry.activePrompt = promptPromise as Promise<void>;

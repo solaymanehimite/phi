@@ -42,7 +42,7 @@ import { UiDemoPanel } from "./components/ui-demo";
 import { ThemeEditor, useThemeEditorEnabled } from "./components/dev/ThemeEditor";
 import { useShortcuts } from "./hooks/useShortcuts";
 import { clearDraftFor } from "./hooks/useDraft";
-import { InlineErrorBlock, type InlineError } from "./components/inline-error";
+import { InlineErrorBlock, InterruptedBlock, isInterruption, type InlineError } from "./components/inline-error";
 
 function prefersReducedMotion(): boolean {
     if (typeof window === "undefined" || typeof window.matchMedia !== "function") return false;
@@ -96,7 +96,6 @@ const ChatViewport = memo(function ChatViewport({
     isStreaming,
     streaming,
     inlineError,
-    archivedErrors,
     onContinue,
     onDismiss,
 }: {
@@ -112,7 +111,6 @@ const ChatViewport = memo(function ChatViewport({
         startedAt?: number | null;
     };
     inlineError?: InlineError | null;
-    archivedErrors?: InlineError[];
     onContinue?: () => void;
     onDismiss?: () => void;
 }) {
@@ -137,7 +135,9 @@ const ChatViewport = memo(function ChatViewport({
                 <div className="flex flex-1 flex-col items-center justify-center pb-16 text-center">
                     <p className="text-[13px] text-phi-text-muted">No messages in this session yet.</p>
                     <p className="mt-1 text-[12px] text-phi-text-muted">Prompt streaming lands in Phase C.</p>
-                    {inlineError && <InlineErrorBlock error={inlineError} onContinue={onContinue} onDismiss={onDismiss!} />}
+                    {inlineError && (isInterruption(inlineError.reason)
+                        ? <InterruptedBlock onContinue={onContinue} />
+                        : <InlineErrorBlock error={inlineError} onContinue={onContinue} onDismiss={onDismiss!} />)}
                 </div>
             </div>
         );
@@ -163,10 +163,9 @@ const ChatViewport = memo(function ChatViewport({
                             <Streaming text={streaming.text} workItems={streaming.workItems} error={streaming.error} isStreaming={isStreaming} />
                         </div>
                     )}
-                    {archivedErrors?.map((e) => (
-                        <InlineErrorBlock key={e.id} error={e} onDismiss={() => {}} archived />
-                    ))}
-                    {inlineError && <InlineErrorBlock error={inlineError} onContinue={onContinue} onDismiss={onDismiss!} />}
+                    {inlineError && (isInterruption(inlineError.reason)
+                        ? <InterruptedBlock onContinue={onContinue} />
+                        : <InlineErrorBlock error={inlineError} onContinue={onContinue} onDismiss={onDismiss!} />)}
                     {error && !isStreaming && !inlineError && (
                         <Alert variant="error" className="mx-auto mt-3 w-full max-w-3xl text-[13px]">{error}</Alert>
                     )}
@@ -201,9 +200,8 @@ export default function App() {
     const { projects, addProject, updateProject, removeProject } = useProjects();
     const [openTabIds, setOpenTabIds] = useState<(string | null)[]>([null]);
     const openTabIdsRef = useRef<(string | null)[]>([null]);
-    // inline errors per session: tail node
+    // single inline notice per session — interrupts clear on next send, never stack
     const [inlineErrors, setInlineErrors] = useState<Record<string, InlineError>>({});
-    const [archivedErrors, setArchivedErrors] = useState<Record<string, InlineError[]>>({});
     const directoryPickerRef = useRef<HTMLDivElement>(null);
 
     // quit guard
@@ -246,16 +244,6 @@ export default function App() {
             return;
         }
         setInlineErrors((prev) => ({ ...prev, [file]: err }));
-    }, []);
-
-    const archiveInline = useCallback((file: string) => {
-        setInlineErrors((prev) => {
-            const cur = prev[file];
-            if (!cur) return prev;
-            const { [file]: _, ...rest } = prev;
-            setArchivedErrors((a) => ({ ...a, [file]: [...(a[file] ?? []), cur] }));
-            return rest;
-        });
     }, []);
 
     const makeInlineReason = (msg: string): InlineError["reason"] => {
@@ -813,7 +801,7 @@ export default function App() {
         const f = chat.activeFile;
         if (!f) return;
         const cwd = activeCwd || newChatCwd || homeCwd;
-        // optimistic: keep inline for now, clear archived? Continue will resume
+        // optimistic: clear the notice, Continue will resume
         setInlineFor(f, null);
         try {
             // use sidecar continue streaming via same mechanism as prompt but via streamContinue
@@ -851,8 +839,8 @@ export default function App() {
                     try { await chat.abort(targetFile); } catch {}
                 }
                 lastCompactInstructionsRef.current[targetFile] = instructions;
-                // archive inline error before compact
-                archiveInline(targetFile);
+                // dismiss any inline notice before compact
+                setInlineFor(targetFile, null);
                 try {
                     const cwd = activeCwd || undefined;
                     await compaction.compact(targetFile, instructions, cwd);
@@ -863,8 +851,8 @@ export default function App() {
                 return;
             }
         }
-        // archive inline error on new prompt
-        if (chat.activeFile) archiveInline(chat.activeFile);
+        // sending a new message clears the interrupt notice — no stacking
+        if (chat.activeFile) setInlineFor(chat.activeFile, null);
         else if (content.trim()) clearDraftFor(null);
         let preparedSessionFile: string | undefined;
         const selectedCwd = !chat.activeFile ? (newChatCwd ?? homeCwd) || undefined : undefined;
@@ -908,7 +896,7 @@ export default function App() {
         if (chat.activeFile || preparedSessionFile) clearDraftFor(chat.activeFile ?? preparedSessionFile ?? null);
         sessions.refresh({ silent: true });
         focusComposer();
-    }, [chat.prompt, chat.data?.cwd, activeCwd, newChatCwd, homeCwd, sessions.addOptimistic, sessions.refresh, chat.activeFile, chat.isStreaming, chat.abort, draftModelKey, draftThinking, models.setModel, models.setThinkingLevel, promoteNewChatTab, chat.patchModel, chat.openFile, chat.refreshSilent, sessions.switchTo, focusComposer, archiveInline, setInlineFor, compaction]);
+    }, [chat.prompt, chat.data?.cwd, activeCwd, newChatCwd, homeCwd, sessions.addOptimistic, sessions.refresh, chat.activeFile, chat.isStreaming, chat.abort, draftModelKey, draftThinking, models.setModel, models.setThinkingLevel, promoteNewChatTab, chat.patchModel, chat.openFile, chat.refreshSilent, sessions.switchTo, focusComposer, setInlineFor, compaction]);
 
     // ---- Message queueing and steering (M3) ----
     // Synchronous mirror of the running set so interrupt can wait for the
@@ -1114,7 +1102,6 @@ export default function App() {
                                             isStreaming={chat.isStreaming}
                                             streaming={chat.streaming}
                                             inlineError={chat.activeFile ? inlineErrors[chat.activeFile] ?? null : null}
-                                            archivedErrors={chat.activeFile ? archivedErrors[chat.activeFile] ?? [] : []}
                                             onContinue={handleContinue}
                                             onDismiss={() => chat.activeFile && setInlineFor(chat.activeFile, null)}
                                         />
