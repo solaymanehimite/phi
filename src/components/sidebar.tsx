@@ -303,7 +303,7 @@ const GroupSection = memo(function GroupSection({
                     {group.sessions.length > 0 ? (
                         <nav
                             aria-label={project.name}
-                            className="mt-1 space-y-0.5 border-l border-phi-border-faint pb-0.5 ml-[13px] pl-2"
+                            className="mt-1 space-y-0.5 pb-0.5"
                         >
                             {group.sessions.map((s) => (
                                 <SessionRowMemo
@@ -320,7 +320,7 @@ const GroupSection = memo(function GroupSection({
                         </nav>
                     ) : (
                         !collapsed && (
-                            <p className="ml-[13px] mt-1 border-l border-phi-border-faint pb-0.5 pl-4 text-[11px] text-phi-text-faint">
+                            <p className="mt-1 pb-0.5 pl-[26px] text-[11px] text-phi-text-faint">
                                 No sessions yet
                             </p>
                         )
@@ -451,7 +451,7 @@ const SessionRow = memo(function SessionRow({
         <div
             onMouseEnter={onPrefetch}
             onFocusCapture={onPrefetch}
-            className={`session-row group relative flex h-8 w-full items-center gap-1 rounded-lg px-1 text-left text-[13px] ${active ? "bg-phi-overlay-active text-phi-text-primary" : "text-phi-text-tertiary hover:bg-phi-overlay-hover hover:text-phi-text-secondary"}`}
+            className={`session-row group relative flex h-8 w-full items-center gap-1 rounded-lg pl-5 pr-1 text-left text-[13px] ${active ? "bg-phi-overlay-active text-phi-text-primary" : "text-phi-text-tertiary hover:bg-phi-overlay-hover hover:text-phi-text-secondary"}`}
         >
             {renaming ? (
                 <div className="flex min-w-0 flex-1 items-center gap-2.5 truncate rounded-lg px-1.5 py-1 pr-8">
