@@ -60,13 +60,6 @@ This milestone defines the product behavior and boundaries without prescribing d
   - Compact, borderless, square-bottom styling with no spacing
   - No pulsing dots or status dots
 
-- **New Chat home screen**
-  - Vertical list of small, ghost-style starter prompts
-  - Starter prompts fill the composer without sending
-  - Improved empty-session messaging
-  - No “Build, Fix and Ship” heading
-  - No keyboard shortcut guide
-
 - **Supporting UI improvements**
   - Animated expand and collapse interactions
   - Reduced-motion support
