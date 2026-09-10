@@ -648,6 +648,29 @@ html[data-theme="light"] .phi-tab-active {
     opacity: 0;
   }
 
+  /* Sidebar session title — ellipsis by default; JS drives a linear
+     ping-pong marquee on row hover and paints the edge fade (vignette)
+     inline only while the text is actually moving. */
+  .session-title-inner {
+    display: block;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    text-align: left;
+    will-change: transform;
+  }
+  .session-title-mask {
+    -webkit-mask-image: none;
+    mask-image: none;
+  }
+  .session-row:hover .session-title-inner[data-marquee="true"],
+  .session-row:focus-within .session-title-inner[data-marquee="true"] {
+    overflow: visible;
+    text-overflow: clip;
+    width: max-content;
+    max-width: none;
+  }
+
   .phi-diff-line {
     min-height: 1.25rem;
   }

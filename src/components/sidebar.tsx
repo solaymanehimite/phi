@@ -9,7 +9,7 @@ import {
     IconSettingsFilled,
     IconTrashFilled,
 } from "@tabler/icons-react";
-import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
 import { Alert } from "./ui/alert";
@@ -56,7 +56,14 @@ function relativeTime(iso: string): string {
     if (hrs < 24) return `${hrs}h`;
     const days = Math.floor(hrs / 24);
     if (days < 7) return `${days}d`;
-    return d.toLocaleDateString();
+    if (days < 30) return `${Math.floor(days / 7)}w`;
+    if (days < 365) return `${Math.floor(days / 30)}mo`;
+    const years = Math.floor(days / 365);
+    if (years < 10) {
+        const remMonths = Math.floor((days % 365) / 30);
+        if (remMonths >= 2) return `${years}y ${remMonths}mo`;
+    }
+    return `${years}y`;
 }
 
 function titleFor(s: { name?: string; firstMessage: string }): string {
@@ -404,6 +411,154 @@ const SessionRowMemo = memo(function SessionRowMemo({
     );
 });
 
+function MarqueeTitle({ title }: { title: string }) {
+    const outerRef = useRef<HTMLSpanElement>(null);
+    const innerRef = useRef<HTMLSpanElement>(null);
+    const [dist, setDist] = useState(0);
+
+    useEffect(() => {
+        const measure = () => {
+            const outer = outerRef.current;
+            const inner = innerRef.current;
+            if (!outer || !inner) return;
+            const overflow = inner.scrollWidth - outer.clientWidth;
+            setDist(overflow > 8 ? Math.ceil(overflow) : 0);
+        };
+        measure();
+        const t = window.setTimeout(measure, 120);
+        window.addEventListener("resize", measure);
+        return () => {
+            window.clearTimeout(t);
+            window.removeEventListener("resize", measure);
+        };
+    }, [title]);
+
+    // Linear ping-pong marquee driven by rAF so the edge fade (vignette)
+    // is only visible while the text is actually moving, and fades only
+    // the edge(s) that still hide content.
+    useEffect(() => {
+        const outer = outerRef.current;
+        const inner = innerRef.current;
+        if (!outer || !inner || dist <= 0) return;
+        if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+        const row = outer.closest(".session-row");
+        if (!row) return;
+
+        const SPEED = 45; // px per second, constant (linear)
+        const START_DELAY = 350;
+        const END_PAUSE = 800;
+        let raf = 0;
+        let timer: number | null = null;
+        let alive = true;
+        let hovering = false;
+
+        const clear = () => {
+            inner.style.transform = "";
+            (outer.style as CSSProperties & { webkitMaskImage?: string }).webkitMaskImage = "none";
+            outer.style.maskImage = "none";
+        };
+        const paintMask = (x: number) => {
+            const atStart = x > -1.5;
+            const atEnd = x < -(dist - 1.5);
+            let mask: string | null = null;
+            if (!atStart && !atEnd)
+                mask = "linear-gradient(to right, transparent, #000 10px, #000 calc(100% - 12px), transparent)";
+            else if (!atStart)
+                mask = "linear-gradient(to right, transparent, #000 10px)";
+            else if (!atEnd)
+                mask = "linear-gradient(to right, #000 calc(100% - 12px), transparent)";
+            if (mask) {
+                (outer.style as CSSProperties & { webkitMaskImage?: string }).webkitMaskImage = mask;
+                outer.style.maskImage = mask;
+            } else {
+                (outer.style as CSSProperties & { webkitMaskImage?: string }).webkitMaskImage = "none";
+                outer.style.maskImage = "none";
+            }
+        };
+        const run = (from: number, to: number, done: () => void) => {
+            const span = Math.abs(to - from);
+            const dur = Math.max(500, (span / SPEED) * 1000);
+            const t0 = performance.now();
+            const step = (now: number) => {
+                if (!alive || !hovering) return;
+                const p = Math.min(1, (now - t0) / dur);
+                const x = from + (to - from) * p; // linear, no easing
+                inner.style.transform = `translateX(${x}px)`;
+                paintMask(x);
+                if (p < 1) raf = requestAnimationFrame(step);
+                else done();
+            };
+            raf = requestAnimationFrame(step);
+        };
+        const loop = () => {
+            if (!alive || !hovering) return;
+            run(0, -dist, () => {
+                if (!alive || !hovering) return;
+                timer = window.setTimeout(() => {
+                    if (!alive || !hovering) return;
+                    run(-dist, 0, () => {
+                        if (!alive || !hovering) return;
+                        clear();
+                        timer = window.setTimeout(() => {
+                            if (alive && hovering) loop();
+                        }, START_DELAY);
+                    });
+                }, END_PAUSE);
+            });
+        };
+        const enter = () => {
+            hovering = true;
+            cancelAnimationFrame(raf);
+            if (timer != null) window.clearTimeout(timer);
+            timer = window.setTimeout(() => {
+                if (alive && hovering) loop();
+            }, START_DELAY);
+        };
+        const leave = () => {
+            hovering = false;
+            cancelAnimationFrame(raf);
+            if (timer != null) {
+                window.clearTimeout(timer);
+                timer = null;
+            }
+            clear();
+        };
+        row.addEventListener("mouseenter", enter);
+        row.addEventListener("mouseleave", leave);
+        row.addEventListener("focusin", enter);
+        row.addEventListener("focusout", leave);
+        return () => {
+            alive = false;
+            hovering = false;
+            cancelAnimationFrame(raf);
+            if (timer != null) window.clearTimeout(timer);
+            row.removeEventListener("mouseenter", enter);
+            row.removeEventListener("mouseleave", leave);
+            row.removeEventListener("focusin", enter);
+            row.removeEventListener("focusout", leave);
+            clear();
+        };
+    }, [dist]);
+
+    const overflowing = dist > 0;
+    return (
+        <span
+            ref={outerRef}
+            data-active={overflowing ? "true" : "false"}
+            className="session-title-mask min-w-0 flex-1 overflow-hidden"
+        >
+            <span
+                ref={innerRef}
+                title={title}
+                data-marquee={overflowing ? "true" : "false"}
+                className="session-title-inner"
+            >
+                {title}
+            </span>
+        </span>
+    );
+}
+
 const SessionRow = memo(function SessionRow({
     active,
     title,
@@ -488,7 +643,7 @@ const SessionRow = memo(function SessionRow({
                     {isStreaming ? (
                         <IconRefresh className="size-4 shrink-0 animate-spin text-phi-text-secondary" />
                     ) : null}
-                    <span className="min-w-0 flex-1 truncate text-left">{title}</span>
+                    <MarqueeTitle title={title} />
                     {hasDraft && (
                         <IconSendFilled
                             className="size-3 shrink-0 text-phi-text-muted"
