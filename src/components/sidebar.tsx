@@ -179,7 +179,7 @@ export const Sidebar = memo(function Sidebar({
                         />
                     ) : (
                         <div>
-                            <p className="px-2 pb-1 text-[11px] font-medium tracking-wide text-phi-text-faint">
+                            <p className="px-2.5 pb-3 text-[13px] font-semibold tracking-wide text-phi-text-tertiary">
                                 Projects
                             </p>
                             <div className="space-y-0.5">
@@ -286,12 +286,11 @@ const GroupSection = memo(function GroupSection({
             <GroupCollapsibleTrigger
                 collapsed={collapsed}
                 onClick={handleToggle}
-                className="h-8 rounded-lg"
                 aria-expanded={!collapsed}
                 aria-label={`${project.name}, ${group.sessions.length} session${group.sessions.length === 1 ? "" : "s"}`}
                 title={`${project.name} — ${formatProjectPath(project.path)}`}
             >
-                <span className="shrink-0 truncate text-[12px] font-semibold tracking-wide text-current">
+                <span className="min-w-0 flex-1 truncate text-current">
                     {project.name}
                 </span>
             </GroupCollapsibleTrigger>
@@ -320,7 +319,7 @@ const GroupSection = memo(function GroupSection({
                         </nav>
                     ) : (
                         !collapsed && (
-                            <p className="mt-1 pb-0.5 pl-[26px] text-[11px] text-phi-text-faint">
+                            <p className="mt-1 pb-0.5 pl-[34px] text-[11px] text-phi-text-faint">
                                 No sessions yet
                             </p>
                         )
@@ -451,7 +450,7 @@ const SessionRow = memo(function SessionRow({
         <div
             onMouseEnter={onPrefetch}
             onFocusCapture={onPrefetch}
-            className={`session-row group relative flex h-8 w-full items-center gap-1 rounded-lg pl-5 pr-1 text-left text-[13px] ${active ? "bg-phi-overlay-active text-phi-text-primary" : "text-phi-text-tertiary hover:bg-phi-overlay-hover hover:text-phi-text-secondary"}`}
+            className={`session-row group relative flex h-8 w-full items-center gap-1 rounded-lg pl-7 pr-1 text-left text-[13px] ${active ? "bg-phi-overlay-active text-phi-text-primary" : "text-phi-text-tertiary hover:bg-phi-overlay-hover hover:text-phi-text-secondary"}`}
         >
             {renaming ? (
                 <div className="flex min-w-0 flex-1 items-center gap-2.5 truncate rounded-lg px-1.5 py-1 pr-8">
