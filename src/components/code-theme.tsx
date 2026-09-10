@@ -36,7 +36,12 @@ export const CODE_THEMES: Record<CodeThemeId, CodeThemeMeta> = {
 
 export type CodeThemeChoice = "auto" | CodeThemeId;
 
-const STORAGE_KEY = "phi:code-theme";
+export const DEFAULT_DARK_CODE_THEME: CodeThemeId = "nightOwl";
+export const DEFAULT_LIGHT_CODE_THEME: CodeThemeId = "oneLight";
+
+const DARK_STORAGE_KEY = "phi:code-theme-dark";
+const LIGHT_STORAGE_KEY = "phi:code-theme-light";
+const LEGACY_STORAGE_KEY = "phi:code-theme";
 
 type Listener = () => void;
 const listeners = new Set<Listener>();
@@ -44,21 +49,67 @@ function emit() {
     for (const listener of listeners) listener();
 }
 
-function readChoice(): CodeThemeChoice {
-    try {
-        const value = localStorage.getItem(STORAGE_KEY);
-        if (value === "auto" || (value != null && value in CODE_THEMES)) {
-            return value as CodeThemeChoice;
-        }
-    } catch {
-        // private mode / no storage — fall through to auto
-    }
-    return "auto";
+function isCodeThemeId(value: unknown): value is CodeThemeId {
+    return typeof value === "string" && value in CODE_THEMES;
 }
 
+// One-time migration from the old single-slot key ("auto" | CodeThemeId)
+// to per-mode slots. A legacy explicit id seeds its own mode's slot; the
+// other mode keeps its default. "auto" (or missing) means defaults.
+let migrated = false;
+function migrateLegacyOnce() {
+    if (migrated) return;
+    migrated = true;
+    try {
+        if (localStorage.getItem(DARK_STORAGE_KEY) != null || localStorage.getItem(LIGHT_STORAGE_KEY) != null) return;
+        const legacy = localStorage.getItem(LEGACY_STORAGE_KEY);
+        if (isCodeThemeId(legacy)) {
+            const mode = CODE_THEMES[legacy].mode;
+            localStorage.setItem(mode === "light" ? LIGHT_STORAGE_KEY : DARK_STORAGE_KEY, legacy);
+        }
+        if (legacy != null) localStorage.removeItem(LEGACY_STORAGE_KEY);
+    } catch {
+        // private mode / no storage — defaults apply
+    }
+}
+
+function readSlot(mode: "dark" | "light"): CodeThemeId {
+    migrateLegacyOnce();
+    const fallback = mode === "light" ? DEFAULT_LIGHT_CODE_THEME : DEFAULT_DARK_CODE_THEME;
+    try {
+        const value = localStorage.getItem(mode === "light" ? LIGHT_STORAGE_KEY : DARK_STORAGE_KEY);
+        if (isCodeThemeId(value) && CODE_THEMES[value].mode === mode) return value;
+    } catch {
+        // private mode / no storage — fall through to default
+    }
+    return fallback;
+}
+
+function readDark(): CodeThemeId {
+    return readSlot("dark");
+}
+
+function readLight(): CodeThemeId {
+    return readSlot("light");
+}
+
+/**
+ * Persist a code theme into its own mode's slot. Picking a dark theme
+ * while the app is dark saves it as the dark default (and vice versa),
+ * so switching the app theme restores each mode's last pick (fallback:
+ * Night Owl / One Light). "auto" resets both slots to those fallbacks.
+ */
 export function setCodeTheme(choice: CodeThemeChoice) {
     try {
-        localStorage.setItem(STORAGE_KEY, choice);
+        if (choice === "auto") {
+            localStorage.removeItem(DARK_STORAGE_KEY);
+            localStorage.removeItem(LIGHT_STORAGE_KEY);
+            localStorage.removeItem(LEGACY_STORAGE_KEY);
+        } else if (isCodeThemeId(choice)) {
+            const mode = CODE_THEMES[choice].mode;
+            localStorage.setItem(mode === "light" ? LIGHT_STORAGE_KEY : DARK_STORAGE_KEY, choice);
+            localStorage.removeItem(LEGACY_STORAGE_KEY);
+        }
     } catch {
         // non-persisted, still apply for this session
     }
@@ -67,7 +118,9 @@ export function setCodeTheme(choice: CodeThemeChoice) {
 
 function subscribe(listener: Listener) {
     listeners.add(listener);
-    // App theme changes arrive as <html data-theme> mutations or OS changes
+    // App theme changes arrive as <html data-theme> mutations or OS changes.
+    // They re-render dependents even when the stored ids are unchanged,
+    // because the active `choice` follows the effective mode.
     const observer = new MutationObserver((mutations) => {
         if (mutations.some((m) => m.attributeName === "data-theme")) listener();
     });
@@ -79,7 +132,7 @@ function subscribe(listener: Listener) {
     const onMedia = () => listener();
     media.addEventListener?.("change", onMedia);
     const onStorage = (e: StorageEvent) => {
-        if (e.key === STORAGE_KEY) listener();
+        if (e.key === DARK_STORAGE_KEY || e.key === LIGHT_STORAGE_KEY || e.key === LEGACY_STORAGE_KEY) listener();
     };
     window.addEventListener("storage", onStorage);
     return () => {
@@ -90,21 +143,30 @@ function subscribe(listener: Listener) {
     };
 }
 
-// Primitive string snapshot — referentially stable for useSyncExternalStore
-function getSnapshot(): CodeThemeChoice {
-    return readChoice();
+// Primitive string snapshot — referentially stable for useSyncExternalStore.
+// Includes the effective mode so flipping light/dark re-renders even when
+// both stored ids are unchanged (the active choice follows the mode).
+function getSnapshot(): string {
+    return `${readDark()}|${readLight()}|${getEffectiveTheme(getStoredTheme())}`;
 }
 
-function resolveTheme(choice: CodeThemeChoice): PrismTheme {
-    if (choice !== "auto") return CODE_THEMES[choice].theme;
-    return getEffectiveTheme(getStoredTheme()) === "light"
-        ? CODE_THEMES.oneLight.theme
-        : CODE_THEMES.nightOwl.theme;
+function resolveTheme(choice: CodeThemeId): PrismTheme {
+    return CODE_THEMES[choice].theme;
 }
 
-export function useCodeTheme(): { choice: CodeThemeChoice; theme: PrismTheme } {
-    const choice = useSyncExternalStore(subscribe, getSnapshot, getSnapshot);
-    return { choice, theme: resolveTheme(choice) };
+export function useCodeTheme(): {
+    choice: CodeThemeId;
+    theme: PrismTheme;
+    darkChoice: CodeThemeId;
+    lightChoice: CodeThemeId;
+    effective: "light" | "dark";
+} {
+    useSyncExternalStore(subscribe, getSnapshot, getSnapshot);
+    const darkChoice = readDark();
+    const lightChoice = readLight();
+    const effective = getEffectiveTheme(getStoredTheme());
+    const choice = effective === "light" ? lightChoice : darkChoice;
+    return { choice, theme: resolveTheme(choice), darkChoice, lightChoice, effective };
 }
 
 // --- language detection -----------------------------------------------------

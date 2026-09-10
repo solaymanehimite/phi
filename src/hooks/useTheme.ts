@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState, useSyncExternalStore } from "react";
+import { useCallback, useEffect, useSyncExternalStore } from "react";
 import { syncFavicon } from "../lib/themed-assets";
 
 export type Theme = "light" | "dark" | "system";
@@ -30,6 +30,34 @@ function applyTheme(theme: Theme) {
   }
   syncFavicon(eff);
   try { localStorage.setItem(STORAGE_KEY, theme); } catch {}
+}
+
+// --- shared stored-theme subscription ---------------------------------------
+// useTheme used to keep per-component useState, so two components calling
+// useTheme() (e.g. AppearanceTab + CodeThemeSection) drifted apart: changing
+// the app theme in one left the other's `effective` stale. A module-level
+// external store keeps every caller in sync.
+
+type Listener = () => void;
+const storedListeners = new Set<Listener>();
+function emitStored() {
+  for (const listener of storedListeners) listener();
+}
+
+function subscribeToStoredTheme(listener: Listener) {
+  storedListeners.add(listener);
+  const onStorage = (e: StorageEvent) => {
+    if (e.key === STORAGE_KEY) listener();
+  };
+  window.addEventListener("storage", onStorage);
+  return () => {
+    storedListeners.delete(listener);
+    window.removeEventListener("storage", onStorage);
+  };
+}
+
+function getStoredSnapshot(): Theme {
+  return getStoredTheme();
 }
 
 function subscribeToEffectiveTheme(listener: () => void) {
@@ -70,8 +98,19 @@ export function useEffectiveTheme(): "light" | "dark" {
   );
 }
 
+export function setStoredTheme(t: Theme) {
+  applyTheme(t);
+  emitStored();
+}
+
 export function useTheme() {
-  const [theme, setThemeState] = useState<Theme>(() => getStoredTheme());
+  const theme = useSyncExternalStore(
+    subscribeToStoredTheme,
+    getStoredSnapshot,
+    () => "system" as const,
+  );
+  // Live effective value (tracks OS changes while in "system" mode).
+  const effective = useEffectiveTheme();
 
   useEffect(() => {
     applyTheme(theme);
@@ -89,11 +128,8 @@ export function useTheme() {
   }, [theme]);
 
   const setTheme = useCallback((t: Theme) => {
-    setThemeState(t);
-    applyTheme(t);
+    setStoredTheme(t);
   }, []);
-
-  const effective = getEffectiveTheme(theme);
 
   return { theme, effective, setTheme };
 }

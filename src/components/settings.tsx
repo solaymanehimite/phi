@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState, type ComponentType } from "react";
-import { useTheme, type Theme } from "../hooks/useTheme";
+import { useTheme, useEffectiveTheme, type Theme } from "../hooks/useTheme";
 import { IconCheckFilled, IconChevronDownFilled, IconKeyFilled, IconPaletteFilled } from "@tabler/icons-react";
 import { useClose } from "@headlessui/react";
 import { Alert } from "./ui/alert";
@@ -11,7 +11,7 @@ import { MenuItem } from "./ui/menu";
 import { NavItem } from "./ui/nav-item";
 import { Popover, PopoverContent, PopoverTrigger } from "./ui/popover";
 import { Highlight, type PrismTheme } from "prism-react-renderer";
-import { CODE_THEMES, setCodeTheme, useCodeTheme, type CodeThemeChoice, type CodeThemeId } from "./code-theme";
+import { CODE_THEMES, setCodeTheme, useCodeTheme, type CodeThemeId } from "./code-theme";
 import { ThemeEditorToggle } from "./dev/ThemeEditor";
 import { listProviders, upsertProvider, deleteProvider, testProvider, type ProviderRow } from "../lib/api";
 
@@ -73,25 +73,17 @@ export function SettingsPanel({
 }
 
 function CodeThemeSection() {
-    const { effective } = useTheme();
-    const { choice, theme: activeTheme } = useCodeTheme();
+    // Live effective mode (shared store) — the dropdown always reflects the
+    // current app theme, and the pick is saved into that mode's slot.
+    const effective = useEffectiveTheme();
+    const { choice } = useCodeTheme();
     const filtered = useMemo(
         () => (Object.entries(CODE_THEMES) as [CodeThemeId, (typeof CODE_THEMES)[CodeThemeId]][]).filter(([, meta]) => meta.mode === effective),
         [effective],
     );
-    const options: { id: CodeThemeChoice; label: string }[] = [
-        { id: "auto", label: "Auto (follows app)" },
-        ...filtered.map(([id, meta]) => ({ id: id as CodeThemeChoice, label: meta.label })),
-    ];
-    // Keep the select valid when the stored choice belongs to the other mode.
-    const allOptions = useMemo(() => {
-        if (choice !== "auto" && !options.some((option) => option.id === choice)) {
-            return [...options, { id: choice, label: CODE_THEMES[choice as CodeThemeId].label }];
-        }
-        return options;
-    }, [options, choice]);
-    const previewTheme: PrismTheme = choice === "auto" ? activeTheme : CODE_THEMES[choice as CodeThemeId].theme;
-    const currentLabel = choice === "auto" ? "Auto" : CODE_THEMES[choice as CodeThemeId].label;
+    const options: { id: CodeThemeId; label: string }[] = filtered.map(([id, meta]) => ({ id, label: meta.label }));
+    const previewTheme: PrismTheme = CODE_THEMES[choice].theme;
+    const currentLabel = CODE_THEMES[choice].label;
 
     return (
         <div className="overflow-hidden rounded-2xl border border-phi-border">
@@ -107,10 +99,13 @@ function CodeThemeSection() {
                     </PopoverTrigger>
                     {/* rounded-xl panel + rounded-lg rows = identical to dropdown menus */}
                     <PopoverContent anchor={{ to: "bottom end", gap: 8 }} className="w-48 !rounded-xl p-1">
-                        <CodeThemeMenu options={allOptions} choice={choice} />
+                        <CodeThemeMenu options={options} choice={choice} />
                     </PopoverContent>
                 </Popover>
             </div>
+            <p className="border-t border-phi-border bg-phi-bg-surface px-4 py-2 text-[11px] text-phi-text-muted">
+                {effective === "light" ? "Light" : "Dark"} code themes — switch the app scheme above to customize the other mode.
+            </p>
         </div>
     );
 }
@@ -119,8 +114,8 @@ function CodeThemeMenu({
     options,
     choice,
 }: {
-    options: { id: CodeThemeChoice; label: string }[];
-    choice: CodeThemeChoice;
+    options: { id: CodeThemeId; label: string }[];
+    choice: CodeThemeId;
 }) {
     const close = useClose();
     return (
