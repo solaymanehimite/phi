@@ -308,13 +308,6 @@ export const ModelSelector = memo(function ModelSelector({
                                 : "Change model"
                         }
                     >
-                        {!loading && selected && (
-                            <ProviderImg
-                                provider={selected.provider}
-                                size={14}
-                                className="shrink-0 text-phi-text-secondary"
-                            />
-                        )}
                         <span className="min-w-0 truncate text-[12.5px] font-medium">
                             {loading
                                 ? "Loading models…"
