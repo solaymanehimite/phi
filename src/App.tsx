@@ -736,6 +736,13 @@ export default function App() {
     }, [chat.activeFile, handleDelete]);
 
     const handleAbort = useCallback(async () => {
+        // Second step of the two-Esc stop: actually abort. Disarm first so a
+        // slow abort can't leave the composer stuck showing Esc.
+        if (abortArmTimerRef.current != null) {
+            window.clearTimeout(abortArmTimerRef.current);
+            abortArmTimerRef.current = null;
+        }
+        setAbortArmed(false);
         const f = chat.activeFile;
         if (!f) return;
         if (compaction.isCompacting(f)) {
@@ -748,6 +755,40 @@ export default function App() {
         setInlineFor(f, err);
         focusComposer();
     }, [chat.abort, chat.activeFile, compaction, focusComposer, setInlineFor]);
+
+    // Two-Esc stop: the first Escape arms (send button morphs to Esc),
+    // the second confirms the abort. Arming expires after a short window.
+    const [abortArmed, setAbortArmed] = useState(false);
+    const abortArmTimerRef = useRef<number | null>(null);
+    const disarmAbort = useCallback(() => {
+        if (abortArmTimerRef.current != null) {
+            window.clearTimeout(abortArmTimerRef.current);
+            abortArmTimerRef.current = null;
+        }
+        setAbortArmed(false);
+    }, []);
+    // Arming only makes sense mid-turn — drop it when streaming ends or
+    // the user switches sessions so the composer never sticks on Esc.
+    const abortArmActive = chat.isStreaming && chat.activeFile;
+    useEffect(() => {
+        if (!abortArmActive) disarmAbort();
+    }, [abortArmActive, disarmAbort]);
+    useEffect(() => () => {
+        if (abortArmTimerRef.current != null) window.clearTimeout(abortArmTimerRef.current);
+    }, []);
+    const handleAbortRequest = useCallback(() => {
+        if (!chat.isStreaming) return;
+        if (abortArmed) {
+            void handleAbort();
+            return;
+        }
+        setAbortArmed(true);
+        if (abortArmTimerRef.current != null) window.clearTimeout(abortArmTimerRef.current);
+        abortArmTimerRef.current = window.setTimeout(() => {
+            abortArmTimerRef.current = null;
+            setAbortArmed(false);
+        }, 2500);
+    }, [abortArmed, chat.isStreaming, handleAbort]);
 
     const handleAbortCompaction = useCallback(async () => {
         const f = chat.activeFile;
@@ -969,7 +1010,7 @@ export default function App() {
         onFocusProject: focusProjectPicker,
         onOpenSearch: () => {},
         onOpenSettings: openSettingsTab,
-        onAbort: () => { if (!settingsActive && !uiDemoActive) void handleAbort(); },
+        onAbort: () => { if (!settingsActive && !uiDemoActive) handleAbortRequest(); },
     }, { isStreaming: chat.isStreaming });
 
     // fatal gate
@@ -1132,7 +1173,7 @@ export default function App() {
                                                             )}
                                                         </div>
                                                     </div>
-                                                    <Composer onSend={handleSend} onAbort={handleAbort} onQueue={handleQueue} onInterrupt={handleInterrupt} isStreaming={chat.isStreaming} isCompacting={isCompacting} compactAttached={attached} cwd={chat.activeFile ? activeCwd : (newChatCwd ?? homeCwd)} draftKey={chat.activeFile} beforeSend={<><ModelSelector models={models.models} value={selectedModelKey} thinkingLevel={thinkingLevel} onSelect={handleSelectModel} onThinkingChange={handleThinkingChange} disabled={chat.isStreaming || (cFile ? compaction.isCompacting(cFile) : false)} isStreaming={chat.isStreaming} loading={models.loading} error={models.error} /><ThinkingEffortSelector models={models.models} modelKey={selectedModelKey} value={thinkingLevel} onChange={handleThinkingChange} disabled={chat.isStreaming || (cFile ? compaction.isCompacting(cFile) : false)} /></>} />
+                                                    <Composer onSend={handleSend} abortArmed={abortArmed} onQueue={handleQueue} isStreaming={chat.isStreaming} isCompacting={isCompacting} compactAttached={attached} cwd={chat.activeFile ? activeCwd : (newChatCwd ?? homeCwd)} draftKey={chat.activeFile} beforeSend={<><ModelSelector models={models.models} value={selectedModelKey} thinkingLevel={thinkingLevel} onSelect={handleSelectModel} onThinkingChange={handleThinkingChange} disabled={chat.isStreaming || (cFile ? compaction.isCompacting(cFile) : false)} isStreaming={chat.isStreaming} loading={models.loading} error={models.error} /><ThinkingEffortSelector models={models.models} modelKey={selectedModelKey} value={thinkingLevel} onChange={handleThinkingChange} disabled={chat.isStreaming || (cFile ? compaction.isCompacting(cFile) : false)} /></>} />
                                                 </div>
                                             );
                                         })()}

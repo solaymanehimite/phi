@@ -64,8 +64,10 @@ export function useShortcuts(handlers: Handlers, opts: { enabled?: boolean; isSt
       if (meta && e.key.toLowerCase() === "k") {
         return;
       }
-      // Esc -> Abort if streaming
+      // Esc -> Abort if streaming (two-step: first press arms, second confirms).
+      // Skip if already handled (e.g. closing a slash/@ palette in the composer).
       if (e.key === "Escape") {
+        if (e.defaultPrevented) return;
         if (isStreaming) {
           e.preventDefault();
           handlers.onAbort();

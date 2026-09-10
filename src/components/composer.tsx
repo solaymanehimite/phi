@@ -12,7 +12,7 @@ import {
     type ClipboardEvent,
 } from "react";
 import { Button } from "./ui/button";
-import { IconArrowUp, IconBolt, IconClockPlus, IconPaperclip, IconXFilled } from "@tabler/icons-react";
+import { IconArrowUp, IconClockPlus, IconPaperclip, IconXFilled } from "@tabler/icons-react";
 import { SlashMenu } from "./composer/slash-menu";
 import { AtMenu } from "./composer/at-menu";
 import { useSlashCommands } from "../hooks/useSlashCommands";
@@ -27,11 +27,10 @@ export type ComposerImagePayload = {
 
 type ComposerProps = {
     onSend: (message: string, images?: ComposerImagePayload[]) => void;
-    onAbort?: () => void;
+    /** True after the first Escape press while streaming — second press stops the turn. */
+    abortArmed?: boolean;
     /** Queue a follow-up while the agent is streaming. */
     onQueue?: (message: string, images?: ComposerImagePayload[]) => void;
-    /** Abort the running turn and send immediately. */
-    onInterrupt?: (message: string, images?: ComposerImagePayload[]) => void;
     isStreaming?: boolean;
     isCompacting?: boolean;
     compactAttached?: boolean;
@@ -124,9 +123,8 @@ function fileToAttached(file: File): Promise<AttachedImage | null> {
 
 export const Composer = memo(function Composer({
     onSend,
-    onAbort,
+    abortArmed,
     onQueue,
-    onInterrupt,
     isStreaming,
     isCompacting,
     compactAttached,
@@ -135,7 +133,6 @@ export const Composer = memo(function Composer({
     draftKey,
     beforeSend,
 }: ComposerProps) {
-    void onAbort;
     const draftStorageKey = draftKey ? `phi:draft:${draftKey}` : "phi:draft:new";
     const [message, setMessage] = useState(() => {
         try {
@@ -506,14 +503,6 @@ export const Composer = memo(function Composer({
         ],
     );
 
-    const interruptSend = useCallback(() => {
-        if (isCompacting) return;
-        const content = message.trim();
-        if ((!content && images.length === 0) || disabled) return;
-        onInterrupt?.(content, buildPayload());
-        clearAfterAction();
-    }, [buildPayload, clearAfterAction, disabled, images.length, isCompacting, message, onInterrupt]);
-
     const handleKeyDown = useCallback(
         (event: KeyboardEvent<HTMLTextAreaElement>) => {
             // At palette takes priority when open
@@ -831,27 +820,16 @@ export const Composer = memo(function Composer({
                         </div>
                     )}
                     {isStreaming ? (
-                        <div className="flex shrink-0 items-center gap-1.5">
-                            <Button
-                                type="button"
-                                variant="danger"
-                                aria-label="Interrupt and send now"
-                                title="Interrupt and send now"
-                                disabled={!hasContent || !!disabled || !!isCompacting}
-                                onClick={interruptSend}
-                            >
-                                <IconBolt className="size-4" />
-                            </Button>
-                            <Button
-                                type="submit"
-                                variant="primary"
-                                disabled={!hasContent || !!disabled || !!isCompacting}
-                                aria-label="Queue as follow-up"
-                                title="Queue as follow-up (Enter)"
-                            >
-                                <IconClockPlus className="size-4" />
-                            </Button>
-                        </div>
+                        <Button
+                            type="submit"
+                            variant="primary"
+                            disabled={!hasContent || !!disabled || !!isCompacting}
+                            aria-label={abortArmed ? "Press Esc again to stop" : "Queue as follow-up"}
+                            title={abortArmed ? "Press Esc again to stop" : "Queue as follow-up (Enter)"}
+                            className={abortArmed ? "ring-2 ring-phi-error/70" : undefined}
+                        >
+                            <IconClockPlus className="size-4" />
+                        </Button>
                     ) : (
                         <Button
                             type="submit"
