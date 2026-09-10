@@ -32,22 +32,12 @@ This milestone defines the product behavior and boundaries without prescribing d
   - Add file paths directly to the composer
   - No pulsing dots or status dots
 
-- **Improved auto-scrolling**
+- [x] **Improved auto-scrolling**
   - Scroll only when already at the bottom
   - Preserve the user’s position while reading history
   - “Scroll to bottom” button
   - Unread message count while scrolled away
   - No pulsing dots or status dots
-
-- **Full-text search**
-  - Normal cmdk command palette matching the existing session search
-  - Search within the current session
-  - Search all sessions using `:` in the palette
-  - Search only user and AI messages
-  - Exclude reasoning and tool calls
-  - Search result snippets and highlighting
-  - Keyboard shortcuts for opening and navigating search
-  - Jump to matching messages
 
 - **Completion notifications**
   - Toasts when background sessions finish
@@ -56,7 +46,7 @@ This milestone defines the product behavior and boundaries without prescribing d
   - Stacking and auto-dismiss behavior
   - Icons or shimmer text instead of pulsing dots
 
-- **Queuing and steering**
+- [x] **Queuing and steering**
   - Replace the normal streaming stop button with a queue-message button
   - Add an interrupt button beside it for forcefully sending a message
   - Queue messages while the agent is streaming
