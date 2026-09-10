@@ -949,12 +949,6 @@ export default function App() {
         void handleInterrupt(item.text, item.images);
     }, [chat.activeFile, queue.queueFor, queue.remove, handleInterrupt]);
 
-    const handleQueueClear = useCallback(() => {
-        const file = chat.activeFile;
-        if (file) queue.clear(file);
-        focusComposer();
-    }, [chat.activeFile, queue.clear, focusComposer]);
-
     // Automatic sequential draining: when the agent finishes a turn, the head
     // of the queue sends as a follow-up. Serialised via drainingRef so a stale
     // isStreaming=false render can never shift two messages for one idle slot.
@@ -1136,7 +1130,7 @@ export default function App() {
                                             const showIndicator = Boolean(isCompacting || cErr);
                                             const queued = cFile ? queue.queueFor(cFile) : [];
                                             const showQueue = queued.length > 0;
-                                            const attached = showIndicator || showQueue;
+                                            const attached = showIndicator;
                                             return (
                                                 <div className="mx-auto flex w-full max-w-3xl flex-col gap-0">
                                                     <div
@@ -1156,7 +1150,7 @@ export default function App() {
                                                     >
                                                         <div className="min-h-0 overflow-hidden">
                                                             {showQueue && (
-                                                                <QueueIndicator items={queued} onRemove={handleQueueRemove} onEdit={handleQueueEdit} onSendNow={handleQueueSendNow} onClear={handleQueueClear} attachedAbove={showIndicator} />
+                                                                <QueueIndicator items={queued} onRemove={handleQueueRemove} onEdit={handleQueueEdit} onSendNow={handleQueueSendNow} />
                                                             )}
                                                         </div>
                                                     </div>

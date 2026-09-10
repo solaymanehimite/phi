@@ -11,6 +11,9 @@ import {
 import { Alert } from "./ui/alert";
 import { Button, buttonClass } from "./ui/button";
 import { InlineCode } from "./ui/code";
+import { Composer } from "./composer";
+import { QueueIndicator } from "./queue-indicator";
+import type { QueuedMessage } from "../hooks/useMessageQueue";
 import { GroupCollapsibleTrigger } from "./ui/collapsible";
 import { DialogOverlay, DialogPanel, DialogTitle } from "./ui/dialog";
 import {
@@ -45,6 +48,7 @@ const SECTIONS = [
     { id: "empty", label: "Empty states" },
     { id: "selects", label: "Selects" },
     { id: "switches", label: "Switches" },
+    { id: "steering", label: "Steering & queue" },
 ] as const;
 
 function DemoSection({
@@ -72,6 +76,13 @@ export function UiDemoPanel() {
     const [selectValue, setSelectValue] = useState("phi-dark");
     const [navActive, setNavActive] = useState("chats");
     const [menuActive, setMenuActive] = useState(0);
+    // Steering & queue demo state — mirrors the live stack in App.tsx:
+    // QueueIndicator floating above a streaming Composer.
+    const [demoQueue, setDemoQueue] = useState<QueuedMessage[]>([
+        { id: "demo-1", text: "Also update the empty-state copy while you're in there", createdAt: Date.now() },
+        { id: "demo-2", text: "And check the mobile layout for the sidebar", createdAt: Date.now() },
+    ]);
+    const [demoAbortArmed, setDemoAbortArmed] = useState(false);
 
     const scrollTo = (id: string) => {
         document.getElementById(`ui-demo-${id}`)?.scrollIntoView({ behavior: "smooth", block: "start" });
@@ -319,6 +330,56 @@ export function UiDemoPanel() {
                                     <Switch checked={false} label="Demo disabled switch" disabled />
                                     Disabled
                                 </div>
+                            </div>
+                        </DemoSection>
+
+                        <DemoSection id="steering" title="Steering & queue">
+                            <p className="mb-3 text-[12.5px] leading-5 text-phi-text-muted">
+                                Live stack from the chat view: <InlineCode>QueueIndicator</InlineCode> floating above a streaming <InlineCode>Composer</InlineCode>. Type a follow-up and hit Enter to queue it; arm Esc to preview the two-step stop.
+                            </p>
+                            {/* Same stack as App.tsx: queue floats narrower above the composer. */}
+                            <div className="mx-auto flex w-full max-w-3xl flex-col gap-0">
+                                <QueueIndicator
+                                    items={demoQueue}
+                                    onRemove={(id) => setDemoQueue((prev) => prev.filter((q) => q.id !== id))}
+                                    onEdit={(id, text) => setDemoQueue((prev) => prev.map((q) => (q.id === id ? { ...q, text } : q)))}
+                                    onSendNow={(id) => setDemoQueue((prev) => prev.filter((q) => q.id !== id))}
+                                />
+                                <Composer
+                                    onSend={() => {}}
+                                    abortArmed={demoAbortArmed}
+                                    onQueue={(message) => {
+                                        const trimmed = message.trim();
+                                        if (!trimmed) return;
+                                        setDemoQueue((prev) => [
+                                            ...prev,
+                                            { id: `demo-${Date.now().toString(36)}`, text: trimmed, createdAt: Date.now() },
+                                        ]);
+                                    }}
+                                    isStreaming
+                                    compactAttached={demoQueue.length > 0}
+                                    draftKey="ui-demo-steering"
+                                />
+                            </div>
+                            <div className="mt-3 flex flex-wrap items-center gap-2">
+                                <Button
+                                    variant="secondary"
+                                    size="xs"
+                                    onClick={() =>
+                                        setDemoQueue((prev) => [
+                                            ...prev,
+                                            { id: `demo-${Date.now().toString(36)}`, text: "Take a look at the failing test in tabs.tsx too", createdAt: Date.now() },
+                                        ])
+                                    }
+                                >
+                                    Add sample follow-up
+                                </Button>
+                                <Button variant={demoAbortArmed ? "primary" : "secondary"} size="xs" onClick={() => setDemoAbortArmed((v) => !v)}>
+                                    {demoAbortArmed ? "Esc armed" : "Arm Esc"}
+                                </Button>
+                                <Button variant="ghost" size="xs" onClick={() => setDemoQueue([])}>
+                                    Clear queue
+                                </Button>
                             </div>
                         </DemoSection>
                     </div>
