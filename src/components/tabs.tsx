@@ -82,7 +82,7 @@ export const Tabs = memo(function Tabs({
             className={`phi-tabs-bar mb-2 flex h-10 shrink-0 items-end ${sidebarActions ? "phi-tabs-bar-extended" : "gap-2"}`}
         >
             {sidebarActions && (
-                <div className="phi-tabs-sidebar-slot">
+                <div className="phi-tab-sidebar-slot">
                     {sidebarActions}
                 </div>
             )}

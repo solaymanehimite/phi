@@ -232,14 +232,14 @@ html[data-theme="light"] {
   /* Two 32px buttons, their 4px gap, and a 20px inset into the sidebar. */
   --phi-tabs-sidebar-extension: 85px;
   --phi-tabs-action-width: 68px;
-  --phi-motion-sidebar: 380ms;
+  --phi-motion-sidebar: 300ms;
   --phi-motion-tab: 180ms;
   --phi-motion-stream: 160ms;
   --phi-motion-composer: 150ms;
   --phi-ease-default: cubic-bezier(0.4, 0, 0.2, 1);
   --phi-ease-out: cubic-bezier(0.16, 1, 0.3, 1);
   --phi-ease-in-out: cubic-bezier(0.4, 0, 0.2, 1);
-  --phi-ease-sidebar: cubic-bezier(0.7, 0, 0.2, 1);
+  --phi-ease-sidebar: cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .session-command-overlay {
@@ -523,10 +523,16 @@ html[data-theme="light"] .phi-empty-logo {
   margin-left: calc(-1 * var(--phi-tabs-sidebar-extension));
   gap: calc(var(--spacing) * 4);
   min-width: 0;
-  transition: margin-left var(--phi-motion-sidebar) var(--phi-ease-sidebar);
+  transition:
+    margin-left var(--phi-motion-sidebar) var(--phi-ease-sidebar),
+    gap var(--phi-motion-sidebar) var(--phi-ease-sidebar);
 }
 .phi-tabs-bar-extended[data-sidebar-collapsed="true"] {
   margin-left: 0;
+}
+/* Open: slot ends flush with the main panel, so the tablist aligns with it. */
+.phi-tabs-bar-extended[data-sidebar-collapsed="false"] {
+  gap: 0;
 }
 .phi-tab-sidebar-slot {
   display: flex;
@@ -536,7 +542,7 @@ html[data-theme="light"] .phi-empty-logo {
   align-items: center;
   justify-content: flex-end;
   overflow: hidden;
-  padding-right: calc(var(--spacing) * 5);
+  padding-right: calc(var(--spacing) * 2);
   box-sizing: border-box;
   transition:
     flex-basis var(--phi-motion-sidebar) var(--phi-ease-sidebar),

@@ -4,6 +4,7 @@ import {
     IconPencilFilled,
     IconPlusFilled,
     IconRefresh,
+    IconSearch,
     IconSendFilled,
     IconSettingsFilled,
     IconTrashFilled,
@@ -33,6 +34,7 @@ type SidebarProps = {
     activeFile: string | null;
     onSelect: (file: string) => void;
     onNewChat: () => void;
+    onOpenSearch: () => void;
     onOpenSettings?: () => void;
     collapsed: Set<string>;
     onToggleGroup: (key: string) => void;
@@ -82,6 +84,7 @@ export const Sidebar = memo(function Sidebar({
     activeFile,
     onSelect,
     onNewChat,
+    onOpenSearch,
     onOpenSettings,
     collapsed,
     onToggleGroup,
@@ -150,10 +153,20 @@ export const Sidebar = memo(function Sidebar({
                 </button>
             </div>
 
-            <div className="shrink-0 px-2 pt-2">
+            <div className="shrink-0 space-y-0.5 px-2 pt-2">
                 <Button className="w-full justify-start" onClick={onNewChat}>
                     <IconPlusFilled className="size-4" />
                     New chat
+                </Button>
+                <Button
+                    className="group w-full justify-start"
+                    onClick={onOpenSearch}
+                    aria-keyshortcuts="Meta+K Control+K"
+                    title="Search sessions and commands (⌘K)"
+                >
+                    <IconSearch className="size-4" />
+                    <span className="min-w-0 flex-1 truncate text-left">Search</span>
+                    <span className="shrink-0 text-[11px] text-phi-text-faint opacity-0 transition-opacity duration-150 group-hover:opacity-100 group-focus-within:opacity-100">⌘K</span>
                 </Button>
             </div>
 

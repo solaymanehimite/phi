@@ -996,6 +996,7 @@ export default function App() {
                                 activeFile={settingsActive ? SETTINGS_TAB_ID : uiDemoActive ? UI_DEMO_TAB_ID : chat.activeFile}
                                 onSelect={handleSelect}
                                 onNewChat={handleNewChat}
+                                onOpenSearch={openSearch}
                                 onOpenSettings={openSettingsTab}
                                 collapsed={sessions.collapsed}
                                 onToggleGroup={sessions.toggleGroup}
@@ -1011,8 +1012,14 @@ export default function App() {
                         <main className="phi-main bg-phi-bg-sidebar px-2 pb-2" data-sidebar-collapsed={sidebarOpen ? "false" : "true"}>
                             <Tabs
                                 sidebarActions={
-                                    <div className="flex items-center gap-1">
-                                        <SearchSessionsButton onClick={openSearch} />
+                                    <div className={`flex items-center transition-all duration-300 ease-[cubic-bezier(0.4,0,0.2,1)] motion-reduce:transition-none ${sidebarOpen ? "gap-0" : "gap-1"}`}>
+                                        <div
+                                            inert={sidebarOpen}
+                                            aria-hidden={sidebarOpen}
+                                            className={`overflow-hidden transition-all duration-300 ease-[cubic-bezier(0.4,0,0.2,1)] motion-reduce:transition-none ${sidebarOpen ? "max-w-0 opacity-0" : "max-w-10 opacity-100"}`}
+                                        >
+                                            <SearchSessionsButton onClick={openSearch} />
+                                        </div>
                                         <Button
                                             variant="icon"
                                             aria-label={sidebarOpen ? "Close sidebar" : "Open sidebar"}
