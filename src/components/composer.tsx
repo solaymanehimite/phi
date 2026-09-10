@@ -33,7 +33,6 @@ type ComposerProps = {
     onQueue?: (message: string, images?: ComposerImagePayload[]) => void;
     isStreaming?: boolean;
     isCompacting?: boolean;
-    compactAttached?: boolean;
     disabled?: boolean;
     cwd?: string;
     draftKey?: string | null;
@@ -127,7 +126,6 @@ export const Composer = memo(function Composer({
     onQueue,
     isStreaming,
     isCompacting,
-    compactAttached,
     disabled,
     cwd,
     draftKey,
@@ -686,7 +684,6 @@ export const Composer = memo(function Composer({
 
     const isMenuOpen = isSlashOpen || isAtOpen;
 
-    const attached = Boolean(compactAttached ?? isCompacting);
     return (
         <form
             onSubmit={submit}
@@ -694,8 +691,8 @@ export const Composer = memo(function Composer({
             onDragOver={handleDragOver}
             onDragLeave={handleDragLeave}
             onDrop={handleDrop}
-            data-compacting={attached ? "true" : "false"}
-            className={`phi-composer-focus relative mx-auto w-full max-w-3xl border border-phi-border-strong bg-phi-bg-surface p-2 shadow-[0_14px_45px_var(--color-phi-shadow),inset_0_1px_0_var(--color-phi-border)] transition-[border-color,box-shadow] focus-within:border-phi-border-strong focus-within:shadow-[0_16px_50px_var(--color-phi-shadow-strong),0_0_0_1px_var(--color-phi-border)] ${attached ? "rounded-b-none rounded-t-none border-t-0 border-b-0" : "rounded-[17px] rounded-b-none border-b-0"}`}
+            data-compacting={isCompacting ? "true" : "false"}
+            className="phi-composer-focus relative mx-auto w-full max-w-3xl rounded-[17px] rounded-b-none border border-b-0 border-phi-border-strong bg-phi-bg-surface p-2 shadow-[0_14px_45px_var(--color-phi-shadow),inset_0_1px_0_var(--color-phi-border)] transition-[border-color,box-shadow] focus-within:border-phi-border-strong focus-within:shadow-[0_16px_50px_var(--color-phi-shadow-strong),0_0_0_1px_var(--color-phi-border)]"
         >
             {/* drag overlay */}
             {isDragging && (

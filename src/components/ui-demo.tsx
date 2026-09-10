@@ -357,7 +357,6 @@ export function UiDemoPanel() {
                                         ]);
                                     }}
                                     isStreaming
-                                    compactAttached={demoQueue.length > 0}
                                     draftKey="ui-demo-steering"
                                 />
                             </div>

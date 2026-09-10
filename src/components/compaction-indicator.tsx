@@ -1,5 +1,5 @@
 import { memo } from "react";
-import { IconFold } from "@tabler/icons-react";
+import { IconRefresh, IconX } from "@tabler/icons-react";
 import { Button } from "./ui/button";
 
 type Props = {
@@ -23,7 +23,7 @@ export const CompactionIndicator = memo(function CompactionIndicator({
     return (
       <div
         data-compaction-indicator="error"
-        className="mx-auto flex w-full max-w-3xl items-center justify-between gap-2 rounded-b-none rounded-t-xl border-x border-b-0 border-t border-phi-error-border bg-phi-error-bg px-3 py-2 text-[12.5px] leading-5"
+        className="mx-auto flex w-[calc(100%-2rem)] max-w-2xl items-center justify-between gap-2 rounded-b-none rounded-t-xl border-x border-b-0 border-t border-phi-error-border bg-phi-error-bg px-3 py-2 text-[12.5px] leading-5"
       >
         <div className="min-w-0 flex items-center gap-2">
           <span
@@ -68,29 +68,27 @@ export const CompactionIndicator = memo(function CompactionIndicator({
   return (
     <div
       data-compaction-indicator="running"
-      className="mx-auto flex w-full max-w-3xl items-center justify-between gap-3 rounded-b-none rounded-t-xl border-x border-b-0 border-t border-phi-border-strong bg-phi-bg-surface px-3 py-2 text-[12.5px] leading-5"
+      className="mx-auto flex w-[calc(100%-2rem)] max-w-2xl min-w-0 items-center gap-1.5 rounded-b-none rounded-t-xl border-x border-b-0 border-t border-phi-border-strong bg-phi-bg-surface px-3 py-2"
     >
-      <div className="min-w-0 flex items-center gap-2.5">
-        <IconFold
-          aria-hidden
-          className="size-5 shrink-0 text-phi-text-tertiary"
-        />
-        <span className="phi-shimmer truncate font-medium tracking-tight text-phi-text-secondary">
-          Compacting transcript
-          {customInstructions ? (
-            <span className="font-normal text-phi-text-muted"> — {customInstructions.slice(0, 80)}</span>
-          ) : null}
-          …
-        </span>
-      </div>
+      <IconRefresh
+        aria-hidden
+        className="size-4 shrink-0 animate-spin text-phi-text-tertiary"
+      />
+      <span className="min-w-0 flex-1 truncate text-[14px] leading-6 text-phi-text-secondary" title={customInstructions ?? undefined}>
+        Compacting transcript
+        {customInstructions ? (
+          <span className="text-phi-text-muted"> — {customInstructions.slice(0, 80)}</span>
+        ) : null}
+        …
+      </span>
       <Button
         type="button"
-        variant="ghost"
-        size="xs"
+        variant="icon"
+        aria-label="Abort compaction"
+        title="Abort"
         onClick={onAbort}
-        className="!rounded-full !text-[11px] !text-phi-text-secondary hover:!text-phi-text-primary"
       >
-        Abort
+        <IconX className="size-4" />
       </Button>
     </div>
   );
