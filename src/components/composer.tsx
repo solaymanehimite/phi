@@ -6,6 +6,7 @@ import {
     useRef,
     useState,
     type FormEvent,
+    type ReactNode,
     type KeyboardEvent,
     type DragEvent,
     type ClipboardEvent,
@@ -37,6 +38,8 @@ type ComposerProps = {
     disabled?: boolean;
     cwd?: string;
     draftKey?: string | null;
+    /** Selectors rendered inside the composer, right before the send button. */
+    beforeSend?: ReactNode;
 };
 
 /** Find slash query at cursor. Returns query after "/" or null if not in slash context. */
@@ -130,6 +133,7 @@ export const Composer = memo(function Composer({
     disabled,
     cwd,
     draftKey,
+    beforeSend,
 }: ComposerProps) {
     void onAbort;
     const draftStorageKey = draftKey ? `phi:draft:${draftKey}` : "phi:draft:new";
@@ -796,8 +800,8 @@ export const Composer = memo(function Composer({
                 className="block max-h-[180px] min-h-16 w-full resize-none bg-transparent px-2.5 py-2 text-[14px] leading-6 text-phi-text-primary outline-none placeholder:text-phi-text-muted disabled:opacity-60"
             />
 
-            <div className="flex items-center justify-between gap-3 px-0.5 pb-0.5">
-                <div className="flex items-center gap-1.5">
+            <div className="flex items-center justify-between gap-2 px-0.5 pb-0.5">
+                <div className="flex shrink-0 items-center gap-1.5">
                     <input
                         ref={fileInputRef}
                         type="file"
@@ -820,39 +824,47 @@ export const Composer = memo(function Composer({
                     </Button>
                 </div>
 
-                {isStreaming ? (
-                    <div className="flex items-center gap-1.5">
-                        <Button
-                            type="button"
-                            variant="danger"
-                            aria-label="Interrupt and send now"
-                            title="Interrupt and send now"
-                            disabled={!hasContent || !!disabled || !!isCompacting}
-                            onClick={interruptSend}
-                        >
-                            <IconBolt className="size-4" />
-                        </Button>
+                <div className="flex min-w-0 flex-1 items-center justify-end gap-4">
+                    {beforeSend && (
+                        <div className="flex min-w-0 items-center gap-1 overflow-hidden">
+                            {beforeSend}
+                        </div>
+                    )}
+                    {isStreaming ? (
+                        <div className="flex shrink-0 items-center gap-1.5">
+                            <Button
+                                type="button"
+                                variant="danger"
+                                aria-label="Interrupt and send now"
+                                title="Interrupt and send now"
+                                disabled={!hasContent || !!disabled || !!isCompacting}
+                                onClick={interruptSend}
+                            >
+                                <IconBolt className="size-4" />
+                            </Button>
+                            <Button
+                                type="submit"
+                                variant="primary"
+                                disabled={!hasContent || !!disabled || !!isCompacting}
+                                aria-label="Queue as follow-up"
+                                title="Queue as follow-up (Enter)"
+                            >
+                                <IconClockPlus className="size-4" />
+                            </Button>
+                        </div>
+                    ) : (
                         <Button
                             type="submit"
                             variant="primary"
                             disabled={!hasContent || !!disabled || !!isCompacting}
-                            aria-label="Queue as follow-up"
-                            title="Queue as follow-up (Enter)"
+                            aria-label="Send message"
+                            title="Send message"
+                            className="shrink-0"
                         >
-                            <IconClockPlus className="size-4" />
+                            <IconArrowUp className="size-4" />
                         </Button>
-                    </div>
-                ) : (
-                    <Button
-                        type="submit"
-                        variant="primary"
-                        disabled={!hasContent || !!disabled || !!isCompacting}
-                        aria-label="Send message"
-                        title="Send message"
-                    >
-                        <IconArrowUp className="size-4" />
-                    </Button>
-                )}
+                    )}
+                </div>
             </div>
         </form>
     );

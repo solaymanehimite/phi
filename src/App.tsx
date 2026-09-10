@@ -1095,13 +1095,11 @@ export default function App() {
                                                 </Alert>
                                             </div>
                                         )}
-                                        <div className="mx-auto pl-6 mb-1 flex w-full max-w-3xl min-w-0 items-center gap-1" ref={directoryPickerRef}>
-                                            {!chat.activeFile && (
+                                        {!chat.activeFile && (
+                                            <div className="mx-auto pl-6 mb-1 flex w-full max-w-3xl min-w-0 items-center gap-1" ref={directoryPickerRef}>
                                                 <DirectoryPicker cwd={newChatCwd} projects={projectOptions} onChange={setNewChatCwd} onCreateProject={handleCreateProject} onUpdateProject={handleUpdateProject} onRemoveProject={handleRemoveProject} homeCwd={homeCwd} disabled={chat.isStreaming || (chat.activeFile ? compaction.isCompacting(chat.activeFile) : false)} />
-                                            )}
-                                            <ModelSelector models={models.models} value={selectedModelKey} thinkingLevel={thinkingLevel} onSelect={handleSelectModel} onThinkingChange={handleThinkingChange} disabled={chat.isStreaming || (chat.activeFile ? compaction.isCompacting(chat.activeFile) : false)} isStreaming={chat.isStreaming} loading={models.loading} error={models.error} />
-                                            <ThinkingEffortSelector models={models.models} modelKey={selectedModelKey} value={thinkingLevel} onChange={handleThinkingChange} disabled={chat.isStreaming || (chat.activeFile ? compaction.isCompacting(chat.activeFile) : false)} />
-                                        </div>
+                                            </div>
+                                        )}
                                         {(() => {
                                             const cFile = chat.activeFile;
                                             const isCompacting = cFile ? compaction.isCompacting(cFile) : false;
@@ -1134,7 +1132,7 @@ export default function App() {
                                                             )}
                                                         </div>
                                                     </div>
-                                                    <Composer onSend={handleSend} onAbort={handleAbort} onQueue={handleQueue} onInterrupt={handleInterrupt} isStreaming={chat.isStreaming} isCompacting={isCompacting} compactAttached={attached} cwd={chat.activeFile ? activeCwd : (newChatCwd ?? homeCwd)} draftKey={chat.activeFile} />
+                                                    <Composer onSend={handleSend} onAbort={handleAbort} onQueue={handleQueue} onInterrupt={handleInterrupt} isStreaming={chat.isStreaming} isCompacting={isCompacting} compactAttached={attached} cwd={chat.activeFile ? activeCwd : (newChatCwd ?? homeCwd)} draftKey={chat.activeFile} beforeSend={<><ModelSelector models={models.models} value={selectedModelKey} thinkingLevel={thinkingLevel} onSelect={handleSelectModel} onThinkingChange={handleThinkingChange} disabled={chat.isStreaming || (cFile ? compaction.isCompacting(cFile) : false)} isStreaming={chat.isStreaming} loading={models.loading} error={models.error} /><ThinkingEffortSelector models={models.models} modelKey={selectedModelKey} value={thinkingLevel} onChange={handleThinkingChange} disabled={chat.isStreaming || (cFile ? compaction.isCompacting(cFile) : false)} /></>} />
                                                 </div>
                                             );
                                         })()}
