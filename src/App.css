@@ -715,4 +715,17 @@ html[data-theme="light"] .phi-tab-active {
       transition-duration: 0.01ms !important;
     }
   }
+
+  /* Frameless window dragging — Tauri reads data-tauri-drag-region natively;
+     Electron needs -webkit-app-region on the same elements. Interactive
+     children stay clickable via the no-drag override below. */
+  [data-tauri-drag-region] {
+    -webkit-app-region: drag;
+  }
+  [data-tauri-drag-region] button,
+  [data-tauri-drag-region] input,
+  [data-tauri-drag-region] [role="tab"],
+  [data-tauri-drag-region] a {
+    -webkit-app-region: no-drag;
+  }
 }

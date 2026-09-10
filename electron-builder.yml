@@ -1,0 +1,44 @@
+# Phi — electron-builder config.
+# Tauri is gone: the sidecar is a self-contained Bun binary built to binaries/
+# via `bun run build:sidecar`, icons live in build/.
+appId: com.solaymanehimite.phi
+productName: phi
+directories:
+  output: release
+files:
+  - dist/**
+  - dist-electron/**
+  - package.json
+  # Main + preload are esbuild-bundled (only `electron` builtin at runtime),
+  # the sidecar is a self-contained Bun binary — no node_modules ships.
+  - "!node_modules/**"
+  - "!src/**"
+  - "!server/**"
+  - "!electron/**"
+  - "!src-tauri/**"
+  - "!scripts/**"
+  - "!docs/**"
+extraResources:
+  # Bun-compiled sidecar from `bun run build:sidecar`.
+  - from: binaries/
+    to: binaries/
+    filter:
+      - server*
+win:
+  icon: build/icon.ico
+  target:
+    - nsis
+mac:
+  icon: build/icon.icns
+  category: public.app-category.developer-tools
+  target:
+    - dmg
+linux:
+  icon: build/icon.png
+  category: Development
+  target:
+    - AppImage
+    - dir
+nsis:
+  oneClick: false
+  allowToChangeInstallationDirectory: true

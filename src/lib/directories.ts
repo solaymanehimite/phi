@@ -1,17 +1,14 @@
-export function isTauriRuntime(): boolean {
-    return typeof window !== "undefined" && "__TAURI__" in window;
+export function isElectronRuntime(): boolean {
+    return typeof window !== "undefined" && !!window.phi?.isElectron;
+}
+
+export function canBrowseDirectories(): boolean {
+    // Native folder picker needs the Electron bridge. Plain `vite dev` in a
+    // browser has no bridge, so projects are typed by hand there.
+    return isElectronRuntime();
 }
 
 export async function pickDirectory(defaultPath?: string): Promise<string | null> {
-    if (!isTauriRuntime()) return null;
-
-    const { open } = await import("@tauri-apps/plugin-dialog");
-    const selected = await open({
-        directory: true,
-        multiple: false,
-        title: "Choose project",
-        defaultPath: defaultPath || undefined,
-    });
-
-    return typeof selected === "string" ? selected : null;
+    if (!isElectronRuntime()) return null;
+    return (await window.phi!.pickDirectory(defaultPath)) ?? null;
 }

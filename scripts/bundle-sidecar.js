@@ -4,7 +4,7 @@ import path from "node:path";
 
 const ext = process.platform === "win32" ? ".exe" : "";
 const triple = execSync("rustc --print host-tuple").toString().trim();
-const binariesDir = path.join("src-tauri", "binaries");
+const binariesDir = path.join("binaries");
 fs.mkdirSync(binariesDir, { recursive: true });
 
 // Support both pkg output locations: either ./server or ./server-<triple> or ./binaries/server

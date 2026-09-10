@@ -219,32 +219,22 @@ export default function App() {
         return () => window.removeEventListener("beforeunload", onBeforeUnload);
     }, [chat.runningFiles.size]);
 
-    // Tauri close-requested
+    // Electron quit-guard: main shows the native confirm and owns the window,
+    // renderer owns the streams. Report liveness so main only prompts mid-stream,
+    // and abort everything when main says the user confirmed quit.
     useEffect(() => {
-        let unlisten: (() => void) | undefined;
-        (async () => {
-            try {
-                const { getCurrentWindow } = await import("@tauri-apps/api/window");
-                const win = getCurrentWindow();
-                unlisten = await win.onCloseRequested(async (event) => {
-                    if (chat.runningFiles.size > 0) {
-                        const { confirm } = await import("@tauri-apps/plugin-dialog");
-                        const ok = await confirm(`${chat.runningFiles.size} session(s) streaming — abort and quit?`, { title: "Phi", kind: "warning" });
-                        if (!ok) {
-                            event.preventDefault();
-                            return;
-                        }
-                        // abort all running then allow close, and persist interruption blocks
-                        for (const f of Array.from(chat.runningFiles)) {
-                            try { await chat.abort(f); } catch {}
-                            const err: InlineError = { id: `${f}-${Date.now()}`, reason: "Interruption", message: "Session interrupted by quit. You can Continue to resume.", time: new Date().toLocaleTimeString(), canContinue: true };
-                            setInlineErrors((prev) => ({ ...prev, [f]: err }));
-                        }
-                    }
-                });
-            } catch {}
-        })();
-        return () => { try { unlisten?.(); } catch {} };
+        window.phi?.setStreamingCount(chat.runningFiles.size);
+    }, [chat.runningFiles.size]);
+
+    useEffect(() => {
+        const off = window.phi?.onAbortAll(() => {
+            for (const f of Array.from(chat.runningFiles)) {
+                try { void chat.abort(f); } catch {}
+                const err: InlineError = { id: `${f}-${Date.now()}`, reason: "Interruption", message: "Session interrupted by quit. You can Continue to resume.", time: new Date().toLocaleTimeString(), canContinue: true };
+                setInlineErrors((prev) => ({ ...prev, [f]: err }));
+            }
+        });
+        return () => { try { off?.(); } catch {} };
     }, [chat.runningFiles, chat.abort]);
 
     const setInlineFor = useCallback((file: string, err: InlineError | null) => {

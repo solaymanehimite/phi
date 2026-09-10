@@ -18,7 +18,7 @@ import { Input } from "./ui/input";
 import type { NewProjectInput } from "../hooks/useProjects";
 import { basenameOfPath, formatProjectPath, type Project, type ProjectOption } from "../lib/projects";
 import { formatCwd } from "../lib/paths";
-import { isTauriRuntime, pickDirectory } from "../lib/directories";
+import { canBrowseDirectories, pickDirectory } from "../lib/directories";
 
 type DirectoryPickerProps = {
     /** Currently selected project path (new-chat cwd). */
@@ -55,7 +55,7 @@ function ProjectForm({
     const [name, setName] = useState(initialName);
     const [path, setPath] = useState(initialPath);
     const [browseError, setBrowseError] = useState<string | null>(null);
-    const canBrowse = isTauriRuntime();
+    const canBrowse = canBrowseDirectories();
 
     const browse = useCallback(async () => {
         setBrowseError(null);

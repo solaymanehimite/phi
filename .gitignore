@@ -9,11 +9,13 @@ lerna-debug.log*
 
 node_modules
 dist
+dist-electron
+release
 dist-ssr
 *.local
 
-# Tauri sidecar binaries — rebuilt via `bun run build:sidecar`
-src-tauri/binaries/
+# Sidecar binary — rebuilt via `bun run build:sidecar`
+binaries/
 
 # Editor directories and files
 .vscode/*

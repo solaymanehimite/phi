@@ -1,10 +1,10 @@
 import type { ModelInfo, SessionInfo, SessionMessagesResponse, ThinkingLevel } from "../types/session";
 
-// --- Tauri sidecar support ---
-// Dev: Vite proxy -> /api on 127.0.0.1:3001 (no Tauri)
-// Prod: Tauri WebView fetches http://127.0.0.1:<random-port>/api where port is picked by Rust at launch
+// --- Sidecar discovery ---
+// Packaged app: Electron main picks a free port at launch, renderer learns it
+// via window.phi.getServerPort() (preload IPC).
+// Dev (`bun run electron:dev`): external server on 3001, reached via Vite proxy.
 let cachedBase: string | null = null;
-let portPromise: Promise<string> | null = null;
 
 export async function getApiBase(): Promise<string> {
   return getBase();
@@ -13,31 +13,18 @@ export async function getApiBase(): Promise<string> {
 async function getBase(): Promise<string> {
   if (cachedBase) return cachedBase;
   if (typeof window === "undefined") return "/api";
-  if (!portPromise) {
-    portPromise = (async () => {
-      try {
-        const { invoke } = await import("@tauri-apps/api/core");
-        const port = await invoke<number>("get_sidecar_port");
-        if (port && Number.isFinite(port) && port !== 3001) {
-          cachedBase = `http://127.0.0.1:${port}/api`;
-          return cachedBase;
-        }
-        // dev fallback or invoke returned 3001 before sidecar ready -> retry next time
-        if (port === 3001) throw new Error("sidecar not ready");
-      } catch (e) {
-        console.warn("[phi] get_sidecar_port failed, falling back to /api", e);
-        // don't cache failure — retry on next call after 500ms
-        portPromise = null;
-      }
-      return "/api";
-    })();
+  try {
+    const port = await window.phi?.getServerPort();
+    if (port && Number.isFinite(port) && port !== 3001) {
+      cachedBase = `http://127.0.0.1:${port}/api`;
+      return cachedBase;
+    }
+    // No bridge (plain `vite dev` in a browser) or dev server on 3001 —
+    // both are reachable through Vite's /api proxy.
+  } catch (e) {
+    console.warn("[phi] getServerPort failed, falling back to /api", e);
   }
-  const base = await portPromise;
-  // if we fell back to /api but we're in Tauri, clear cache so next fetch retries invoke
-  if (base === "/api" && typeof window !== "undefined" && "__TAURI_INTERNALS__" in window) {
-    portPromise = null;
-  }
-  return base;
+  return "/api";
 }
 
 async function apiFetch(path: string, init?: RequestInit): Promise<Response> {

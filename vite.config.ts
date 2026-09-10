@@ -4,36 +4,41 @@ import tailwindcss from "@tailwindcss/vite";
 import svgr from "vite-plugin-svgr";
 
 // @ts-expect-error process is a nodejs global
-const host = process.env.TAURI_DEV_HOST;
+const tauriHost = process.env.TAURI_DEV_HOST;
+// @ts-expect-error process is a nodejs global
+const apiTarget = process.env.PHI_API_TARGET || "http://127.0.0.1:3001";
 
 // https://vite.dev/config/
 export default defineConfig(async () => ({
     plugins: [react(), tailwindcss(), svgr()],
 
-    // Vite options tailored for Tauri development and only applied in `tauri dev` or `tauri build`
+    // Dual-host dev config:
+    // - Electron dev (`bun run electron:dev`): default Vite port 5173, main loads
+    //   it via ELECTRON_RENDERER_URL. /api proxies to the external dev server.
+    // - Tauri dev (`bun run tauri:dev`, legacy): fixed 1420 + HMR dance.
     //
     // 1. prevent Vite from obscuring rust errors
     clearScreen: false,
     // 2. tauri expects a fixed port, fail if that port is not available
     server: {
-        port: 1420,
-        strictPort: true,
-        host: host || false,
-        hmr: host
+        port: tauriHost ? 1420 : 5173,
+        strictPort: !!tauriHost,
+        host: tauriHost || false,
+        hmr: tauriHost
             ? {
                 protocol: "ws",
-                host,
+                host: tauriHost,
                 port: 1421,
             }
             : undefined,
         watch: {
-            // 3. tell Vite to ignore watching `src-tauri`
-            ignored: ["**/src-tauri/**"],
+            // 3. tell Vite to ignore watching build output
+            ignored: ["**/electron/**", "**/dist-electron/**", "**/release/**", "**/binaries/**"],
         },
         proxy: {
             // Dev sidecar — Vite forwards /api to the Express Node process
             "/api": {
-                target: "http://127.0.0.1:3001",
+                target: apiTarget,
                 changeOrigin: true,
             },
         },

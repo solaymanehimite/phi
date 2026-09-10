@@ -23,7 +23,7 @@ const variants: Record<ButtonVariant, string> = {
     // Inverted action — Send, Retry, Save, Continue. Hover dims instead of
     // flipping to pure white (which inverts in light theme).
     primary:
-        "shrink-0 rounded-[10px] bg-phi-bg-inverse text-phi-text-inverse hover:opacity-90 disabled:cursor-default disabled:bg-phi-bg-disabled disabled:text-phi-text-disabled disabled:opacity-100",
+        "shrink-0 rounded-lg bg-phi-bg-inverse text-phi-text-inverse hover:opacity-90 disabled:cursor-default disabled:bg-phi-bg-disabled disabled:text-phi-text-disabled disabled:opacity-100",
     // Bordered action — Test connection, form buttons, chip triggers (code theme
     // picker). Opaque elevated fill so content never shows through; hover lifts
     // the border toward accent and the text to primary.
@@ -32,9 +32,9 @@ const variants: Record<ButtonVariant, string> = {
     // Destructive action — Stop button. White text on saturated red is correct
     // in both themes (phi-white is a fixed #fff, not theme text).
     danger:
-        "shrink-0 rounded-[10px] bg-phi-error text-phi-white hover:opacity-90 disabled:opacity-50",
+        "shrink-0 rounded-lg bg-phi-error text-phi-white hover:opacity-90 disabled:opacity-50",
     // Tiny ghost icon — copy buttons, clear buttons inside menus and code.
-    mini: "shrink-0 rounded text-phi-text-muted opacity-70 hover:bg-phi-overlay-hover hover:text-phi-text-primary hover:opacity-100 focus-visible:opacity-100 disabled:opacity-40",
+    mini: "shrink-0 rounded-lg text-phi-text-muted opacity-70 hover:bg-phi-overlay-hover hover:text-phi-text-primary hover:opacity-100 focus-visible:opacity-100 disabled:opacity-40",
 };
 
 const sizes: Record<ButtonSize, string> = {
