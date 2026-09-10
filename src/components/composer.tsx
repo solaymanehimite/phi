@@ -189,10 +189,12 @@ export const Composer = memo(function Composer({
     const [slashIndex, setSlashIndex] = useState(0);
 
     const compactCmd: import("../lib/api").SlashCommand = useMemo(() => ({ name: "compact", description: "Compact transcript with optional instructions", source: "prompt" as const, argumentHint: "[instructions]" }), []);
+    const undoCmd: import("../lib/api").SlashCommand = useMemo(() => ({ name: "undo", description: "Undo the last turn (conversation + files)", source: "prompt" as const }), []);
+    const redoCmd: import("../lib/api").SlashCommand = useMemo(() => ({ name: "redo", description: "Redo an undone turn", source: "prompt" as const }), []);
     const filteredSlash = useMemo(() => {
         if (slashQuery === null) return [];
         const q = slashQuery.toLowerCase().trim();
-        const base: import("../lib/api").SlashCommand[] = [compactCmd, ...commands.filter((c) => c.source === "skill")];
+        const base: import("../lib/api").SlashCommand[] = [compactCmd, undoCmd, redoCmd, ...commands.filter((c) => c.source === "skill")];
         if (!q) return base.slice(0, 30);
         return base
             .filter(
@@ -201,7 +203,7 @@ export const Composer = memo(function Composer({
                     (c.description ?? "").toLowerCase().includes(q),
             )
             .slice(0, 30);
-    }, [commands, slashQuery, compactCmd]);
+    }, [commands, slashQuery, compactCmd, undoCmd, redoCmd]);
 
     const isSlashOpen = slashQuery !== null && filteredSlash.length > 0;
 

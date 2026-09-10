@@ -187,6 +187,35 @@ export async function abortCompaction(sessionFile: string, cwd?: string): Promis
   return jsonOrThrow(res);
 }
 
+export type NavResult = {
+  ok: boolean;
+  nav: {
+    type: "undo" | "redo";
+    turnId: string | null;
+    filesRestored: boolean;
+    restoredPaths: string[];
+    conversationOnly: boolean;
+  };
+} & Partial<SessionMessagesResponse>;
+
+export async function undoTurn(sessionFile: string, cwd?: string): Promise<NavResult> {
+  const res = await apiFetch(`/undo`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ sessionFile, cwd }),
+  });
+  return jsonOrThrow(res);
+}
+
+export async function redoTurn(sessionFile: string, cwd?: string): Promise<NavResult> {
+  const res = await apiFetch(`/redo`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ sessionFile, cwd }),
+  });
+  return jsonOrThrow(res);
+}
+
 export async function abortPrompt(sessionFile: string): Promise<{ ok: boolean; active: boolean }> {
   const res = await apiFetch(`/abort`, {
     method: "POST",

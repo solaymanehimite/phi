@@ -31,7 +31,7 @@ import { useCompaction } from "./hooks/useCompaction";
 import { clearQueueFor, useMessageQueue } from "./hooks/useMessageQueue";
 import { QueueIndicator } from "./components/queue-indicator";
 import { useModels } from "./hooks/useModels";
-import { createSession, health, streamContinue } from "./lib/api";
+import { createSession, health, redoTurn, streamContinue, undoTurn } from "./lib/api";
 import { CompactionIndicator } from "./components/compaction-indicator";
 import { useEffectiveTheme, useTheme } from "./hooks/useTheme";
 import { brandingUrl } from "./lib/themed-assets";
@@ -838,6 +838,38 @@ export default function App() {
 
     const handleSend = useCallback(async (content: string, images?: { type: "image"; data: string; mimeType: string }[]) => {
         const trimmed = content.trim();
+        // /undo and /redo are exact-match local commands. Anything with extra
+        // text falls through to the agent as a normal message.
+        if (trimmed === "/undo" || trimmed === "/redo") {
+            const isUndo = trimmed === "/undo";
+            const targetFile = chat.activeFile;
+            if (!targetFile) {
+                setModelError(`Open a session to ${isUndo ? "undo" : "redo"}.`);
+                return;
+            }
+            if (chat.isStreaming) {
+                setModelError(`Wait for the response to finish before running ${trimmed}.`);
+                return;
+            }
+            if (compaction.isCompacting(targetFile)) {
+                setModelError(`Wait for compaction to finish before running ${trimmed}.`);
+                return;
+            }
+            setInlineFor(targetFile, null);
+            try {
+                const cwd = activeCwd || undefined;
+                if (isUndo) await undoTurn(targetFile, cwd);
+                else await redoTurn(targetFile, cwd);
+                await chat.revalidate(targetFile);
+                sessions.refresh({ silent: true });
+            } catch (e) {
+                const msg = e instanceof Error ? e.message : String(e);
+                const err: InlineError = { id: `${targetFile}-${Date.now()}`, reason: makeInlineReason(msg), message: msg, time: new Date().toLocaleTimeString(), canContinue: false };
+                setInlineFor(targetFile, err);
+            }
+            focusComposer();
+            return;
+        }
         // /compact with optional instructions — keep verbatim routing even while streaming (compact will abort streaming)
         if (trimmed.startsWith("/compact")) {
             const after = trimmed.slice("/compact".length).trim();

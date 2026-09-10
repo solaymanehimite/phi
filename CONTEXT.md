@@ -28,6 +28,14 @@ _Avoid_: abort (for accidental cases), crash
 Resuming an aborted or interrupted turn from its checkpoint, like `pi continue`.
 _Avoid_: retry, resume, continue (as generic verb), regeneration
 
+### Undo
+Returning the conversation to before the last turn and restoring workspace files to their pre-turn snapshot. Sending a new message afterwards forks the session and clears redo.
+_Avoid_: revert, rewind
+
+### Redo
+Re-applying the most recently undone turn. Ephemeral per session — lost on sidecar restart or session eviction — while undo still works from the session tree.
+_Avoid_: continue, retry
+
 ### Inline Error
 An error block persisted as the tail node of a session's conversation (abort, auth, rate limit, provider down) with a Continue action.
 _Avoid_: banner, toast (for session errors), fatal

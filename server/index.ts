@@ -1,5 +1,7 @@
 import cors from "cors";
 import express from "express";
+import { execFile as execFileCb } from "node:child_process";
+import { createHash } from "node:crypto";
 import { existsSync, promises as fs } from "node:fs";
 import os from "node:os";
 import { resolve as resolvePath, join as joinPath, dirname } from "node:path";
@@ -24,11 +26,12 @@ app.use(cors());
 app.use(express.json({ limit: "10mb" }));
 
 class ApiError extends Error {
-  constructor(
-    message: string,
-    readonly status = 400,
-  ) {
+  public code?: string;
+  public details?: unknown;
+  constructor(message: string, readonly status = 400, code?: string, details?: unknown) {
     super(message);
+    this.code = code;
+    this.details = details;
   }
 }
 
@@ -70,6 +73,8 @@ type SessionRuntimeEntry = {
   runtime: AgentRuntime;
   activePrompt?: Promise<void>;
   lastUsedAt: number;
+  /** Per-session nav lock: undo/redo take the same lock as prompts. */
+  activeNav?: boolean;
 };
 
 const runtimeEntries = new Map<string, SessionRuntimeEntry>();
@@ -180,6 +185,9 @@ async function disposeRuntimeEntry(entry: SessionRuntimeEntry, abort = false) {
   if (runtimeEntries.get(entry.sessionFile) === entry) {
     runtimeEntries.delete(entry.sessionFile);
   }
+  // Redo stacks are ephemeral by design: evicted with the runtime.
+  // Undo still works from the persisted tree + checkpoint file.
+  navStates.delete(entry.sessionFile);
   if (abort && isPromptActive(entry)) {
     try {
       await entry.runtime.session.abort();
@@ -253,6 +261,329 @@ async function sessionPayload(file: string) {
     throw new ApiError("session file does not exist", 404);
   }
   return sessionPayloadFromManager(key, SessionManager.open(key));
+}
+
+// ---- Turn checkpoints: undo / redo (v1) ----
+// Conversation nav is pointer moves on the append-only session tree (branch /
+// resetLeaf). File nav is `git stash create` snapshots + selective restore.
+// Invariants: files first, conversation second (the leaf never moves when a
+// restore fails); capture failure never fails the turn (the boundary becomes
+// conversation-only); only worktree-vs-snapshot divergence on affected paths
+// is a typed conflict, everything else is one generic restore error.
+type FileSnapshot = { repoRoot: string | null; tree: string | null; head: string | null };
+type TurnRecord = {
+  id: string;
+  kind: "prompt" | "continue" | "compact";
+  beforeLeaf: string | null;
+  afterLeaf: string | null;
+  beforeTree: string | null;
+  afterTree: string | null;
+  head: string | null;
+  repoRoot: string | null;
+  ts: number;
+};
+type NavState = {
+  /** Ephemeral redo stack. Lost on sidecar restart or runtime eviction. */
+  redoStack: Array<{ leafId: string; turnId: string | null }>;
+};
+const navStates = new Map<string, NavState>();
+const MAX_TURNS_PER_SESSION = 100;
+const EMPTY_SNAPSHOT: FileSnapshot = { repoRoot: null, tree: null, head: null };
+
+function navStateFor(sessionFile: string): NavState {
+  const key = normalisePath(sessionFile);
+  let state = navStates.get(key);
+  if (!state) {
+    state = { redoStack: [] };
+    navStates.set(key, state);
+  }
+  return state;
+}
+
+function clearRedoStack(sessionFile: string) {
+  const state = navStates.get(normalisePath(sessionFile));
+  if (state) state.redoStack.length = 0;
+}
+
+function checkpointFileFor(sessionFile: string): string {
+  const dir = process.env.PHI_CHECKPOINTS_DIR || joinPath(os.homedir(), ".config", "phi", "checkpoints");
+  return joinPath(dir, `${createHash("sha1").update(normalisePath(sessionFile)).digest("hex")}.json`);
+}
+
+async function loadTurns(sessionFile: string): Promise<TurnRecord[]> {
+  try {
+    const raw = await fs.readFile(checkpointFileFor(sessionFile), "utf-8");
+    const data = JSON.parse(raw) as { turns?: unknown };
+    if (!Array.isArray(data.turns)) return [];
+    return (data.turns as TurnRecord[]).filter(
+      (t) => t && typeof t.id === "string" && typeof t.afterLeaf === "string",
+    );
+  } catch {
+    return [];
+  }
+}
+
+async function saveTurns(sessionFile: string, turns: TurnRecord[]): Promise<void> {
+  const file = checkpointFileFor(sessionFile);
+  await fs.mkdir(dirname(file), { recursive: true });
+  const trimmed = turns.slice(Math.max(0, turns.length - MAX_TURNS_PER_SESSION));
+  await fs.writeFile(file, JSON.stringify({ sessionFile: normalisePath(sessionFile), turns: trimmed }, null, 2));
+}
+
+/** Append a turn record and clear the redo stack. Bookkeeping: never throws. */
+async function recordTurn(
+  sessionFile: string,
+  turn: Omit<TurnRecord, "id" | "ts">,
+): Promise<void> {
+  try {
+    const turns = await loadTurns(sessionFile);
+    turns.push({
+      ...turn,
+      id: `chk_${Date.now().toString(36)}${Math.floor(Math.random() * 0xffffff).toString(36)}`,
+      ts: Date.now(),
+    });
+    await saveTurns(sessionFile, turns);
+    clearRedoStack(sessionFile);
+  } catch {
+    // Checkpoint bookkeeping must never fail the turn.
+  }
+}
+
+function runGit(args: string[], cwd: string): Promise<string> {
+  return new Promise((resolve, reject) => {
+    execFileCb("git", args, { cwd, timeout: 15_000, maxBuffer: 16 * 1024 * 1024 }, (error, stdout) => {
+      if (error) reject(error);
+      else resolve(String(stdout ?? "").trim());
+    });
+  });
+}
+
+async function findRepoRoot(cwd: string): Promise<string | null> {
+  try {
+    return await runGit(["rev-parse", "--show-toplevel"], cwd);
+  } catch {
+    return null;
+  }
+}
+
+/** Never rejects. A null tree means "uncaptured": conversation-only nav. */
+async function captureSnapshot(cwd: string): Promise<FileSnapshot> {
+  try {
+    const repoRoot = await findRepoRoot(cwd);
+    if (!repoRoot) return EMPTY_SNAPSHOT;
+    let head: string | null = null;
+    try {
+      head = await runGit(["rev-parse", "HEAD"], repoRoot);
+    } catch {
+      head = null;
+    }
+    let tree: string | null = null;
+    try {
+      // Writes the stash object without touching worktree, index, or HEAD.
+      // Empty output means a clean worktree: HEAD itself is the snapshot.
+      tree = (await runGit(["stash", "create"], repoRoot)) || head;
+    } catch {
+      tree = head;
+    }
+    if (!tree) return { repoRoot, tree: null, head };
+    return { repoRoot, tree, head };
+  } catch {
+    return EMPTY_SNAPSHOT;
+  }
+}
+
+function splitNull(out: string): string[] {
+  return out
+    .split("\0")
+    .map((s) => s.trim())
+    .filter(Boolean);
+}
+
+function chunks<T>(arr: T[], size: number): T[][] {
+  const out: T[][] = [];
+  for (let i = 0; i < arr.length; i += size) out.push(arr.slice(i, i + size));
+  return out;
+}
+
+async function diffTrees(repoRoot: string, a: string, b: string): Promise<string[]> {
+  return splitNull(await runGit(["diff", "--name-only", "--no-renames", "-z", a, b, "--"], repoRoot));
+}
+
+async function diffWorktree(repoRoot: string, tree: string, paths: string[]): Promise<string[]> {
+  const out: string[] = [];
+  for (const chunk of chunks(paths, 200)) {
+    if (chunk.length === 0) continue;
+    out.push(...splitNull(await runGit(["diff", "--name-only", "--no-renames", "-z", tree, "--", ...chunk], repoRoot)));
+  }
+  return out;
+}
+
+async function existsInTree(repoRoot: string, tree: string, rel: string): Promise<boolean> {
+  return new Promise((resolve) => {
+    execFileCb("git", ["cat-file", "-e", `${tree}:${rel}`], { cwd: repoRoot, timeout: 15_000 }, (error) =>
+      resolve(!error),
+    );
+  });
+}
+
+function isPathSafe(repoRoot: string, rel: string): boolean {
+  if (!rel || rel.startsWith("/") || rel.includes("\0")) return false;
+  const parts = rel.split("/");
+  if (parts.some((p) => p === "" || p === "." || p === ".." || p === ".git")) return false;
+  const abs = resolvePath(repoRoot, rel);
+  const root = resolvePath(repoRoot);
+  return abs === root || abs.startsWith(`${root}/`);
+}
+
+/** File-level deletes only; refuse anything under a nested repository. */
+function isUnderNestedRepo(repoRoot: string, rel: string): boolean {
+  const root = resolvePath(repoRoot);
+  let dir = dirname(resolvePath(root, rel));
+  while (dir === root || dir.startsWith(`${root}/`)) {
+    if (dir !== root && existsSync(joinPath(dir, ".git"))) return true;
+    if (dir === root) break;
+    dir = dirname(dir);
+  }
+  return false;
+}
+
+const RESTORE_FAILED = "file restore failed; conversation unchanged";
+
+/**
+ * Selective restore: diff(currentTree, targetTree) is the plan. Only paths
+ * inside the repo root are touched; deletions are file-level `rm` and never
+ * recurse into nested repositories. Throws ApiError on any failure; the
+ * caller must not move the leaf in that case.
+ */
+async function restoreWorktreeToTree(
+  repoRoot: string,
+  currentTree: string,
+  targetTree: string,
+): Promise<{ restoredPaths: string[] }> {
+  try {
+    await fs.access(repoRoot);
+  } catch {
+    throw new ApiError("workspace repository is no longer available; conversation unchanged", 500);
+  }
+  let affected: string[];
+  try {
+    affected = await diffTrees(repoRoot, currentTree, targetTree);
+  } catch {
+    throw new ApiError(RESTORE_FAILED, 500);
+  }
+  if (affected.length === 0) return { restoredPaths: [] };
+  let conflicted: string[];
+  try {
+    // Worktree vs the current snapshot, scoped to affected paths only.
+    conflicted = await diffWorktree(repoRoot, currentTree, affected);
+  } catch {
+    throw new ApiError(RESTORE_FAILED, 500);
+  }
+  if (conflicted.length > 0) {
+    const shown = conflicted.slice(0, 10).join(", ");
+    throw new ApiError(
+      `files changed since the checkpoint: ${shown}${conflicted.length > 10 ? "\u2026" : ""}`,
+      409,
+      "conflict",
+      { paths: conflicted },
+    );
+  }
+  const toRestore: string[] = [];
+  const toDelete: string[] = [];
+  for (const p of affected) {
+    if (!isPathSafe(repoRoot, p)) throw new ApiError(RESTORE_FAILED, 500);
+    if (await existsInTree(repoRoot, targetTree, p)) toRestore.push(p);
+    else toDelete.push(p);
+  }
+  try {
+    for (const chunk of chunks(toRestore, 200)) {
+      if (chunk.length === 0) continue;
+      await runGit(["checkout", targetTree, "--", ...chunk], repoRoot);
+    }
+    for (const p of toDelete) {
+      if (isUnderNestedRepo(repoRoot, p)) {
+        throw new ApiError("file restore refused inside a nested repository; conversation unchanged", 500);
+      }
+      try {
+        await fs.unlink(joinPath(repoRoot, p));
+      } catch (error: any) {
+        if (error?.code !== "ENOENT") throw error;
+      }
+    }
+  } catch (error) {
+    if (error instanceof ApiError) throw error;
+    throw new ApiError(RESTORE_FAILED, 500);
+  }
+  let remaining: string[];
+  try {
+    remaining = await diffWorktree(repoRoot, targetTree, affected);
+  } catch {
+    throw new ApiError("file restore failed verification; conversation unchanged", 500);
+  }
+  if (remaining.length > 0) throw new ApiError("file restore failed verification; conversation unchanged", 500);
+  return { restoredPaths: affected };
+}
+
+/**
+ * The runtime caches agent messages in memory (AgentSession.prompt builds the
+ * next turn from agent state, not from the session manager), so a raw
+ * branch() would leave stale history behind. Supernova rebuilds from the
+ * visible branch after navigation; same here. Verified against the SDK's own
+ * navigateTree, which does exactly this assignment.
+ */
+function rebuildAgentMessages(session: any) {
+  const sm = session?.sessionManager;
+  const agent = session?.agent;
+  if (!sm || !agent?.state) throw new ApiError("live session has no agent state", 500);
+  agent.state.messages = sm.buildSessionContext().messages;
+}
+
+/** Shared per-session lock for nav ops: rejects while a prompt, compaction, or another nav op is active. */
+function assertNavIdle(entry: SessionRuntimeEntry) {
+  if (isPromptActive(entry)) throw new ApiError("a prompt is already running for this session", 409);
+  const session: any = entry.runtime.session;
+  if (session?.isCompacting) throw new ApiError("compaction is in progress for this session", 409);
+  if (entry.activeNav) throw new ApiError("a navigation operation is already in progress for this session", 409);
+}
+
+/**
+ * Latest turn whose end is on the visible branch (root→leaf). Exact match is
+ * the common case; ancestor match tolerates metadata entries appended between
+ * turns (model/thinking changes, renames), which move the leaf without
+ * touching files. Walks newest-first so chains resolve to the latest turn.
+ */
+function findUndoTurn(turns: TurnRecord[], branchIds: Set<string>): TurnRecord | undefined {
+  for (let i = turns.length - 1; i >= 0; i--) {
+    const afterLeaf = turns[i]?.afterLeaf;
+    if (afterLeaf && branchIds.has(afterLeaf)) return turns[i];
+  }
+  return undefined;
+}
+
+/** Restart/eviction fallback: undo target is the parent of the last user message on the visible branch. */
+function undoFallbackTarget(sm: any): string | null | undefined {
+  let path: any[] = [];
+  try {
+    path = sm.getBranch();
+  } catch {
+    return undefined;
+  }
+  for (let i = path.length - 1; i >= 0; i--) {
+    const e = path[i];
+    if (e?.type === "message" && (e as any).message?.role === "user") {
+      return (e.parentId ?? null) as string | null;
+    }
+  }
+  return undefined;
+}
+
+function sendNavError(res: express.Response, error: unknown) {
+  const body: { error: string; code?: string; details?: unknown } = { error: errorMessage(error) };
+  if (error instanceof ApiError && error.code) {
+    body.code = error.code;
+    body.details = error.details;
+  }
+  return res.status(errorStatus(error)).json(body);
 }
 
 function serialiseModel(model: any) {
@@ -647,10 +978,17 @@ app.post("/api/prompt", async (req, res) => {
     // cwd before any directory-bound services are created.
     const entry = await getSessionRuntime(sessionFile, cwd);
     if (isPromptActive(entry)) throw new ApiError("a prompt is already running for this session", 409);
+    if (entry.activeNav) throw new ApiError("a navigation operation is in progress for this session", 409);
 
     const promptText = typeof text === "string" && text.trim() ? text : " ";
     const session: any = entry.runtime.session;
     touchRuntime(entry);
+
+    // Undo boundary: the pre-turn leaf is the parent of the turn's user entry
+    // in the linear case, so it doubles as the undo target. The file snapshot
+    // is a `git stash create` photo. Capture failure never fails the turn.
+    const turnBeforeLeaf: string | null = session.sessionManager?.getLeafId?.() ?? null;
+    const snapBefore: FileSnapshot = await captureSnapshot(entry.cwd);
 
     sseHeaders(res);
     if (typeof (res as any).flushHeaders === "function") (res as any).flushHeaders();
@@ -694,6 +1032,23 @@ app.post("/api/prompt", async (req, res) => {
       } catch {
         // no-op
       }
+      try {
+        const afterLeaf: string | null = session.sessionManager?.getLeafId?.() ?? null;
+        if (afterLeaf !== turnBeforeLeaf) {
+          const snapAfter = await captureSnapshot(entry.cwd);
+          await recordTurn(entry.sessionFile, {
+            kind: "prompt",
+            beforeLeaf: turnBeforeLeaf,
+            afterLeaf,
+            beforeTree: snapBefore.tree,
+            afterTree: snapAfter.tree,
+            head: snapAfter.head ?? snapBefore.head,
+            repoRoot: snapAfter.repoRoot ?? snapBefore.repoRoot,
+          });
+        }
+      } catch {
+        // Checkpoint bookkeeping must never fail the turn.
+      }
       if (entry.activePrompt === promptPromise) entry.activePrompt = undefined;
       touchRuntime(entry);
       void cleanupRuntimeRegistry();
@@ -718,7 +1073,12 @@ app.post("/api/compact", async (req, res) => {
     const entry = await getSessionRuntime(sessionFile, cwd);
     const session: any = entry.runtime.session;
     if (session.isCompacting) throw new ApiError("compaction already in progress", 409);
+    if (isPromptActive(entry)) throw new ApiError("a prompt is already running for this session", 409);
+    if (entry.activeNav) throw new ApiError("a navigation operation is in progress for this session", 409);
+    entry.activeNav = true;
     const instructions = typeof customInstructions === "string" ? customInstructions.trim() : undefined;
+    // Compaction touches no workspace files: the turn is conversation-only.
+    const compactBeforeLeaf: string | null = session.sessionManager?.getLeafId?.() ?? null;
     touchRuntime(entry);
     sseHeaders(res);
     if (typeof (res as any).flushHeaders === "function") (res as any).flushHeaders();
@@ -728,6 +1088,22 @@ app.post("/api/compact", async (req, res) => {
     res.on("close", () => { connectionClosed = true; clearInterval(heartbeat); try { off(); } catch {} });
     try {
       const result = await session.compact(instructions || undefined);
+      try {
+        const afterLeaf: string | null = session.sessionManager?.getLeafId?.() ?? null;
+        if (afterLeaf !== compactBeforeLeaf) {
+          await recordTurn(entry.sessionFile, {
+            kind: "compact",
+            beforeLeaf: compactBeforeLeaf,
+            afterLeaf,
+            beforeTree: null,
+            afterTree: null,
+            head: null,
+            repoRoot: null,
+          });
+        }
+      } catch {
+        // Checkpoint bookkeeping must never fail the turn.
+      }
       invalidateSessionsCache();
       if (!connectionClosed) {
         sendSSE(res, { type: "done", result });
@@ -743,6 +1119,7 @@ app.post("/api/compact", async (req, res) => {
     } finally {
       clearInterval(heartbeat);
       try { off(); } catch {}
+      entry.activeNav = false;
       touchRuntime(entry);
       void cleanupRuntimeRegistry();
     }
@@ -915,8 +1292,11 @@ app.post("/api/continue", async (req, res) => {
     if (!sessionFile) throw new ApiError("missing sessionFile");
     const entry = await getSessionRuntime(sessionFile, cwd);
     if (isPromptActive(entry)) throw new ApiError("a prompt is already running for this session", 409);
+    if (entry.activeNav) throw new ApiError("a navigation operation is in progress for this session", 409);
     const session: any = entry.runtime.session;
     touchRuntime(entry);
+    const turnBeforeLeaf: string | null = session.sessionManager?.getLeafId?.() ?? null;
+    const snapBefore: FileSnapshot = await captureSnapshot(entry.cwd);
     sseHeaders(res);
     if (typeof (res as any).flushHeaders === "function") (res as any).flushHeaders();
     let connectionClosed = false;
@@ -959,6 +1339,23 @@ app.post("/api/continue", async (req, res) => {
     } finally {
       clearInterval(heartbeat);
       try { off(); } catch {}
+      try {
+        const afterLeaf: string | null = session.sessionManager?.getLeafId?.() ?? null;
+        if (afterLeaf !== turnBeforeLeaf) {
+          const snapAfter = await captureSnapshot(entry.cwd);
+          await recordTurn(entry.sessionFile, {
+            kind: "continue",
+            beforeLeaf: turnBeforeLeaf,
+            afterLeaf,
+            beforeTree: snapBefore.tree,
+            afterTree: snapAfter.tree,
+            head: snapAfter.head ?? snapBefore.head,
+            repoRoot: snapAfter.repoRoot ?? snapBefore.repoRoot,
+          });
+        }
+      } catch {
+        // Checkpoint bookkeeping must never fail the turn.
+      }
       if (entry.activePrompt === promptPromise) entry.activePrompt = undefined;
       touchRuntime(entry);
       void cleanupRuntimeRegistry();
@@ -967,6 +1364,120 @@ app.post("/api/continue", async (req, res) => {
     if (!res.headersSent) return res.status(errorStatus(error)).json({ error: errorMessage(error) });
     sendSSE(res, { type: "error", error: errorMessage(error) });
     res.end();
+  }
+});
+
+// ---- Undo / redo ----
+// POST /api/undo { sessionFile, cwd? } — files first, conversation second.
+// The leaf never moves when the workspace restore fails.
+app.post("/api/undo", async (req, res) => {
+  try {
+    const { sessionFile, cwd } = req.body as { sessionFile?: string; cwd?: string };
+    if (!sessionFile) throw new ApiError("missing sessionFile");
+    const entry = await getSessionRuntime(sessionFile, cwd);
+    assertNavIdle(entry);
+    entry.activeNav = true;
+    try {
+      const session: any = entry.runtime.session;
+      const sm = session.sessionManager;
+      const curLeaf = sm.getLeafId() as string | null;
+      if (!curLeaf) throw new ApiError("nothing to undo", 404);
+      const turns = await loadTurns(entry.sessionFile);
+      let branchIds = new Set<string>();
+      try {
+        for (const e of sm.getBranch()) branchIds.add(e.id);
+      } catch {
+        branchIds = new Set(curLeaf ? [curLeaf] : []);
+      }
+      const turn = findUndoTurn(turns, branchIds);
+      let targetLeaf: string | null | undefined;
+      let turnId: string | null = null;
+      let filesRestored = false;
+      let restoredPaths: string[] = [];
+      let conversationOnly = false;
+      if (turn) {
+        turnId = turn.id;
+        targetLeaf = turn.beforeLeaf;
+        if (turn.beforeTree && turn.afterTree && turn.repoRoot) {
+          const restored = await restoreWorktreeToTree(turn.repoRoot, turn.afterTree, turn.beforeTree);
+          filesRestored = true;
+          restoredPaths = restored.restoredPaths;
+        } else {
+          conversationOnly = true;
+        }
+      } else {
+        targetLeaf = undoFallbackTarget(sm);
+        if (targetLeaf === undefined) throw new ApiError("nothing to undo", 404);
+        conversationOnly = true;
+      }
+      if (targetLeaf === curLeaf) throw new ApiError("nothing to undo", 404);
+      navStateFor(entry.sessionFile).redoStack.push({ leafId: curLeaf, turnId });
+      if (targetLeaf === null) sm.resetLeaf();
+      else sm.branch(targetLeaf);
+      rebuildAgentMessages(session);
+      touchRuntime(entry);
+      invalidateSessionsCache();
+      res.json({
+        ok: true,
+        nav: { type: "undo", turnId, filesRestored, restoredPaths, conversationOnly },
+        ...(await sessionPayload(sessionFile)),
+      });
+    } finally {
+      entry.activeNav = false;
+    }
+  } catch (error) {
+    if (!res.headersSent) return sendNavError(res, error);
+  }
+});
+
+// POST /api/redo { sessionFile, cwd? } — pops the ephemeral redo stack.
+// Unavailable after sidecar restart or runtime eviction; undo still works.
+app.post("/api/redo", async (req, res) => {
+  try {
+    const { sessionFile, cwd } = req.body as { sessionFile?: string; cwd?: string };
+    if (!sessionFile) throw new ApiError("missing sessionFile");
+    const entry = await getSessionRuntime(sessionFile, cwd);
+    assertNavIdle(entry);
+    entry.activeNav = true;
+    try {
+      const stack = navStateFor(entry.sessionFile).redoStack;
+      const next = stack.pop();
+      if (!next) throw new ApiError("nothing to redo", 404);
+      const session: any = entry.runtime.session;
+      const sm = session.sessionManager;
+      if (!sm.getEntry(next.leafId)) throw new ApiError("redo target no longer exists", 404);
+      const turns = await loadTurns(entry.sessionFile);
+      const turn = next.turnId ? turns.find((t) => t.id === next.turnId) : undefined;
+      let filesRestored = false;
+      let restoredPaths: string[] = [];
+      let conversationOnly = false;
+      try {
+        if (turn?.beforeTree && turn?.afterTree && turn?.repoRoot) {
+          const restored = await restoreWorktreeToTree(turn.repoRoot, turn.beforeTree, turn.afterTree);
+          filesRestored = true;
+          restoredPaths = restored.restoredPaths;
+        } else {
+          conversationOnly = true;
+        }
+        sm.branch(next.leafId);
+        rebuildAgentMessages(session);
+      } catch (error) {
+        // A failed redo stays redoable so resolving the conflict can retry it.
+        stack.push(next);
+        throw error;
+      }
+      touchRuntime(entry);
+      invalidateSessionsCache();
+      res.json({
+        ok: true,
+        nav: { type: "redo", turnId: next.turnId, filesRestored, restoredPaths, conversationOnly },
+        ...(await sessionPayload(sessionFile)),
+      });
+    } finally {
+      entry.activeNav = false;
+    }
+  } catch (error) {
+    if (!res.headersSent) return sendNavError(res, error);
   }
 });
 
