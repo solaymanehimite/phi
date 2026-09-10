@@ -12,7 +12,7 @@ import {
     type ClipboardEvent,
 } from "react";
 import { Button } from "./ui/button";
-import { IconArrowUp, IconClockPlus, IconPaperclip, IconXFilled } from "@tabler/icons-react";
+import { IconArrowUp, IconPaperclip, IconXFilled } from "@tabler/icons-react";
 import { SlashMenu } from "./composer/slash-menu";
 import { AtMenu } from "./composer/at-menu";
 import { useSlashCommands } from "../hooks/useSlashCommands";
@@ -826,9 +826,12 @@ export const Composer = memo(function Composer({
                             disabled={!hasContent || !!disabled || !!isCompacting}
                             aria-label={abortArmed ? "Press Esc again to stop" : "Queue as follow-up"}
                             title={abortArmed ? "Press Esc again to stop" : "Queue as follow-up (Enter)"}
-                            className={abortArmed ? "ring-2 ring-phi-error/70" : undefined}
                         >
-                            <IconClockPlus className="size-4" />
+                            {abortArmed ? (
+                                <span className="px-0.5 text-[11px] font-semibold leading-none">Esc</span>
+                            ) : (
+                                <IconArrowUp className="size-4" />
+                            )}
                         </Button>
                     ) : (
                         <Button
