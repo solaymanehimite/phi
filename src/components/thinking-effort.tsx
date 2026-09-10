@@ -95,8 +95,11 @@ export const ThinkingEffortSelector = memo(function ThinkingEffortSelector({
                 className="group inline-flex max-w-full min-w-0 items-center gap-1.5 rounded-md pl-2 pr-1.5 py-1 text-left text-phi-text-secondary hover:bg-phi-overlay-hover hover:text-phi-text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-phi-accent/40 disabled:pointer-events-none disabled:opacity-60"
                 aria-label={`Change thinking effort, currently ${current}`}
             >
-                <span className="min-w-0 truncate text-[12.5px] font-medium capitalize">
-                    {current}
+                <span className="grid min-w-0 flex-1">
+                    <span aria-hidden="true" className="invisible col-start-1 row-start-1 text-[12.5px] font-medium capitalize">minimal</span>
+                    <span className="col-start-1 row-start-1 truncate text-[12.5px] font-medium capitalize">
+                        {current}
+                    </span>
                 </span>
                 <IconChevronDownFilled className="size-3.5 shrink-0 text-phi-text-muted transition-transform group-data-open:rotate-180" />
             </PopoverTrigger>
