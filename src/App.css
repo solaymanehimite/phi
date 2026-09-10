@@ -287,15 +287,28 @@ html[data-theme="light"] {
   height: auto;
   opacity: 0.12;
   user-select: none;
+  transition: opacity 200ms ease;
+}
+
+.phi-empty-logo:hover {
+  opacity: 1;
 }
 
 html[data-theme="light"] .phi-empty-logo {
   opacity: 0.1;
 }
 
+html[data-theme="light"] .phi-empty-logo:hover {
+  opacity: 1;
+}
+
 @media (prefers-color-scheme: light) {
   html[data-theme="system"] .phi-empty-logo {
     opacity: 0.1;
+  }
+
+  html[data-theme="system"] .phi-empty-logo:hover {
+    opacity: 1;
   }
 }
 

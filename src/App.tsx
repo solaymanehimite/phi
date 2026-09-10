@@ -400,6 +400,22 @@ export default function App() {
         return trimmed.split("/").pop() || trimmed;
     }, [currentProjectCwd, homeCwd, projects]);
 
+    // Display name for the new-chat hero — resolves the picker cwd to its
+    // project name, falling back to a folder-name guess. Empty when no
+    // project is selected yet (hero shows a placeholder instead).
+    const newChatProjectDisplay = useMemo(() => {
+        if (!newChatCwd) return "";
+        const project = projectOptions.find((p) => p.path === newChatCwd);
+        if (project) return project.name;
+        if (homeCwd && (newChatCwd === homeCwd || newChatCwd.startsWith(`${homeCwd}/`))) {
+            const rest = newChatCwd.slice(homeCwd.length).replace(/^\//, "");
+            if (!rest) return "~";
+            return rest.split("/").pop() || `~/${rest}`;
+        }
+        const trimmed = newChatCwd.endsWith("/") ? newChatCwd.slice(0, -1) : newChatCwd;
+        return trimmed.split("/").pop() || trimmed;
+    }, [newChatCwd, homeCwd, projectOptions]);
+
     const ctxModel: any = (chat.data?.context as any)?.model;
     const ctxModelKey = ctxModel ? `${ctxModel.provider}/${ctxModel.modelId ?? ctxModel.id}` : undefined;
     const selectedModelKey = ctxModelKey ?? draftModelKey ?? models.defaultModelKey;
@@ -1079,6 +1095,18 @@ export default function App() {
                                                     aria-hidden="true"
                                                     className="phi-empty-logo"
                                                 />
+                                                <h1 className="mt-8 max-w-2xl text-balance text-[26px] leading-[1.2] tracking-tight text-phi-text-primary sm:text-[32px]">
+                                                    What are we building in{" "}
+                                                    <button
+                                                        type="button"
+                                                        onClick={focusProjectPicker}
+                                                        title={newChatProjectDisplay ? `Change project, currently ${newChatProjectDisplay}` : "Select a project"}
+                                                        aria-label={newChatProjectDisplay ? `Change project, currently ${newChatProjectDisplay}` : "Select a project"}
+                                                        className="underline decoration-dashed decoration-phi-text-muted decoration-[2px] underline-offset-[6px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-phi-accent/40"
+                                                    >
+                                                        {newChatProjectDisplay || "a project"}
+                                                    </button>?
+                                                </h1>
                                                 {!sessions.loading && !sessions.error && projectOptions.length === 0 && (
                                                     <p className="mt-6 text-[12px] text-phi-text-muted">No projects yet — create one from the picker below to start chatting.</p>
                                                 )}
