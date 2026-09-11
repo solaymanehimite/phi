@@ -6,7 +6,7 @@
   "description": "run pi agents in parallel.",
   "author": "Solaymane Himite sol.himite@gmail.com",
   "main": "dist-electron/main.cjs",
-    "desktopName": "phi", 
+  "desktopName": "phi",
   "linux": {
     "syncDesktopName": true
   },

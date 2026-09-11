@@ -110,7 +110,7 @@ export const ContextIndicator = memo(function ContextIndicator({
                 <div className="flex flex-col gap-3">
                     <section aria-label="Context usage">
                         <div className="mb-1.5 flex items-baseline justify-between gap-2">
-                            <span className="text-[11px] font-semibold uppercase tracking-[0.08em] text-phi-text-tertiary">
+                            <span className="text-[11px] font-semibold text-phi-text-tertiary">
                                 Context
                             </span>
                             {showTokens && percent != null && (
@@ -159,7 +159,7 @@ export const ContextIndicator = memo(function ContextIndicator({
 
                     <section aria-label="Session cost">
                         <div className="mb-1.5 flex items-baseline justify-between gap-2">
-                            <span className="text-[11px] font-semibold uppercase tracking-[0.08em] text-phi-text-tertiary">
+                            <span className="text-[11px] font-semibold text-phi-text-tertiary">
                                 Session cost
                             </span>
                             <span className="text-[12px] font-semibold tabular-nums text-phi-text-primary">

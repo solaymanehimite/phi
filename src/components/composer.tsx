@@ -694,7 +694,7 @@ export const Composer = memo(function Composer({
             onDragLeave={handleDragLeave}
             onDrop={handleDrop}
             data-compacting={isCompacting ? "true" : "false"}
-            className="phi-composer-focus relative mx-auto w-full max-w-3xl rounded-[17px] rounded-b-none border border-b-0 border-phi-border-strong bg-phi-bg-surface p-2 shadow-[0_14px_45px_var(--color-phi-shadow),inset_0_1px_0_var(--color-phi-border)] transition-[border-color,box-shadow] focus-within:border-phi-border-strong focus-within:shadow-[0_16px_50px_var(--color-phi-shadow-strong),0_0_0_1px_var(--color-phi-border)]"
+            className="phi-composer-focus relative mx-auto w-full max-w-3xl rounded-[17px] rounded-b-none border border-b-0 border-phi-border-strong bg-phi-bg-surface p-2 shadow-[0_8px_24px_var(--color-phi-shadow),inset_0_1px_0_var(--color-phi-border)] transition-[border-color,box-shadow] focus-within:border-phi-border-strong focus-within:shadow-[0_10px_28px_var(--color-phi-shadow),0_0_0_1px_var(--color-phi-border)]"
         >
             {/* drag overlay */}
             {isDragging && (
@@ -788,7 +788,7 @@ export const Composer = memo(function Composer({
                 className="block max-h-[180px] min-h-16 w-full resize-none bg-transparent px-2.5 py-2 text-[14px] leading-6 text-phi-text-primary outline-none placeholder:text-phi-text-muted disabled:opacity-60"
             />
 
-            <div className="flex items-center justify-between gap-2 px-0.5 pb-0.5">
+            <div className="mt-3 flex items-center justify-between gap-2 px-0.5 pb-0.5">
                 <div className="flex shrink-0 items-center gap-1.5">
                     <input
                         ref={fileInputRef}
