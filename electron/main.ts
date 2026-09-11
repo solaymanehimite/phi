@@ -202,6 +202,13 @@ function createWindow(): void {
         void mainWindow.loadURL(RENDERER_DEV_URL);
         if (process.env.ELECTRON_OPEN_DEVTOOLS === "1") mainWindow.webContents.openDevTools({ mode: "detach" });
     } else {
+        mainWindow.webContents.on("console-message", (_e, level, message, line, sourceId) => {
+            console.log(`[renderer:${level}] ${message} (${sourceId}:${line})`);
+        });
+        mainWindow.webContents.on("did-fail-load", (_e, code, desc) =>
+            console.error(`[phi] renderer load failed ${code}: ${desc}`),
+        );
+        mainWindow.webContents.on("did-finish-load", () => console.log("[phi] renderer loaded"));
         void mainWindow.loadFile(path.join(__dirname, "..", "dist", "index.html"));
     }
 

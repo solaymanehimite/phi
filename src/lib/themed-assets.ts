@@ -6,8 +6,9 @@ export function providerIconUrl(
   theme: EffectiveTheme,
 ): string | undefined {
   const p = provider.toLowerCase();
-  if (p === "openai" || p === "openai-codex") return `/providers/${theme}/openai.svg`;
-  if (p === "opencode") return `/providers/${theme}/opencode.svg`;
+  const base = import.meta.env.BASE_URL || "./";
+  if (p === "openai" || p === "openai-codex") return `${base}providers/${theme}/openai.svg`;
+  if (p === "opencode") return `${base}providers/${theme}/opencode.svg`;
   return undefined;
 }
 
@@ -16,7 +17,8 @@ export function brandingUrl(
   name: "logo.svg" | "logo_small.svg",
   theme: EffectiveTheme,
 ): string {
-  return `/branding/${theme}/${name}`;
+  const base = import.meta.env.BASE_URL || "./";
+  return `${base}branding/${theme}/${name}`;
 }
 
 /** Favicon URL — the small logo for the given theme. */

@@ -10,6 +10,9 @@ const apiTarget = process.env.PHI_API_TARGET || "http://127.0.0.1:3001";
 
 // https://vite.dev/config/
 export default defineConfig(async () => ({
+    // Packaged app loads dist/index.html via file:// — absolute /assets URLs
+    // 404 there, so emit relative paths.
+    base: "./",
     plugins: [react(), tailwindcss(), svgr()],
 
     // Dual-host dev config:
