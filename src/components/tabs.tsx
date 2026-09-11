@@ -1,6 +1,6 @@
 import {
     IconComponents,
-    IconRefresh,
+    IconLoader2,
     IconSendFilled,
     IconSettingsFilled,
     IconXFilled,
@@ -45,7 +45,7 @@ const TabItem = memo(function TabItem({ tab, active, canClose, onSelect, onClose
                 onClick={() => onSelect(tab.id)}
                 className="flex min-w-0 flex-1 items-center gap-2 self-stretch truncate rounded-tl-lg pl-3 pr-1 text-left text-[12px] font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-phi-accent/50"
             >
-                {tab.isRunning ? <IconRefresh className="size-3.5 shrink-0 animate-spin text-phi-accent" /> : isSettings ? <IconSettingsFilled className="size-3.5 shrink-0 text-phi-text-muted" /> : isUiDemo ? <IconComponents className="size-3.5 shrink-0 text-phi-text-muted" /> : null}
+                {tab.isRunning ? <IconLoader2 className="size-3.5 shrink-0 animate-spin text-phi-text-primary" /> : isSettings ? <IconSettingsFilled className="size-3.5 shrink-0 text-phi-text-muted" /> : isUiDemo ? <IconComponents className="size-3.5 shrink-0 text-phi-text-muted" /> : null}
                 <span className="min-w-0 truncate">{tab.title}</span>
                 {!isSpecial && hasDraft && <IconSendFilled className="size-3 shrink-0 text-phi-text-muted" aria-label="Has draft" title="Draft" />}
             </button>

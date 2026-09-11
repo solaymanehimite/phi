@@ -3,7 +3,7 @@ import {
     IconDotsFilled,
     IconPencilFilled,
     IconPlusFilled,
-    IconRefresh,
+    IconLoader2,
     IconSearch,
     IconSendFilled,
     IconSettingsFilled,
@@ -622,7 +622,7 @@ const SessionRow = memo(function SessionRow({
             {renaming ? (
                 <div className="flex min-w-0 flex-1 items-center gap-2.5 truncate rounded-lg px-1.5 py-1 pr-8">
                     {isStreaming ? (
-                        <IconRefresh className="size-4 shrink-0 animate-spin text-phi-text-secondary" />
+                        <IconLoader2 className="size-4 shrink-0 animate-spin text-phi-text-primary" />
                     ) : null}
                     <Input
                         autoFocus
@@ -640,7 +640,7 @@ const SessionRow = memo(function SessionRow({
                     className="flex min-w-0 flex-1 items-center gap-2.5 truncate rounded-lg px-1.5 py-1 pr-8 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-phi-accent/40"
                 >
                     {isStreaming ? (
-                        <IconRefresh className="size-4 shrink-0 animate-spin text-phi-text-secondary" />
+                        <IconLoader2 className="size-4 shrink-0 animate-spin text-phi-text-primary" />
                     ) : null}
                     <MarqueeTitle title={title} />
                     {hasDraft && (
