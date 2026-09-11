@@ -39,12 +39,12 @@ This milestone defines the product behavior and boundaries without prescribing d
   - Unread message count while scrolled away
   - No pulsing dots or status dots
 
-- **Completion notifications**
-  - Toasts when background sessions finish
-  - Session name and response preview
-  - Open or dismiss actions
-  - Stacking and auto-dismiss behavior
-  - Icons or shimmer text instead of pulsing dots
+- [x] **Completion notifications**
+  - [x] Toasts when background sessions finish
+  - [x] Session name and response preview
+  - [x] Open or dismiss actions
+  - [x] Stacking and auto-dismiss behavior
+  - [x] Icons or shimmer text instead of pulsing dots
 
 - [x] **Queuing and steering**
   - Replace the normal streaming stop button with a queue-message button

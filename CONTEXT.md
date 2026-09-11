@@ -71,3 +71,7 @@ _Avoid_: window, session tab
 ### Context Indicator
 The composer ring showing session context usage, opening cost stats on click.
 _Avoid_: token ring, usage badge
+
+### Sonner
+A bottom-right toast fired when a stream finishes in a session the user isn't viewing. Titled with the session name, with a View action that jumps to it. Auto-dismisses, caps at a few, never a record of anything.
+_Avoid_: banner, alert (for background notices), notification (in UI copy)

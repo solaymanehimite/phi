@@ -23,6 +23,7 @@ import {
 } from "@tabler/icons-react";
 import { Button } from "./components/ui/button";
 import { Alert } from "./components/ui/alert";
+import { SonnerViewport, useSonners } from "./components/ui/sonner";
 import { InlineCode } from "./components/ui/code";
 import { useSessions } from "./hooks/useSessions";
 import { useProjects, type NewProjectInput } from "./hooks/useProjects";
@@ -204,6 +205,7 @@ export default function App() {
     const openTabIdsRef = useRef<(string | null)[]>([null]);
     // single inline notice per session — interrupts clear on next send, never stack
     const [inlineErrors, setInlineErrors] = useState<Record<string, InlineError>>({});
+    const streamSonners = useSonners();
     const directoryPickerRef = useRef<HTMLDivElement>(null);
 
     // quit guard
@@ -269,6 +271,38 @@ export default function App() {
         const err: InlineError = { id: `${f}-${Date.now()}`, reason, message: chat.error, time: new Date().toLocaleTimeString(), canContinue };
         setInlineFor(f, err);
     }, [chat.error, chat.activeFile, chat.isStreaming, inlineErrors, setInlineFor]);
+
+    // Bottom-right sonner when a stream finishes in a session the user isn't
+    // looking at — a finished background tab, or anything while the window
+    // is hidden. The focused session already shows the result live.
+    const sessionTitleFor = useCallback((file: string) => {
+        const session = sessions.sessions.find((item) => item.path === file);
+        const raw = session?.name?.trim() || session?.firstMessage?.trim() || file.split("/").pop() || "Session";
+        return raw.length > 42 ? `${raw.slice(0, 42).trim()}…` : raw;
+    }, [sessions.sessions]);
+    const activeFileMirrorRef = useRef(chat.activeFile);
+    activeFileMirrorRef.current = chat.activeFile;
+    const prevRunningRef = useRef<Set<string>>(chat.runningFiles);
+    const pushSonner = streamSonners.push;
+    useEffect(() => {
+        const prev = prevRunningRef.current;
+        const next = chat.runningFiles;
+        prevRunningRef.current = next;
+        const finished = [...prev].filter((f) => !next.has(f));
+        if (finished.length === 0) return;
+        for (const file of finished) {
+            if (file === activeFileMirrorRef.current && !document.hidden) continue;
+            // Deleted sessions settle their stream on removal — not a finish.
+            if (!openTabIdsRef.current.includes(file) && !sessions.sessions.some((s) => s.path === file)) continue;
+            const failure = chat.errorsByFile[file]?.trim();
+            pushSonner({
+                title: sessionTitleFor(file),
+                description: failure ? failure.slice(0, 140) : "Finished streaming",
+                variant: failure ? "error" : "done",
+                sessionFile: file,
+            });
+        }
+    }, [chat.runningFiles, chat.errorsByFile, sessions.sessions, sessionTitleFor, pushSonner]);
 
     const openSessionTab = useCallback((id: string) => {
         const current = openTabIdsRef.current;
@@ -1227,6 +1261,14 @@ export default function App() {
                                 </div>
                             )}
                         </main>
+                        <SonnerViewport
+                            sonners={streamSonners.sonners}
+                            onDismiss={streamSonners.dismiss}
+                            onOpen={(item) => {
+                                streamSonners.dismiss(item.id);
+                                if (item.sessionFile) void handleSelect(item.sessionFile);
+                            }}
+                        />
                     </div>
                 );
             }}

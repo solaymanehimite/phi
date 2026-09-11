@@ -759,6 +759,7 @@ export function useChat() {
     data,
     loading,
     error,
+    errorsByFile,
     isStreaming,
     streaming,
     runningFiles,

@@ -489,6 +489,21 @@ html[data-theme="light"] .phi-empty-logo:hover {
   animation-delay: 120ms;
 }
 
+/* Sonner toast enter — slide up + fade from the bottom-right corner */
+@keyframes phi-sonner-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+.phi-sonner-enter {
+  animation: phi-sonner-in 220ms var(--phi-ease-out) both;
+}
+
 .phi-sidebar-enter {
   animation: phi-sidebar-in var(--phi-motion-sidebar) var(--phi-ease-out);
 }
@@ -634,6 +649,7 @@ html[data-theme="light"] .phi-tab-active {
   .phi-tab-enter,
   .phi-tab-exit,
   .phi-work-stagger > *,
+  .phi-sonner-enter,
   .phi-compaction-appear,
   .phi-sidebar-enter,
   .phi-composer-focus {

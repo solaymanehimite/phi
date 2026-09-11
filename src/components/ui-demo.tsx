@@ -31,6 +31,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "./ui/popover";
 import { Select } from "./ui/select";
 import { Well } from "./ui/surface";
 import { Switch } from "./ui/switch";
+import { SonnerViewport, useSonners } from "./ui/sonner";
 
 const SECTIONS = [
     { id: "buttons", label: "Buttons" },
@@ -49,6 +50,7 @@ const SECTIONS = [
     { id: "selects", label: "Selects" },
     { id: "switches", label: "Switches" },
     { id: "steering", label: "Steering & queue" },
+    { id: "sonners", label: "Sonners" },
 ] as const;
 
 function DemoSection({
@@ -83,6 +85,8 @@ export function UiDemoPanel() {
         { id: "demo-2", text: "And check the mobile layout for the sidebar", createdAt: Date.now() },
     ]);
     const [demoAbortArmed, setDemoAbortArmed] = useState(false);
+    // Sonner demo — fires real bottom-right toasts via the live viewport.
+    const demoSonners = useSonners();
 
     const scrollTo = (id: string) => {
         document.getElementById(`ui-demo-${id}`)?.scrollIntoView({ behavior: "smooth", block: "start" });
@@ -380,6 +384,47 @@ export function UiDemoPanel() {
                                     Clear queue
                                 </Button>
                             </div>
+                        </DemoSection>
+
+                        <DemoSection id="sonners" title="Sonners">
+                            <p className="mb-3 text-[12.5px] leading-5 text-phi-text-muted">
+                                Background finish notices pin to the <InlineCode>bottom-right</InlineCode> of the window — fire one to see it live. <InlineCode>View session</InlineCode> jumps to the session; they auto-dismiss after a few seconds.
+                            </p>
+                            <div className="flex flex-wrap items-center gap-2">
+                                <Button
+                                    variant="secondary"
+                                    size="xs"
+                                    onClick={() => demoSonners.push({ title: "Refactor tab switching", description: "Finished streaming", variant: "done", sessionFile: "demo-session" })}
+                                >
+                                    Show finished
+                                </Button>
+                                <Button
+                                    variant="secondary"
+                                    size="xs"
+                                    onClick={() => demoSonners.push({ title: "Fix sidebar marquee", description: "Rate limit — retry shortly", variant: "error", sessionFile: "demo-session" })}
+                                >
+                                    Show error
+                                </Button>
+                                <Button
+                                    variant="ghost"
+                                    size="xs"
+                                    onClick={() => {
+                                        demoSonners.push({ title: "Refactor tab switching", description: "Finished streaming", variant: "done", sessionFile: "demo-session" });
+                                        demoSonners.push({ title: "Ship milestone 3", description: "Finished streaming", variant: "done", sessionFile: "demo-session-2" });
+                                        demoSonners.push({ title: "Fix sidebar marquee", description: "Provider down — retry shortly", variant: "error", sessionFile: "demo-session-3" });
+                                    }}
+                                >
+                                    Stack three
+                                </Button>
+                                <Button variant="ghost" size="xs" onClick={() => demoSonners.clear()}>
+                                    Clear
+                                </Button>
+                            </div>
+                            <SonnerViewport
+                                sonners={demoSonners.sonners}
+                                onDismiss={demoSonners.dismiss}
+                                onOpen={(item) => demoSonners.dismiss(item.id)}
+                            />
                         </DemoSection>
                     </div>
                 </div>
