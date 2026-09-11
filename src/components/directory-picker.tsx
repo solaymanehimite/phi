@@ -296,7 +296,7 @@ function DirectoryPanel({
                 aria-hidden={!listActive}
                 className={`w-full transition-opacity duration-150 motion-reduce:transition-none ${listActive ? "relative opacity-100" : "pointer-events-none absolute inset-x-0 top-0 opacity-0"}`}
             >
-            <div className="flex items-center gap-2 px-3 pb-3 pt-3">
+            <div className="flex items-center gap-2 border-b border-phi-border-faint px-3 pb-3 pt-3">
                 <IconSearch className="size-3.5 shrink-0 text-phi-text-muted" />
                 <input
                     ref={searchInputRef}
@@ -320,7 +320,7 @@ function DirectoryPanel({
                 )}
             </div>
 
-            <div className="max-h-56 overflow-y-auto px-1.5 py-1.5">
+            <div className="max-h-56 overflow-y-auto px-1.5 pt-1.5">
                 {filteredProjects.length > 0 ? (
                     filteredProjects.map((project) => {
                         const selected = project.path === cwd;
@@ -335,12 +335,14 @@ function DirectoryPanel({
                                     title={`${project.name} — ${formatProjectPath(project.path)}`}
                                     className="flex min-w-0 flex-1 items-center gap-3 rounded-lg py-2 pl-3 pr-2 text-left text-[13px] text-phi-text-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-phi-accent/40"
                                 >
+                                    {selected ? (
+                                        <IconCheckFilled className="size-4 shrink-0 text-phi-text-secondary" />
+                                    ) : (
+                                        <span aria-hidden="true" className="size-4 shrink-0" />
+                                    )}
                                     <span className="min-w-0 flex-1 truncate font-medium">
                                         {project.name}
                                     </span>
-                                    {selected && (
-                                        <IconCheckFilled className="size-4 shrink-0 text-phi-text-secondary" />
-                                    )}
                                 </button>
                                 {!project.implicit && (
                                     <button
@@ -381,7 +383,7 @@ function DirectoryPanel({
                 )}
             </div>
 
-            <div className="px-1.5 pb-1.5 pt-1.5">
+            <div className="px-1.5 pb-1.5">
                 <button
                     type="button"
                     onClick={() => onModeChange("create")}

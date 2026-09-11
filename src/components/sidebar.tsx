@@ -21,6 +21,7 @@ import {
     DropdownMenuTrigger,
 } from "./ui/dropdown-menu";
 import { GroupCollapsibleTrigger } from "./ui/collapsible";
+import { NavItem } from "./ui/nav-item";
 import { formatProjectPath, type ProjectGroup } from "../lib/projects";
 import type { SessionInfo } from "../types/session";
 import { useHasDraft } from "../hooks/useHasDraft";
@@ -259,16 +260,14 @@ export const Sidebar = memo(function Sidebar({
                 </div>
             </div>
 
-            <div className="mt-auto flex shrink-0 items-center px-3 pb-4 pt-2">
-                <Button
-                    variant="icon"
-                    onClick={onOpenSettings}
+            <div className="mt-auto shrink-0 px-2 pb-4 pt-2">
+                <NavItem
+                    label="Settings"
+                    icon={IconSettingsFilled}
+                    onClick={() => onOpenSettings?.()}
                     title="Settings (Cmd+,)"
-                    aria-label="Open settings"
-                    className="!size-7"
-                >
-                    <IconSettingsFilled className="size-4" />
-                </Button>
+                    ariaLabel="Open settings"
+                />
             </div>
         </aside>
     );
