@@ -23,7 +23,7 @@ export const CompactionIndicator = memo(function CompactionIndicator({
     return (
       <div
         data-compaction-indicator="error"
-        className="mx-auto flex w-[calc(100%-2rem)] max-w-2xl items-center justify-between gap-2 rounded-b-none rounded-t-xl border-x border-b-0 border-t border-phi-error-border bg-phi-error-bg px-3 py-2 text-[12.5px] leading-5"
+        className="mx-auto flex w-[calc(100%-2rem)] max-w-3xl items-center justify-between gap-2 rounded-b-none rounded-t-xl border-x border-b-0 border-t border-phi-error-border bg-phi-error-bg px-3 py-2 text-[12.5px] leading-5"
       >
         <div className="min-w-0 flex items-center gap-2">
           <span
@@ -68,7 +68,7 @@ export const CompactionIndicator = memo(function CompactionIndicator({
   return (
     <div
       data-compaction-indicator="running"
-      className="mx-auto flex w-[calc(100%-2rem)] max-w-2xl min-w-0 items-center gap-1.5 rounded-b-none rounded-t-xl border-x border-b-0 border-t border-phi-border-strong bg-phi-bg-surface px-3 py-2"
+      className="mx-auto flex w-[calc(100%-2rem)] max-w-3xl min-w-0 items-center gap-1.5 rounded-b-none rounded-t-xl border-x border-b-0 border-t border-phi-border-strong bg-phi-bg-surface px-3 py-2"
     >
       <IconRefresh
         aria-hidden

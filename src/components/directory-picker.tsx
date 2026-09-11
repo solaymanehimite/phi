@@ -459,7 +459,7 @@ export function DirectoryPicker({
                 <IconChevronDownFilled className="size-3.5 shrink-0 text-phi-text-muted transition-transform group-data-open:rotate-180" />
             </PopoverTrigger>
             <PopoverContent
-                anchor={{ to: "bottom start", gap: 8 }}
+                anchor={{ to: "top start", gap: 12 }}
                 className="w-max max-w-[min(360px,calc(100vw-32px))] overflow-hidden p-0"
             >
                 <DirectoryPanel

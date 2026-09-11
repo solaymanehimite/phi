@@ -117,7 +117,7 @@ export const QueueIndicator = memo(function QueueIndicator({ items, onRemove, on
       data-queue-indicator="queued"
       role="status"
       aria-label={`${items.length} queued message${items.length > 1 ? "s" : ""}`}
-      className="mx-auto flex w-[calc(100%-2rem)] max-w-2xl flex-col gap-2 rounded-b-none rounded-t-xl border-x border-b-0 border-t border-phi-border-strong bg-phi-bg-surface px-3 py-2"
+      className="mx-auto flex w-[calc(100%-2rem)] max-w-3xl flex-col gap-2 rounded-b-none rounded-t-xl border-x border-b-0 border-t border-phi-border-strong bg-phi-bg-surface px-3 py-2"
     >
       <div className="flex max-h-44 flex-col gap-2 overflow-y-auto">
         {items.map((item) => (

@@ -694,7 +694,7 @@ export const Composer = memo(function Composer({
             onDragLeave={handleDragLeave}
             onDrop={handleDrop}
             data-compacting={isCompacting ? "true" : "false"}
-            className="phi-composer-focus relative mx-auto w-full max-w-3xl rounded-[17px] rounded-b-none border border-b-0 border-phi-border-strong bg-phi-bg-surface p-2 shadow-[0_8px_24px_var(--color-phi-shadow),inset_0_1px_0_var(--color-phi-border)] transition-[border-color,box-shadow] focus-within:border-phi-border-strong focus-within:shadow-[0_10px_28px_var(--color-phi-shadow),0_0_0_1px_var(--color-phi-border)]"
+            className="phi-composer-focus relative mx-auto w-full max-w-4xl rounded-[17px] rounded-b-none border border-b-0 border-phi-border-strong bg-phi-bg-surface p-2 shadow-[0_8px_24px_var(--color-phi-shadow),inset_0_1px_0_var(--color-phi-border)] transition-[border-color,box-shadow] focus-within:border-phi-border-strong focus-within:shadow-[0_10px_28px_var(--color-phi-shadow),0_0_0_1px_var(--color-phi-border)]"
         >
             {/* drag overlay */}
             {isDragging && (

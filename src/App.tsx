@@ -120,21 +120,21 @@ const ChatViewport = memo(function ChatViewport({
     if (!activeFile) return null;
     if (loading) {
         return (
-            <div className="mx-auto flex w-full max-w-3xl flex-1 flex-col overflow-y-auto px-6 pt-6">
+            <div className="mx-auto flex w-full max-w-4xl flex-1 flex-col overflow-y-auto px-6 pt-6">
                 <p className="py-10 text-center text-[13px] text-phi-text-muted">Loading messages…</p>
             </div>
         );
     }
     if (error && messages.length === 0) {
         return (
-            <div className="mx-auto flex w-full max-w-3xl flex-1 flex-col overflow-y-auto px-6 pt-6">
+            <div className="mx-auto flex w-full max-w-4xl flex-1 flex-col overflow-y-auto px-6 pt-6">
                 <Alert variant="error" className="mx-auto mt-6 max-w-xl text-[13px]">{error}</Alert>
             </div>
         );
     }
     if (messages.length === 0) {
         return (
-            <div className="mx-auto flex w-full max-w-3xl flex-1 flex-col overflow-y-auto px-6 pt-6">
+            <div className="mx-auto flex w-full max-w-4xl flex-1 flex-col overflow-y-auto px-6 pt-6">
                 <div className="flex flex-1 flex-col items-center justify-center pb-16 text-center">
                     <p className="text-[13px] text-phi-text-muted">No messages in this session yet.</p>
                     <p className="mt-1 text-[12px] text-phi-text-muted">Prompt streaming lands in Phase C.</p>
@@ -159,7 +159,7 @@ const ChatViewport = memo(function ChatViewport({
                 scrollClassName="overflow-y-auto px-6 pt-6"
                 className="flex flex-col items-center"
             >
-                <div className="w-2xl flex h-full max-w-full flex-col">
+                <div className="w-3xl flex h-full max-w-full flex-col">
                     <Conversation messages={messages} hideLastWork={hideLastWork} isStreaming={isStreaming} />
                     {showLive && (
                         <div className="pt-2 phi-work-stagger">
@@ -170,7 +170,7 @@ const ChatViewport = memo(function ChatViewport({
                         ? <InterruptedBlock onContinue={onContinue} />
                         : <InlineErrorBlock error={inlineError} onContinue={onContinue} onDismiss={onDismiss!} />)}
                     {error && !isStreaming && !inlineError && (
-                        <Alert variant="error" className="mx-auto mt-3 w-full max-w-3xl text-[13px]">{error}</Alert>
+                        <Alert variant="error" className="mx-auto mt-3 w-full max-w-4xl text-[13px]">{error}</Alert>
                     )}
                 </div>
             </StickToBottom.Content>
@@ -1156,7 +1156,7 @@ export default function App() {
                                 ) : (
                                 <section className="flex min-h-0 flex-1 flex-col">
                                     {!chat.activeFile ? (
-                                        <div className="mx-auto flex w-full max-w-3xl flex-1 flex-col overflow-y-auto px-6 pt-6">
+                                        <div className="mx-auto flex w-full max-w-4xl flex-1 flex-col overflow-y-auto px-6 pt-6">
                                             <div className="flex flex-1 flex-col items-center justify-center pb-16 text-center">
                                                 <img
                                                     src={brandingUrl("logo_small.svg", effectiveTheme)}
@@ -1197,7 +1197,7 @@ export default function App() {
 
                                     <div className="shrink-0 px-4 sm:px-7">
                                         {(modelError) && (
-                                            <div className="mx-auto mb-2 w-full max-w-3xl">
+                                            <div className="mx-auto mb-2 w-full max-w-4xl">
                                                 <Alert variant="error" className="flex items-center justify-between gap-2 !text-[12.5px]">
                                                     <span className="truncate">{modelError}</span>
                                                     <button onClick={() => setModelError(null)} className="shrink-0 text-[11px] underline opacity-80 hover:opacity-100">Dismiss</button>
@@ -1205,14 +1205,14 @@ export default function App() {
                                             </div>
                                         )}
                                         {!modelError && !models.loading && models.models.length === 0 && !models.error && (
-                                            <div className="mx-auto mb-2 w-full max-w-3xl">
+                                            <div className="mx-auto mb-2 w-full max-w-4xl">
                                                 <Alert variant="warning" className="!text-[12.5px]">
                                                     No models available — check auth (run <InlineCode>pi auth</InlineCode>) or configure API keys. The model selector will populate after auth.
                                                 </Alert>
                                             </div>
                                         )}
                                         {!chat.activeFile && (
-                                            <div className="mx-auto pl-6 mb-1 flex w-full max-w-3xl min-w-0 items-center gap-1" ref={directoryPickerRef}>
+                                            <div className="mx-auto pl-6 mb-1 flex w-full max-w-4xl min-w-0 items-center gap-1" ref={directoryPickerRef}>
                                                 <DirectoryPicker cwd={newChatCwd} projects={projectOptions} onChange={setNewChatCwd} onCreateProject={handleCreateProject} onUpdateProject={handleUpdateProject} onRemoveProject={handleRemoveProject} homeCwd={homeCwd} disabled={chat.isStreaming || (chat.activeFile ? compaction.isCompacting(chat.activeFile) : false)} />
                                             </div>
                                         )}
@@ -1225,7 +1225,7 @@ export default function App() {
                                             const queued = cFile ? queue.queueFor(cFile) : [];
                                             const showQueue = queued.length > 0;
                                             return (
-                                                <div className="mx-auto flex w-full max-w-3xl flex-col gap-0">
+                                                <div className="mx-auto flex w-full max-w-4xl flex-col gap-0">
                                                     <div
                                                         className={`grid overflow-hidden transition-[grid-template-rows,opacity] duration-300 ease-[cubic-bezier(0.4,0,0.2,1)] ${showIndicator ? "grid-rows-[1fr] opacity-100" : "grid-rows-[0fr] opacity-0"}`}
                                                     >

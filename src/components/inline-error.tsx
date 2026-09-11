@@ -62,7 +62,7 @@ export function InlineErrorBlock({ error, onContinue, onDismiss }: Props) {
 
   return (
     <div
-      className="mx-auto mt-3 flex w-full max-w-3xl items-start gap-3 rounded-lg border border-phi-error-border bg-phi-error-bg px-3 py-2.5 text-[13px] leading-5 text-phi-error-text"
+      className="mx-auto mt-3 flex w-full max-w-4xl items-start gap-3 rounded-lg border border-phi-error-border bg-phi-error-bg px-3 py-2.5 text-[13px] leading-5 text-phi-error-text"
     >
       <span className="mt-0.5 shrink-0 text-phi-error">⚠</span>
       <div className="min-w-0 flex-1">
