@@ -1145,9 +1145,6 @@ export default function App() {
                                                 {!sessions.loading && !sessions.error && projectOptions.length === 0 && (
                                                     <p className="mt-6 text-[12px] text-phi-text-muted">No projects yet — create one from the picker below to start chatting.</p>
                                                 )}
-                                                {!sessions.loading && !sessions.error && projectOptions.length > 0 && sessions.groups.length === 0 && (
-                                                    <p className="mt-6 text-[12px] text-phi-text-muted">No sessions found — run `pi` in a project to create one.</p>
-                                                )}
                                             </div>
                                         </div>
                                     ) : (
