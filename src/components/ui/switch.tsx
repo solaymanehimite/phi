@@ -8,7 +8,7 @@ type SwitchProps = Omit<ButtonHTMLAttributes<HTMLButtonElement>, "children"> & {
 /** Toggle switch — accent track when on, overlay track when off. */
 export function Switch({ checked, label, className = "", ...props }: SwitchProps) {
   return (
-    <button type="button" role="switch" aria-checked={checked} aria-label={label} className={className} {...props}>
+    <button type="button" role="switch" aria-checked={checked} aria-label={label} className={`shrink-0 rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-phi-accent/40 ${className}`} {...props}>
       <span
         aria-hidden
         style={checked ? { backgroundColor: "var(--color-phi-accent)" } : undefined}
