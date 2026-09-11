@@ -107,6 +107,19 @@ function CodeThemeSection() {
     );
 }
 
+/** First three distinct token colors, for the dropdown swatches. */
+function themeSwatches(theme: PrismTheme): string[] {
+    const out: string[] = [];
+    const push = (c: unknown) => {
+        if (typeof c === "string" && /^(#|rgb|hsl)/.test(c) && !out.includes(c)) out.push(c);
+    };
+    for (const entry of theme.styles) {
+        push(entry.style?.color);
+        if (out.length >= 3) break;
+    }
+    return out;
+}
+
 function CodeThemeMenu({
     options,
     choice,
@@ -119,6 +132,7 @@ function CodeThemeMenu({
         <>
             {options.map((option) => {
                 const selected = option.id === choice;
+                const swatches = themeSwatches(CODE_THEMES[option.id].theme);
                 return (
                     <MenuItem
                         key={option.id}
@@ -128,6 +142,15 @@ function CodeThemeMenu({
                             close();
                         }}
                     >
+                        <span aria-hidden="true" className="flex shrink-0 items-center">
+                            {swatches.map((color, i) => (
+                                <span
+                                    key={i}
+                                    style={{ backgroundColor: color }}
+                                    className={`size-3.5 rounded-full ring-2 ring-phi-bg-elevated ${i > 0 ? "-ml-1.5" : ""}`}
+                                />
+                            ))}
+                        </span>
                         <span className="min-w-0 flex-1 truncate">{option.label}</span>
                         {selected && <IconCheckFilled className="size-3.5 shrink-0 text-phi-accent" />}
                     </MenuItem>
