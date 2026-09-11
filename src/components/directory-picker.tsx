@@ -83,19 +83,19 @@ function ProjectForm({
 
     return (
         <form onSubmit={handleSubmit} className="w-full">
-            <div className="-mx-2 flex items-center gap-1 border-b border-phi-border-faint px-2 pb-2 pt-1">
-                <Button variant="icon" size="sm" onClick={onBack} aria-label="Back to projects" className="!size-7">
-                    <IconChevronLeft className="size-4" />
+            <div className="flex items-center gap-2 px-2 pb-1 pt-2">
+                <Button variant="icon" size="icon" onClick={onBack} aria-label="Back to projects" className="!size-7">
+                    <IconChevronLeft className="size-5 shrink-0" />
                 </Button>
-                <p className="min-w-0 flex-1 truncate text-[13px] font-semibold text-phi-text-primary">
+                <p className="min-w-0 flex-1 truncate text-[13px] text-phi-text-primary">
                     {title}
                 </p>
             </div>
 
-            <div className="py-3">
+            <div className="px-3 py-3">
                 <label
                     htmlFor="new-project-name"
-                    className="mb-1.5 block px-1 text-[11px] font-medium tracking-wide text-phi-text-muted"
+                    className="mb-1.5 block text-[13px] font-medium text-phi-text-primary"
                 >
                     Name
                 </label>
@@ -109,23 +109,23 @@ function ProjectForm({
                     spellCheck={false}
                     autoComplete="off"
                     variant="default"
-                    className="mx-1 w-[calc(100%-8px)] !text-[13px]"
+                    className="w-full !border-0 !bg-phi-overlay-strong !px-3 !text-[13px] placeholder:!text-phi-text-tertiary focus-visible:ring-2 focus-visible:ring-phi-accent/40"
                 />
 
                 <span
                     id="new-project-path-label"
-                    className="mb-1.5 mt-3 block px-1 text-[11px] font-medium tracking-wide text-phi-text-muted"
+                    className="mb-1.5 mt-3 block text-[13px] font-medium text-phi-text-primary"
                 >
                     Path
                 </span>
                 {canBrowse ? (
-                    <div className="mx-1 flex gap-1.5">
+                    <div className="flex gap-1.5">
                         <button
                             type="button"
                             onClick={() => void browse()}
                             aria-labelledby="new-project-path-label new-project-path-value"
                             title={path || "Choose a directory"}
-                            className="flex min-w-0 flex-1 items-center gap-2 rounded-md border border-phi-input-border bg-phi-input-bg px-2 py-1.5 text-left focus:border-phi-input-border-focus focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-phi-accent/40"
+                            className="flex min-w-0 flex-1 items-center gap-2 rounded-md bg-phi-overlay-strong px-3 py-1.5 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-phi-accent/40"
                         >
                             <IconFolderOpen className="size-3.5 shrink-0 text-phi-text-tertiary" />
                             <span
@@ -141,7 +141,7 @@ function ProjectForm({
                                 onClick={() => setPath("")}
                                 title="Clear directory"
                                 aria-label="Clear directory"
-                                className="inline-flex shrink-0 items-center justify-center rounded-md border border-phi-input-border bg-phi-input-bg px-2 text-phi-text-tertiary hover:bg-phi-overlay-hover hover:text-phi-text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-phi-accent/40"
+                                className="inline-flex shrink-0 items-center justify-center rounded-md bg-phi-overlay-strong px-2 text-phi-text-tertiary hover:text-phi-text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-phi-accent/40"
                             >
                                 <IconXFilled className="size-3.5" />
                             </button>
@@ -157,17 +157,17 @@ function ProjectForm({
                         spellCheck={false}
                         autoComplete="off"
                         variant="default"
-                        className="mx-1 w-[calc(100%-8px)]"
+                        className="w-full !border-0 !bg-phi-overlay-strong !px-3 placeholder:!text-phi-text-tertiary focus-visible:ring-2 focus-visible:ring-phi-accent/40"
                     />
                 )}
                 {browseError && (
-                    <p className="mt-1.5 px-1 text-[11px] leading-4 text-phi-error-text">
+                    <p className="mt-1.5 text-[11px] leading-4 text-phi-error-text">
                         {browseError}
                     </p>
                 )}
             </div>
 
-            <div className="-mx-2 flex items-center justify-end gap-1.5 border-t border-phi-border-faint px-2 pt-2">
+            <div className="flex items-center justify-end gap-1.5 px-2 pb-2 pt-2">
                 <Button variant="ghost" size="xs" onClick={onBack} className="!text-[12.5px]">
                     Cancel
                 </Button>
@@ -296,7 +296,7 @@ function DirectoryPanel({
                 aria-hidden={!listActive}
                 className={`w-full transition-opacity duration-150 motion-reduce:transition-none ${listActive ? "relative opacity-100" : "pointer-events-none absolute inset-x-0 top-0 opacity-0"}`}
             >
-            <div className="-mx-2 flex items-center gap-2 border-b border-phi-border-faint px-3 pb-3 pt-1">
+            <div className="flex items-center gap-2 px-3 pb-3 pt-3">
                 <IconSearch className="size-3.5 shrink-0 text-phi-text-muted" />
                 <input
                     ref={searchInputRef}
@@ -306,7 +306,7 @@ function DirectoryPanel({
                     placeholder="Search projects"
                     aria-label="Search projects"
                     spellCheck={false}
-                    className="min-w-0 flex-1 bg-transparent text-sm text-phi-text-primary outline-none placeholder:text-phi-text-muted"
+                    className="min-w-0 flex-1 bg-transparent text-sm text-phi-text-primary outline-none placeholder:text-phi-text-tertiary"
                 />
                 {query && (
                     <button
@@ -320,31 +320,23 @@ function DirectoryPanel({
                 )}
             </div>
 
-            <div className="max-h-56 overflow-y-auto py-1.5">
+            <div className="max-h-56 overflow-y-auto px-1.5 py-1.5">
                 {filteredProjects.length > 0 ? (
                     filteredProjects.map((project) => {
                         const selected = project.path === cwd;
                         return (
                             <div
                                 key={project.id}
-                                className={`group flex w-full items-center gap-1 rounded-lg pr-1 hover:bg-phi-overlay-strong focus-within:bg-phi-overlay-strong ${selected ? "bg-phi-overlay-muted" : ""}`}
+                                className="group flex w-full items-center gap-1 rounded-lg pr-1 hover:bg-phi-overlay-strong focus-within:bg-phi-overlay-strong"
                             >
                                 <button
                                     type="button"
                                     onClick={() => selectProject(project.path)}
                                     title={`${project.name} — ${formatProjectPath(project.path)}`}
-                                    className={`flex min-w-0 flex-1 items-center gap-3 rounded-lg px-2 py-2 text-left text-[13px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-phi-accent/40 ${selected
-                                            ? "text-phi-text-primary"
-                                            : "text-phi-text-secondary"
-                                        }`}
+                                    className="flex min-w-0 flex-1 items-center gap-3 rounded-lg py-2 pl-3 pr-2 text-left text-[13px] text-phi-text-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-phi-accent/40"
                                 >
-                                    <span className="flex min-w-0 flex-1 items-baseline gap-2">
-                                        <span className="max-w-[55%] shrink-0 truncate font-medium">
-                                            {project.name}
-                                        </span>
-                                        <span className="min-w-0 flex-1 truncate text-[11px] text-phi-text-muted">
-                                            {formatProjectPath(project.path)}
-                                        </span>
+                                    <span className="min-w-0 flex-1 truncate font-medium">
+                                        {project.name}
                                     </span>
                                     {selected && (
                                         <IconCheckFilled className="size-4 shrink-0 text-phi-text-secondary" />
@@ -389,7 +381,7 @@ function DirectoryPanel({
                 )}
             </div>
 
-            <div className="-mx-2 border-t border-phi-border-faint px-2 pt-1.5">
+            <div className="px-1.5 pb-1.5 pt-1.5">
                 <button
                     type="button"
                     onClick={() => onModeChange("create")}
@@ -466,7 +458,7 @@ export function DirectoryPicker({
             </PopoverTrigger>
             <PopoverContent
                 anchor={{ to: "bottom start", gap: 8 }}
-                className="w-max max-w-[min(360px,calc(100vw-32px))] p-2"
+                className="w-max max-w-[min(360px,calc(100vw-32px))] overflow-hidden p-0"
             >
                 <DirectoryPanel
                     cwd={cwd}
