@@ -103,9 +103,6 @@ function CodeThemeSection() {
                     </PopoverContent>
                 </Popover>
             </div>
-            <p className="border-t border-phi-border bg-phi-bg-surface px-4 py-2 text-[11px] text-phi-text-muted">
-                {effective === "light" ? "Light" : "Dark"} code themes — switch the app scheme above to customize the other mode.
-            </p>
         </div>
     );
 }
