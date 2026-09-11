@@ -26,6 +26,7 @@ import { Alert } from "./components/ui/alert";
 import { SonnerViewport, useSonners } from "./components/ui/sonner";
 import { InlineCode } from "./components/ui/code";
 import { useSessions } from "./hooks/useSessions";
+import { useSessionFlags } from "./hooks/useSessionFlags";
 import { useProjects, type NewProjectInput } from "./hooks/useProjects";
 import { normalizeProjectPath, resolveProjectOptions, sessionsForProject, type Project } from "./lib/projects";
 import { useChat } from "./hooks/useChat";
@@ -184,6 +185,7 @@ const ChatViewport = memo(function ChatViewport({
 export default function App() {
     const [sidebarOpen, setSidebarOpen] = useState(true);
     const sessions = useSessions();
+    const sessionFlags = useSessionFlags();
     const chat = useChat();
     const compaction = useCompaction({ revalidate: chat.revalidate });
     const queue = useMessageQueue(chat.activeFile);
@@ -409,18 +411,37 @@ export default function App() {
         }
     }, [newChatCwd, projects, removeProject]);
 
+    // Pinned sessions move out of their project into the Pinned group above
+    // Projects; archived sessions move to the footer group. Both stay
+    // searchable via Cmd+K. Newest first in both groups.
+    const byModifiedDesc = (a: { modified: string }, b: { modified: string }) =>
+        new Date(b.modified).getTime() - new Date(a.modified).getTime();
+    const pinnedSessions = useMemo(
+        () => sessions.sessions
+            .filter((s) => sessionFlags.pinned.has(s.path) && !sessionFlags.archived.has(s.path))
+            .sort(byModifiedDesc),
+        [sessions.sessions, sessionFlags.pinned, sessionFlags.archived],
+    );
+    const archivedSessions = useMemo(
+        () => sessions.sessions
+            .filter((s) => sessionFlags.archived.has(s.path))
+            .sort(byModifiedDesc),
+        [sessions.sessions, sessionFlags.archived],
+    );
     // Sidebar sections: every project (even empty) with its sessions, newest first.
+    // Pinned / archived sessions are excluded — they live in their own groups.
     const projectGroups = useMemo(
         () => projectOptions.map((project) => ({
             project,
-            sessions: sessionsForProject(sessions.sessions, project.path),
+            sessions: sessionsForProject(sessions.sessions, project.path)
+                .filter((s) => !sessionFlags.pinned.has(s.path) && !sessionFlags.archived.has(s.path)),
         })),
-        [projectOptions, sessions.sessions],
+        [projectOptions, sessions.sessions, sessionFlags.pinned, sessionFlags.archived],
     );
     const orphanCount = useMemo(() => {
         const paths = new Set(projectOptions.map((p) => p.path));
-        return sessions.sessions.filter((s) => !paths.has(s.cwd)).length;
-    }, [projectOptions, sessions.sessions]);
+        return sessions.sessions.filter((s) => !paths.has(s.cwd) && !sessionFlags.pinned.has(s.path) && !sessionFlags.archived.has(s.path)).length;
+    }, [projectOptions, sessions.sessions, sessionFlags.pinned, sessionFlags.archived]);
 
     const activeTitle = useMemo(() => chat.data?.sessionName || chat.data?.header?.id || chat.activeFile?.split("/").pop() || "New chat", [chat.data?.sessionName, chat.data?.header?.id, chat.activeFile]);
     const activeCwd = chat.data?.cwd || chat.data?.header?.cwd;
@@ -767,12 +788,13 @@ export default function App() {
 
     const handleDelete = useCallback(async (file: string) => {
         await sessions.remove(file);
+        sessionFlags.removeFile(file);
         if (openTabIdsRef.current.includes(file)) handleCloseTab(file);
         chat.invalidateCache(file);
         chat.removeFile(file);
         clearQueueFor(file);
         setInlineFor(file, null);
-    }, [sessions.remove, handleCloseTab, chat.removeFile, chat.invalidateCache, setInlineFor]);
+    }, [sessions.remove, sessionFlags.removeFile, handleCloseTab, chat.removeFile, chat.invalidateCache, setInlineFor]);
 
     const handleDeleteCurrent = useCallback(async () => {
         const f = chat.activeFile;
@@ -1106,6 +1128,8 @@ export default function App() {
                         >
                             <Sidebar
                                 projectGroups={projectGroups}
+                                pinnedSessions={pinnedSessions}
+                                archivedSessions={archivedSessions}
                                 orphanCount={orphanCount}
                                 activeFile={settingsActive ? SETTINGS_TAB_ID : uiDemoActive ? UI_DEMO_TAB_ID : chat.activeFile}
                                 onSelect={handleSelect}
@@ -1116,6 +1140,8 @@ export default function App() {
                                 onToggleGroup={sessions.toggleGroup}
                                 onRename={handleRename}
                                 onDelete={handleDelete}
+                                onTogglePin={sessionFlags.togglePin}
+                                onToggleArchive={sessionFlags.toggleArchive}
                                 loading={sessions.loading}
                                 error={sessions.error}
                                 runningFiles={chat.runningFiles}
