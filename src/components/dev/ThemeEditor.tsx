@@ -7,7 +7,7 @@ import {
     IconCopyFilled,
 } from "@tabler/icons-react";
 import { useEffect, useMemo, useState, useSyncExternalStore } from "react";
-import { HexColorInput, HexColorPicker } from "react-colorful";
+import { HexColorInput } from "react-colorful";
 
 const THEME_EDITOR_ENABLED_KEY = "phi:theme-editor-enabled";
 const themeEditorEnabledListeners = new Set<() => void>();
@@ -219,7 +219,66 @@ function hexToRgb(hex: string): [number, number, number] {
                 .join("")
             : h;
     const n = parseInt(full.slice(0, 6), 16);
+    if (Number.isNaN(n)) return [0, 0, 0];
     return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
+}
+
+function clamp(n: number, min: number, max: number): number {
+    return Math.min(max, Math.max(min, n));
+}
+
+function rgbToHex(r: number, g: number, b: number): string {
+    const toHex = (n: number) =>
+        clamp(Math.round(n), 0, 255).toString(16).padStart(2, "0");
+    return `#${toHex(r)}${toHex(g)}${toHex(b)}`;
+}
+
+function rgbToHsv(r: number, g: number, b: number): [number, number, number] {
+    const rp = r / 255;
+    const gp = g / 255;
+    const bp = b / 255;
+    const max = Math.max(rp, gp, bp);
+    const min = Math.min(rp, gp, bp);
+    const d = max - min;
+    let h = 0;
+    if (d !== 0) {
+        if (max === rp) h = ((gp - bp) / d) % 6;
+        else if (max === gp) h = (bp - rp) / d + 2;
+        else h = (rp - gp) / d + 4;
+        h *= 60;
+        if (h < 0) h += 360;
+    }
+    const s = max === 0 ? 0 : (d / max) * 100;
+    const v = max * 100;
+    return [h, s, v];
+}
+
+function hsvToRgb(h: number, s: number, v: number): [number, number, number] {
+    const hh = ((h % 360) + 360) % 360;
+    const ss = clamp(s, 0, 100) / 100;
+    const vv = clamp(v, 0, 100) / 100;
+    const c = vv * ss;
+    const x = c * (1 - Math.abs(((hh / 60) % 2) - 1));
+    const m = vv - c;
+    let rp = 0;
+    let gp = 0;
+    let bp = 0;
+    if (hh < 60) [rp, gp, bp] = [c, x, 0];
+    else if (hh < 120) [rp, gp, bp] = [x, c, 0];
+    else if (hh < 180) [rp, gp, bp] = [0, c, x];
+    else if (hh < 240) [rp, gp, bp] = [0, x, c];
+    else if (hh < 300) [rp, gp, bp] = [x, 0, c];
+    else [rp, gp, bp] = [c, 0, x];
+    return [
+        Math.round((rp + m) * 255),
+        Math.round((gp + m) * 255),
+        Math.round((bp + m) * 255),
+    ];
+}
+
+function hsvToHex(h: number, s: number, v: number): string {
+    const [r, g, b] = hsvToRgb(h, s, v);
+    return rgbToHex(r, g, b);
 }
 
 function getAlpha(original: string): string | null {
@@ -237,6 +296,159 @@ function getAlpha(original: string): string | null {
     if (original.includes("/")) return a;
     return null;
 }
+
+function ChannelSlider(props: {
+    label: string;
+    value: number;
+    min: number;
+    max: number;
+    gradient: string;
+    ariaLabel: string;
+    suffix?: string;
+    onChange: (next: number) => void;
+}) {
+    const { label, value, min, max, gradient, ariaLabel, suffix, onChange } = props;
+    return (
+        <div className="flex items-center gap-2">
+            <span
+                aria-hidden
+                className="w-3 shrink-0 text-center font-mono text-[10px] font-semibold text-phi-text-tertiary"
+            >
+                {label}
+            </span>
+            <input
+                type="range"
+                aria-label={ariaLabel}
+                min={min}
+                max={max}
+                step={1}
+                value={Math.round(value)}
+                onChange={(e) => onChange(clamp(Number(e.target.value), min, max))}
+                className="phi-color-slider min-w-0 flex-1"
+                style={{ backgroundImage: gradient }}
+            />
+            <span className="flex w-[52px] shrink-0 items-center gap-0.5 rounded-md border border-phi-border bg-phi-bg-sunken px-1 py-0.5 focus-within:border-phi-accent/40">
+                <input
+                    type="number"
+                    aria-label={`${ariaLabel} value`}
+                    min={min}
+                    max={max}
+                    step={1}
+                    value={Math.round(value)}
+                    onChange={(e) => {
+                        if (e.target.value === "") return;
+                        const n = Number(e.target.value);
+                        if (Number.isNaN(n)) return;
+                        onChange(clamp(Math.round(n), min, max));
+                    }}
+                    className="min-w-0 flex-1 bg-transparent text-right font-mono text-[10px] text-phi-text-secondary outline-none [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+                />
+                {suffix && (
+                    <span className="font-mono text-[9px] text-phi-text-faint">{suffix}</span>
+                )}
+            </span>
+        </div>
+    );
+}
+
+function HsvRgbSliders(props: { hex: string; onChange: (nextHex: string) => void }) {
+    const { hex, onChange } = props;
+    const [r, g, b] = useMemo(() => hexToRgb(hex), [hex]);
+    const [h, s, v] = useMemo(() => rgbToHsv(r, g, b), [r, g, b]);
+    const rh = Math.round(h);
+    const rs = Math.round(s);
+    const rv = Math.round(v);
+
+    const setRgb = (nr: number, ng: number, nb: number) => {
+        onChange(rgbToHex(nr, ng, nb));
+    };
+    const setHsv = (nh: number, ns: number, nv: number) => {
+        onChange(hsvToHex(nh, ns, nv));
+    };
+
+    const sStart = hsvToHex(rh, 0, rv);
+    const sEnd = hsvToHex(rh, 100, rv);
+    const vEnd = hsvToHex(rh, rs === 0 ? 0 : rs, 100);
+
+    return (
+        <div className="space-y-3 px-0.5 pt-2.5">
+            <div className="space-y-1.5">
+                <p className="font-mono text-[9px] font-semibold tracking-[0.12em] text-phi-text-faint uppercase">
+                    HSV
+                </p>
+                <ChannelSlider
+                    label="H"
+                    value={rh}
+                    min={0}
+                    max={360}
+                    ariaLabel="Hue"
+                    suffix="°"
+                    gradient="linear-gradient(to right, #ff0000, #ffff00, #00ff00, #00ffff, #0000ff, #ff00ff, #ff0000)"
+                    onChange={(nh) => setHsv(nh, rs, rv)}
+                />
+                <ChannelSlider
+                    label="S"
+                    value={rs}
+                    min={0}
+                    max={100}
+                    ariaLabel="Saturation"
+                    suffix="%"
+                    gradient={`linear-gradient(to right, ${sStart}, ${sEnd})`}
+                    onChange={(ns) => setHsv(rh, ns, rv)}
+                />
+                <ChannelSlider
+                    label="V"
+                    value={rv}
+                    min={0}
+                    max={100}
+                    ariaLabel="Value (brightness)"
+                    suffix="%"
+                    gradient={`linear-gradient(to right, #000000, ${vEnd})`}
+                    onChange={(nv) => setHsv(rh, rs, nv)}
+                />
+            </div>
+            <div className="space-y-1.5">
+                <p className="font-mono text-[9px] font-semibold tracking-[0.12em] text-phi-text-faint uppercase">
+                    RGB
+                </p>
+                <ChannelSlider
+                    label="R"
+                    value={r}
+                    min={0}
+                    max={255}
+                    ariaLabel="Red"
+                    gradient={`linear-gradient(to right, rgb(0 ${g} ${b}), rgb(255 ${g} ${b}))`}
+                    onChange={(nr) => setRgb(nr, g, b)}
+                />
+                <ChannelSlider
+                    label="G"
+                    value={g}
+                    min={0}
+                    max={255}
+                    ariaLabel="Green"
+                    gradient={`linear-gradient(to right, rgb(${r} 0 ${b}), rgb(${r} 255 ${b}))`}
+                    onChange={(ng) => setRgb(r, ng, b)}
+                />
+                <ChannelSlider
+                    label="B"
+                    value={b}
+                    min={0}
+                    max={255}
+                    ariaLabel="Blue"
+                    gradient={`linear-gradient(to right, rgb(${r} ${g} 0), rgb(${r} ${g} 255))`}
+                    onChange={(nb) => setRgb(r, g, nb)}
+                />
+            </div>
+        </div>
+    );
+}
+
+const COLOR_SLIDER_CSS = `
+.phi-color-slider { -webkit-appearance: none; appearance: none; height: 10px; border-radius: 9999px; outline: none; cursor: pointer; border: 1px solid var(--color-phi-border); }
+.phi-color-slider::-webkit-slider-thumb { -webkit-appearance: none; appearance: none; width: 14px; height: 14px; border-radius: 9999px; background: #fff; border: 2px solid rgba(0,0,0,0.55); box-shadow: 0 1px 4px rgba(0,0,0,0.5); cursor: ew-resize; }
+.phi-color-slider::-moz-range-thumb { width: 12px; height: 12px; border-radius: 9999px; background: #fff; border: 2px solid rgba(0,0,0,0.55); box-shadow: 0 1px 4px rgba(0,0,0,0.5); cursor: ew-resize; }
+.phi-color-slider:focus-visible { outline: 2px solid color-mix(in srgb, var(--color-phi-accent) 60%, transparent); outline-offset: 2px; }
+`;
 
 type ThemeEditorProps = {
     className?: string;
@@ -321,6 +533,7 @@ export function ThemeEditor({ className = "" }: ThemeEditorProps) {
                 anchor={{ to: "top end", gap: 12 }}
                 className="relative flex !max-h-[500px] w-[360px] flex-col overflow-hidden [--anchor-gap:12px]"
             >
+                <style>{COLOR_SLIDER_CSS}</style>
                 <div className="min-h-0 flex-1 overflow-y-auto px-2 py-3 space-y-4">
                     {groups.map(([group, tokens]) => (
                         <div key={group}>
@@ -358,13 +571,11 @@ export function ThemeEditor({ className = "" }: ThemeEditorProps) {
                                                 />
                                             </div>
                                             {isActive && (
-                                                <div className="pt-2">
-                                                    <HexColorPicker
-                                                        color={hex}
+                                                <div className="pt-1">
+                                                    <HsvRgbSliders
+                                                        hex={hex}
                                                         onChange={(nextHex) => setToken(t.name, nextHex)}
-                                                        className="!w-full"
                                                     />
-                                                    <style>{`.react-colorful { width: 100% !important } .react-colorful__saturation { border-radius: 10px 10px 0 0 } .react-colorful__hue, .react-colorful__alpha { height: 14px; border-radius: 0 0 10px 10px }`}</style>
                                                 </div>
                                             )}
                                         </div>
