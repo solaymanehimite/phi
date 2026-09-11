@@ -4,6 +4,7 @@ import { Composer } from "./components/composer";
 import { DirectoryPicker } from "./components/directory-picker";
 import { ModelSelector } from "./components/model-selector";
 import { ThinkingEffortSelector } from "./components/thinking-effort";
+import { ContextIndicator } from "./components/context-indicator";
 import { Conversation } from "./components/conversation/conversation";
 import { Streaming } from "./components/conversation/streaming";
 import { Sidebar } from "./components/sidebar";
@@ -31,6 +32,7 @@ import { useCompaction } from "./hooks/useCompaction";
 import { clearQueueFor, useMessageQueue } from "./hooks/useMessageQueue";
 import { QueueIndicator } from "./components/queue-indicator";
 import { useModels } from "./hooks/useModels";
+import { useSessionStats } from "./hooks/useSessionStats";
 import { createSession, health, redoTurn, streamContinue, undoTurn } from "./lib/api";
 import { CompactionIndicator } from "./components/compaction-indicator";
 import { useEffectiveTheme, useTheme } from "./hooks/useTheme";
@@ -1021,6 +1023,7 @@ export default function App() {
     }, [chat.activeFile, chat.isStreaming, chat.loading, compactingActive, queuedForActive.length, queue.shift]);
 
     const messages = useMemo(() => chat.data?.context.messages ?? [], [chat.data?.context.messages]);
+    const sessionStats = useSessionStats(chat.activeFile, messages.length, chat.isStreaming);
 
     const tabItems = useMemo(() => openTabIds.map((id) => {
         if (id === null) return { id, title: "New chat" };
@@ -1213,7 +1216,7 @@ export default function App() {
                                                             )}
                                                         </div>
                                                     </div>
-                                                    <Composer onSend={handleSend} abortArmed={abortArmed} onQueue={handleQueue} isStreaming={chat.isStreaming} isCompacting={isCompacting} cwd={chat.activeFile ? activeCwd : (newChatCwd ?? homeCwd)} draftKey={chat.activeFile} beforeSend={<><ModelSelector models={models.models} value={selectedModelKey} thinkingLevel={thinkingLevel} onSelect={handleSelectModel} onThinkingChange={handleThinkingChange} disabled={chat.isStreaming || (cFile ? compaction.isCompacting(cFile) : false)} isStreaming={chat.isStreaming} loading={models.loading} error={models.error} /><ThinkingEffortSelector models={models.models} modelKey={selectedModelKey} value={thinkingLevel} onChange={handleThinkingChange} disabled={chat.isStreaming || (cFile ? compaction.isCompacting(cFile) : false)} /></>} />
+                                                    <Composer onSend={handleSend} abortArmed={abortArmed} onQueue={handleQueue} isStreaming={chat.isStreaming} isCompacting={isCompacting} cwd={chat.activeFile ? activeCwd : (newChatCwd ?? homeCwd)} draftKey={chat.activeFile} beforeSend={<><ContextIndicator file={chat.activeFile} stats={sessionStats.stats} loading={sessionStats.loading} onRefresh={() => void sessionStats.refresh()} /><ModelSelector models={models.models} value={selectedModelKey} thinkingLevel={thinkingLevel} onSelect={handleSelectModel} onThinkingChange={handleThinkingChange} disabled={chat.isStreaming || (cFile ? compaction.isCompacting(cFile) : false)} isStreaming={chat.isStreaming} loading={models.loading} error={models.error} /><ThinkingEffortSelector models={models.models} modelKey={selectedModelKey} value={thinkingLevel} onChange={handleThinkingChange} disabled={chat.isStreaming || (cFile ? compaction.isCompacting(cFile) : false)} /></>} />
                                                 </div>
                                             );
                                         })()}

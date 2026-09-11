@@ -1704,6 +1704,160 @@ app.get("/api/files", async (req, res) => {
   }
 });
 
+// ---- Session stats: context usage + cost (composer indicator) ----
+// Live runtimes report AgentSession.getSessionStats() (trailing estimates
+// included). Evicted sessions fall back to persisted entries + the last
+// assistant usage, mirroring the TUI footer math.
+function summarizeSessionEntries(entries: any[]) {
+  const totals = { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, cost: 0, total: 0 };
+  const byKey = new Map<string, { cost: number; tokens: number }>();
+  let userMessages = 0;
+  let assistantMessages = 0;
+  let toolCalls = 0;
+  let toolResults = 0;
+  let totalMessages = 0;
+  const add = (usage: any, key: string) => {
+    if (!usage) return;
+    const input = usage.input || 0;
+    const output = usage.output || 0;
+    const cacheRead = usage.cacheRead || 0;
+    const cacheWrite = usage.cacheWrite || 0;
+    const cost = usage.cost?.total || 0;
+    const tokens = input + output + cacheRead + cacheWrite;
+    totals.input += input;
+    totals.output += output;
+    totals.cacheRead += cacheRead;
+    totals.cacheWrite += cacheWrite;
+    totals.cost += cost;
+    totals.total += tokens;
+    if (tokens > 0 || cost > 0) {
+      const cur = byKey.get(key) ?? { cost: 0, tokens: 0 };
+      cur.cost += cost;
+      cur.tokens += tokens;
+      byKey.set(key, cur);
+    }
+  };
+  for (const entry of entries) {
+    if (!entry || typeof entry !== "object") continue;
+    if (entry.type === "branch_summary" || entry.type === "compaction") {
+      add((entry as any).usage, "Tools/summaries");
+      continue;
+    }
+    if (entry.type !== "message") continue;
+    const message: any = (entry as any).message;
+    if (!message) continue;
+    totalMessages++;
+    if (message.role === "user") {
+      userMessages++;
+    } else if (message.role === "toolResult") {
+      toolResults++;
+      add(message.usage, "Tools/summaries");
+    } else if (message.role === "assistant") {
+      assistantMessages++;
+      if (Array.isArray(message.content)) {
+        toolCalls += message.content.filter((c: any) => c?.type === "toolCall").length;
+      }
+      add(message.usage, `${message.provider ?? "unknown"}/${message.responseModel ?? message.model ?? "unknown"}`);
+    }
+  }
+  const breakdown = [...byKey.entries()]
+    .map(([key, v]) => ({ key, cost: v.cost, tokens: v.tokens }))
+    .sort((a, b) => b.cost - a.cost || b.tokens - a.tokens);
+  return { totals, breakdown, counts: { userMessages, assistantMessages, toolCalls, toolResults, totalMessages } };
+}
+
+function contextTokensOf(usage: any): number {
+  if (!usage) return 0;
+  if (typeof usage.totalTokens === "number" && usage.totalTokens > 0) return usage.totalTokens;
+  return (usage.input || 0) + (usage.output || 0) + (usage.cacheRead || 0) + (usage.cacheWrite || 0);
+}
+
+app.get("/api/session/stats", async (req, res) => {
+  try {
+    const file = req.query.file as string;
+    if (!file) throw new ApiError("missing file query param");
+    const key = normalisePath(file);
+    const live = runtimeEntries.get(key);
+    if (live) {
+      touchRuntime(live);
+      const session: any = live.runtime.session;
+      const stats = session.getSessionStats();
+      const { totals, breakdown, counts } = summarizeSessionEntries(session.sessionManager.getEntries());
+      return res.json({
+        file: live.sessionFile,
+        tokens: { input: totals.input, output: totals.output, cacheRead: totals.cacheRead, cacheWrite: totals.cacheWrite, total: totals.total },
+        cost: totals.cost,
+        contextUsage: stats.contextUsage ?? null,
+        breakdown,
+        counts,
+      });
+    }
+    try {
+      await fs.access(key);
+    } catch {
+      throw new ApiError("session file does not exist", 404);
+    }
+    const sm: any = SessionManager.open(key);
+    const entries = sm.getEntries();
+    const { totals, breakdown, counts } = summarizeSessionEntries(entries);
+    let contextWindow = 0;
+    try {
+      const model = sm.buildSessionContext()?.model as { provider?: string; modelId?: string; id?: string } | null;
+      if (model?.provider) {
+        const mr = await getModelRuntime();
+        const found = (mr as any).getModel?.(model.provider, (model as any).modelId ?? (model as any).id);
+        if (found) contextWindow = found.contextWindow ?? 0;
+      }
+    } catch {
+      // Model resolution is best effort; totals still report.
+    }
+    let contextUsage: { tokens: number | null; contextWindow: number; percent: number | null } | null = null;
+    if (contextWindow > 0) {
+      let branch: any[] = [];
+      try {
+        branch = sm.getBranch();
+      } catch {
+        branch = entries;
+      }
+      let boundary = -1;
+      for (let i = branch.length - 1; i >= 0; i--) {
+        if (branch[i]?.type === "compaction") {
+          boundary = i;
+          break;
+        }
+      }
+      let tokens: number | null = null;
+      for (let i = branch.length - 1; i > boundary; i--) {
+        const message: any = branch[i]?.type === "message" ? (branch[i] as any).message : null;
+        if (!message || message.role !== "assistant") continue;
+        if (message.stopReason === "aborted" || message.stopReason === "error") continue;
+        const t = contextTokensOf(message.usage);
+        if (t > 0) {
+          tokens = t;
+          break;
+        }
+      }
+      if (tokens != null) {
+        contextUsage = { tokens, contextWindow, percent: (tokens / contextWindow) * 100 };
+      } else if (boundary >= 0) {
+        contextUsage = { tokens: null, contextWindow, percent: null };
+      } else {
+        contextUsage = { tokens: 0, contextWindow, percent: 0 };
+      }
+    }
+    res.json({
+      file: key,
+      tokens: { input: totals.input, output: totals.output, cacheRead: totals.cacheRead, cacheWrite: totals.cacheWrite, total: totals.total },
+      cost: totals.cost,
+      contextUsage,
+      breakdown,
+      counts,
+    });
+  } catch (error) {
+    res.status(errorStatus(error)).json({ error: errorMessage(error) });
+  }
+});
+
 app.use("/api", (_req, res) => {
   res.status(404).json({ error: "not found" });
 });

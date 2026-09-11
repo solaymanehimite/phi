@@ -67,3 +67,7 @@ _Avoid_: autosave, unsent message
 ### Tab
 An open session handle in the header bar, including the special New Chat draft tab.
 _Avoid_: window, session tab
+
+### Context Indicator
+The composer ring showing session context usage, opening cost stats on click.
+_Avoid_: token ring, usage badge

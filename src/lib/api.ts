@@ -216,6 +216,40 @@ export async function redoTurn(sessionFile: string, cwd?: string): Promise<NavRe
   return jsonOrThrow(res);
 }
 
+export type SessionStatsTokens = {
+  input: number;
+  output: number;
+  cacheRead: number;
+  cacheWrite: number;
+  total: number;
+};
+
+export type SessionContextUsage = {
+  tokens: number | null;
+  contextWindow: number;
+  percent: number | null;
+};
+
+export type SessionStatsResponse = {
+  file: string;
+  tokens: SessionStatsTokens;
+  cost: number;
+  contextUsage: SessionContextUsage | null;
+  breakdown: Array<{ key: string; cost: number; tokens: number }>;
+  counts?: {
+    userMessages: number;
+    assistantMessages: number;
+    toolCalls: number;
+    toolResults: number;
+    totalMessages: number;
+  };
+};
+
+export async function getSessionStats(file: string): Promise<SessionStatsResponse> {
+  const res = await apiFetch(`/session/stats?file=${encodeURIComponent(file)}`);
+  return jsonOrThrow(res);
+}
+
 export async function abortPrompt(sessionFile: string): Promise<{ ok: boolean; active: boolean }> {
   const res = await apiFetch(`/abort`, {
     method: "POST",
