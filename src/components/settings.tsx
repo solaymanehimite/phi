@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useMemo, useState, type ComponentType } from "react";
 import { useTheme, useEffectiveTheme, type Theme } from "../hooks/useTheme";
+import { useCustomThemes, setActiveCustomThemeId, clearActiveCustomTheme } from "../hooks/useCustomThemes";
+import { formatThemeForAppCss, formatThemeJson, parseThemeJson } from "../lib/custom-themes";
 import { IconCheckFilled, IconChevronDownFilled, IconKeyFilled, IconPaletteFilled } from "@tabler/icons-react";
 import { useClose } from "@headlessui/react";
 import { Alert } from "./ui/alert";
@@ -245,6 +247,136 @@ function SchemePreviewPane({ light }: { light: boolean }) {
     );
 }
 
+function CustomThemesSection() {
+    const { themes, appliedTheme, activeTheme } = useCustomThemes();
+    const { setTheme } = useTheme();
+    const [renamingId, setRenamingId] = useState<string | null>(null);
+    const [renameDraft, setRenameDraft] = useState("");
+    const [notice, setNotice] = useState<string | null>(null);
+    const [importOpen, setImportOpen] = useState(false);
+    const [importText, setImportText] = useState("");
+    const { renameTheme, deleteTheme, importTheme } = useCustomThemes();
+
+    const copyText = async (text: string, msg: string) => {
+        try {
+            await navigator.clipboard.writeText(text);
+            setNotice(msg);
+            setTimeout(() => setNotice(null), 1600);
+        } catch {
+            setNotice("Copy failed.");
+        }
+    };
+
+    const handleApply = (id: string, base: "light" | "dark") => {
+        setTheme(base);
+        setActiveCustomThemeId(id);
+    };
+
+    const handleStop = () => {
+        clearActiveCustomTheme();
+    };
+
+    const handleImport = () => {
+        try {
+            const theme = parseThemeJson(importText);
+            importTheme(theme);
+            setImportText("");
+            setImportOpen(false);
+            setNotice(`Imported "${theme.name}".`);
+            setTimeout(() => setNotice(null), 1600);
+        } catch (e) {
+            setNotice(e instanceof Error ? e.message : "Import failed.");
+        }
+    };
+
+    return (
+        <div>
+            <div className="flex items-baseline justify-between">
+                <h3 className="text-[12px] font-semibold tracking-wide text-phi-text-muted">Custom themes</h3>
+                <button
+                    onClick={() => setImportOpen((v) => !v)}
+                    className="text-[12px] text-phi-text-tertiary underline hover:text-phi-text-secondary"
+                >
+                    {importOpen ? "Close import" : "Import JSON"}
+                </button>
+            </div>
+            <p className="mt-1 text-[12px] leading-snug text-phi-text-muted">
+                Saved from the floating color editor. A custom theme pins its light or dark base, so you can iterate safely then copy its values into App.css when it is ready to become the bundled theme.
+            </p>
+            {importOpen && (
+                <div className="mt-3 space-y-2 rounded-2xl border border-phi-border bg-phi-bg-surface p-3">
+                    <textarea
+                        value={importText}
+                        onChange={(e) => setImportText(e.target.value)}
+                        placeholder='Paste a theme JSON { name, base, tokens }'
+                        rows={4}
+                        spellCheck={false}
+                        className="w-full rounded-lg border border-phi-border bg-phi-bg-sunken p-2 font-mono text-[11px] text-phi-text-secondary outline-none focus:border-phi-accent/40"
+                    />
+                    <div className="flex justify-end">
+                        <Button onClick={handleImport} variant="secondary" size="xs">Import theme</Button>
+                    </div>
+                </div>
+            )}
+            <div className="mt-3 space-y-2">
+                {themes.length === 0 && (
+                    <div className="rounded-2xl border border-dashed border-phi-border px-4 py-4 text-[12px] leading-snug text-phi-text-muted">
+                        No custom themes yet. Enable Advanced Settings, tweak colors with the brush button in a chat, then Save new. Your draft stays live until you save.
+                    </div>
+                )}
+                {themes.map((t) => {
+                    const isApplied = appliedTheme?.id === t.id;
+                    const isActive = activeTheme?.id === t.id;
+                    const swatches = [t.tokens["--color-phi-accent"], t.tokens["--color-phi-bg-app"], t.tokens["--color-phi-text-primary"]].filter(Boolean) as string[];
+                    return (
+                        <div key={t.id} className={`rounded-2xl border bg-phi-bg-surface px-4 py-3 ${isApplied ? "border-phi-accent ring-1 ring-phi-accent" : "border-phi-border"}`}>
+                            <div className="flex items-center gap-3">
+                                <span aria-hidden className="flex shrink-0 items-center">
+                                    {swatches.map((c, i) => (
+                                        <span key={i} style={{ backgroundColor: c }} className={`size-4 rounded-full border border-phi-border ${i > 0 ? "-ml-1.5" : ""}`} />
+                                    ))}
+                                </span>
+                                <div className="min-w-0 flex-1">
+                                    {renamingId === t.id ? (
+                                        <input
+                                            autoFocus
+                                            value={renameDraft}
+                                            onChange={(e) => setRenameDraft(e.target.value)}
+                                            onBlur={() => { renameTheme(t.id, renameDraft); setRenamingId(null); }}
+                                            onKeyDown={(e) => {
+                                                if (e.key === "Enter") { renameTheme(t.id, renameDraft); setRenamingId(null); }
+                                                if (e.key === "Escape") setRenamingId(null);
+                                            }}
+                                            className="w-full rounded-md border border-phi-accent/40 bg-phi-bg-sunken px-1.5 py-0.5 text-[13px] text-phi-text-primary outline-none"
+                                        />
+                                    ) : (
+                                        <p className="truncate text-[13px] font-medium text-phi-text-primary">{t.name}</p>
+                                    )}
+                                    <p className="mt-0.5 text-[11px] text-phi-text-muted">
+                                        {t.base} base{isApplied ? " · applied" : isActive ? " · saved (switch back to its base to apply)" : ""} · {Object.keys(t.tokens).length} tokens
+                                    </p>
+                                </div>
+                                {isApplied ? (
+                                    <Button onClick={handleStop} variant="secondary" size="xs">Stop using</Button>
+                                ) : (
+                                    <Button onClick={() => handleApply(t.id, t.base)} variant="secondary" size="xs">Apply</Button>
+                                )}
+                            </div>
+                            <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 px-7">
+                                <button onClick={() => { setRenamingId(t.id); setRenameDraft(t.name); }} className="text-[11px] text-phi-text-tertiary underline hover:text-phi-text-secondary">Rename</button>
+                                <button onClick={() => void copyText(formatThemeForAppCss(t), `Copied "${t.name}" for App.css.`)} className="text-[11px] text-phi-text-tertiary underline hover:text-phi-text-secondary">Copy for App.css</button>
+                                <button onClick={() => void copyText(formatThemeJson(t), `Copied "${t.name}" JSON.`)} className="text-[11px] text-phi-text-tertiary underline hover:text-phi-text-secondary">Copy JSON</button>
+                                <button onClick={() => { if (confirm(`Delete "${t.name}"?`)) deleteTheme(t.id); }} className="text-[11px] text-phi-error-text underline hover:opacity-80">Delete</button>
+                            </div>
+                        </div>
+                    );
+                })}
+            </div>
+            {notice && <p className="mt-2 text-[12px] text-phi-text-tertiary">{notice}</p>}
+        </div>
+    );
+}
+
 function AppearanceTab() {
     const { theme, setTheme } = useTheme();
 
@@ -259,7 +391,7 @@ function AppearanceTab() {
                         return (
                             <span key={t} className="min-w-0">
                                 <button
-                                    onClick={() => setTheme(t)}
+                                    onClick={() => { setTheme(t); clearActiveCustomTheme(); }}
                                     aria-pressed={selected}
                                     className={`block w-full rounded-2xl border bg-phi-bg-surface p-2 transition ${selected ? "border-phi-accent ring-1 ring-phi-accent" : "border-phi-border hover:border-phi-border-strong"}`}
                                 >
@@ -271,6 +403,8 @@ function AppearanceTab() {
                     })}
                 </div>
             </div>
+
+            <CustomThemesSection />
 
             <CodeThemeSection />
 

@@ -1,0 +1,58 @@
+export type ThemeToken = {
+  name: string;
+  label: string;
+  group: string;
+};
+
+export const THEME_TOKENS: ThemeToken[] = [
+  { name: "--color-phi-bg-app", label: "bg-app", group: "Background" },
+  { name: "--color-phi-bg-main", label: "bg-main", group: "Background" },
+  { name: "--color-phi-bg-sidebar", label: "bg-sidebar", group: "Background" },
+  { name: "--color-phi-bg-surface", label: "bg-surface", group: "Background" },
+  { name: "--color-phi-bg-elevated", label: "bg-elevated", group: "Background" },
+  { name: "--color-phi-bg-sunken", label: "bg-sunken", group: "Background" },
+  { name: "--color-phi-bg-inverse", label: "bg-inverse", group: "Background" },
+  { name: "--color-phi-bg-disabled", label: "bg-disabled", group: "Background" },
+  { name: "--color-phi-text-primary", label: "text-primary", group: "Text" },
+  { name: "--color-phi-text-secondary", label: "text-secondary", group: "Text" },
+  { name: "--color-phi-text-tertiary", label: "text-tertiary", group: "Text" },
+  { name: "--color-phi-text-muted", label: "text-muted", group: "Text" },
+  { name: "--color-phi-text-faint", label: "text-faint", group: "Text" },
+  { name: "--color-phi-text-inverse", label: "text-inverse", group: "Text" },
+  { name: "--color-phi-text-disabled", label: "text-disabled", group: "Text" },
+  { name: "--color-phi-text-brand", label: "text-brand", group: "Text" },
+  { name: "--color-phi-icon", label: "icon", group: "Text" },
+  { name: "--color-phi-icon-active", label: "icon-active", group: "Text" },
+  { name: "--color-phi-accent", label: "accent", group: "Accent" },
+  { name: "--color-phi-white", label: "white", group: "Accent" },
+  { name: "--color-phi-white-muted", label: "white-muted", group: "Accent" },
+  { name: "--color-phi-border", label: "border", group: "Border" },
+  { name: "--color-phi-border-strong", label: "border-strong", group: "Border" },
+  { name: "--color-phi-border-faint", label: "border-faint", group: "Border" },
+  { name: "--color-phi-border-subtle", label: "border-subtle", group: "Border" },
+  { name: "--color-phi-separator", label: "separator", group: "Border" },
+  { name: "--color-phi-overlay", label: "overlay", group: "Overlay" },
+  { name: "--color-phi-overlay-hover", label: "overlay-hover", group: "Overlay" },
+  { name: "--color-phi-overlay-active", label: "overlay-active", group: "Overlay" },
+  { name: "--color-phi-overlay-strong", label: "overlay-strong", group: "Overlay" },
+  { name: "--color-phi-overlay-muted", label: "overlay-muted", group: "Overlay" },
+  { name: "--color-phi-overlay-code", label: "overlay-code", group: "Overlay" },
+  { name: "--color-phi-overlay-focus", label: "overlay-focus", group: "Overlay" },
+  { name: "--color-phi-input-border", label: "input-border", group: "Input" },
+  { name: "--color-phi-input-border-focus", label: "input-border-focus", group: "Input" },
+  { name: "--color-phi-input-bg", label: "input-bg", group: "Input" },
+  { name: "--color-phi-input-bg-focus", label: "input-bg-focus", group: "Input" },
+  { name: "--color-phi-error", label: "error", group: "Status" },
+  { name: "--color-phi-error-bg", label: "error-bg", group: "Status" },
+  { name: "--color-phi-error-border", label: "error-border", group: "Status" },
+  { name: "--color-phi-error-text", label: "error-text", group: "Status" },
+  { name: "--color-phi-streaming", label: "streaming", group: "Status" },
+  { name: "--color-phi-thinking-low", label: "thinking-low", group: "Thinking" },
+  { name: "--color-phi-thinking-minimal", label: "thinking-minimal", group: "Thinking" },
+  { name: "--color-phi-thinking-medium", label: "thinking-medium", group: "Thinking" },
+  { name: "--color-phi-thinking-high", label: "thinking-high", group: "Thinking" },
+  { name: "--color-phi-thinking-xhigh", label: "thinking-xhigh", group: "Thinking" },
+  { name: "--color-phi-thinking-max", label: "thinking-max", group: "Thinking" },
+];
+
+export const THEME_TOKEN_NAMES = THEME_TOKENS.map((t) => t.name);

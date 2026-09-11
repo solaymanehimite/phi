@@ -37,6 +37,7 @@ import { useSessionStats } from "./hooks/useSessionStats";
 import { createSession, health, redoTurn, streamContinue, undoTurn } from "./lib/api";
 import { CompactionIndicator } from "./components/compaction-indicator";
 import { useEffectiveTheme, useTheme } from "./hooks/useTheme";
+import { refreshCustomThemeApplication, clearActiveCustomTheme } from "./hooks/useCustomThemes";
 import { brandingUrl } from "./lib/themed-assets";
 import { useHealth } from "./hooks/useHealth";
 import { FatalState } from "./components/fatal";
@@ -191,6 +192,10 @@ export default function App() {
     const { theme, setTheme } = useTheme();
     const effectiveTheme = useEffectiveTheme();
     const themeEditorEnabled = useThemeEditorEnabled();
+    // Re-apply the saved custom theme (if any) on boot, after data-theme is set.
+    useEffect(() => {
+        refreshCustomThemeApplication();
+    }, []);
     const healthHook = useHealth(3000);
     const [settingsActive, setSettingsActive] = useState(false);
     const [uiDemoActive, setUiDemoActive] = useState(false);
@@ -609,6 +614,7 @@ export default function App() {
     }, [chat.clear, ensureNewChatTab, focusComposer]);
 
     const handleToggleTheme = useCallback(() => {
+        clearActiveCustomTheme();
         setTheme(effectiveTheme === "dark" ? "light" : "dark");
     }, [effectiveTheme, setTheme]);
 

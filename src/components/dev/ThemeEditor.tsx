@@ -7,7 +7,9 @@ import {
     IconCopyFilled,
 } from "@tabler/icons-react";
 import { useEffect, useMemo, useState, useSyncExternalStore } from "react";
-import { HexColorInput } from "react-colorful";
+import { useCustomThemes, setActiveCustomThemeId, clearActiveCustomTheme } from "../../hooks/useCustomThemes";
+import { useEffectiveTheme, getStoredTheme, setStoredTheme } from "../../hooks/useTheme";
+import { formatThemeForAppCss, readLiveTokens } from "../../lib/custom-themes";
 
 const THEME_EDITOR_ENABLED_KEY = "phi:theme-editor-enabled";
 const themeEditorEnabledListeners = new Set<() => void>();
@@ -302,12 +304,44 @@ function ChannelSlider(props: {
     value: number;
     min: number;
     max: number;
+    step?: number;
+    precision?: number;
     gradient: string;
     ariaLabel: string;
     suffix?: string;
     onChange: (next: number) => void;
 }) {
-    const { label, value, min, max, gradient, ariaLabel, suffix, onChange } = props;
+    const { label, value, min, max, step = 0.1, precision = 1, gradient, ariaLabel, suffix, onChange } = props;
+    const [draft, setDraft] = useState<string | null>(null);
+    const [focused, setFocused] = useState(false);
+
+    const format = (n: number): string => {
+        if (precision === 0) return String(Math.round(n));
+        const fixed = n.toFixed(precision);
+        // trim trailing zeros: "42.0" -> "42"
+        return fixed.includes(".") ? fixed.replace(/\.?0+$/, "") : fixed;
+    };
+
+    // Clear a stale draft once the committed value catches up from outside
+    // (e.g. another control changed the same channel).
+    useEffect(() => {
+        if (!focused) setDraft(null);
+    }, [value, focused]);
+
+    const commit = (raw: string) => {
+        if (raw.trim() === "") {
+            setDraft(null);
+            return;
+        }
+        const n = Number(raw);
+        if (Number.isNaN(n)) {
+            setDraft(null);
+            return;
+        }
+        onChange(clamp(n, min, max));
+        setDraft(null);
+    };
+
     return (
         <div className="flex items-center gap-2">
             <span
@@ -321,8 +355,8 @@ function ChannelSlider(props: {
                 aria-label={ariaLabel}
                 min={min}
                 max={max}
-                step={1}
-                value={Math.round(value)}
+                step={step}
+                value={clamp(value, min, max)}
                 onChange={(e) => onChange(clamp(Number(e.target.value), min, max))}
                 className="phi-color-slider min-w-0 flex-1"
                 style={{ backgroundImage: gradient }}
@@ -333,13 +367,31 @@ function ChannelSlider(props: {
                     aria-label={`${ariaLabel} value`}
                     min={min}
                     max={max}
-                    step={1}
-                    value={Math.round(value)}
+                    step={step}
+                    value={draft ?? format(clamp(value, min, max))}
                     onChange={(e) => {
-                        if (e.target.value === "") return;
-                        const n = Number(e.target.value);
-                        if (Number.isNaN(n)) return;
-                        onChange(clamp(Math.round(n), min, max));
+                        // Buffer while typing; only commit on Enter/blur so
+                        // intermediate values like "2" (of "255") don't snap.
+                        setDraft(e.target.value);
+                    }}
+                    onFocus={() => {
+                        setFocused(true);
+                        setDraft(format(clamp(value, min, max)));
+                    }}
+                    onBlur={(e) => {
+                        setFocused(false);
+                        commit(e.target.value);
+                    }}
+                    onKeyDown={(e) => {
+                        if (e.key === "Enter") {
+                            e.preventDefault();
+                            commit((e.target as HTMLInputElement).value);
+                            (e.target as HTMLInputElement).blur();
+                        } else if (e.key === "Escape") {
+                            e.preventDefault();
+                            setDraft(null);
+                            (e.target as HTMLInputElement).blur();
+                        }
                     }}
                     className="min-w-0 flex-1 bg-transparent text-right font-mono text-[10px] text-phi-text-secondary outline-none [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
                 />
@@ -351,24 +403,73 @@ function ChannelSlider(props: {
     );
 }
 
+function HexField(props: { hex: string; onCommit: (nextHex: string) => void }) {
+    const { hex, onCommit } = props;
+    const [draft, setDraft] = useState<string | null>(null);
+    const [focused, setFocused] = useState(false);
+
+    useEffect(() => {
+        if (!focused) setDraft(null);
+    }, [hex, focused]);
+
+    const isValidHex = (v: string) => /^#[0-9a-fA-F]{6}$/.test(v) || /^#[0-9a-fA-F]{3}$/.test(v);
+
+    const commit = (raw: string) => {
+        const v = raw.trim();
+        if (v === "") {
+            setDraft(null);
+            return;
+        }
+        const normalized = v.startsWith("#") ? v : `#${v}`;
+        if (isValidHex(normalized)) onCommit(normalized.slice(0, 7));
+        setDraft(null);
+    };
+
+    return (
+        <input
+            aria-label="Hex color value"
+            spellCheck={false}
+            value={draft ?? hex}
+            onChange={(e) => setDraft(e.target.value)}
+            onFocus={() => {
+                setFocused(true);
+                setDraft(hex);
+            }}
+            onBlur={(e) => {
+                setFocused(false);
+                commit(e.target.value);
+            }}
+            onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                    e.preventDefault();
+                    commit((e.target as HTMLInputElement).value);
+                    (e.target as HTMLInputElement).blur();
+                } else if (e.key === "Escape") {
+                    e.preventDefault();
+                    setDraft(null);
+                    (e.target as HTMLInputElement).blur();
+                }
+            }}
+            className="w-[88px] rounded-md border border-phi-border bg-phi-bg-sunken px-1.5 py-1 text-center font-mono text-[11px] text-phi-text-secondary outline-none focus:border-phi-accent/40"
+        />
+    );
+}
+
 function HsvRgbSliders(props: { hex: string; onChange: (nextHex: string) => void }) {
     const { hex, onChange } = props;
     const [r, g, b] = useMemo(() => hexToRgb(hex), [hex]);
     const [h, s, v] = useMemo(() => rgbToHsv(r, g, b), [r, g, b]);
-    const rh = Math.round(h);
-    const rs = Math.round(s);
-    const rv = Math.round(v);
 
     const setRgb = (nr: number, ng: number, nb: number) => {
-        onChange(rgbToHex(nr, ng, nb));
+        onChange(rgbToHex(Math.round(nr), Math.round(ng), Math.round(nb)));
     };
     const setHsv = (nh: number, ns: number, nv: number) => {
         onChange(hsvToHex(nh, ns, nv));
     };
 
-    const sStart = hsvToHex(rh, 0, rv);
-    const sEnd = hsvToHex(rh, 100, rv);
-    const vEnd = hsvToHex(rh, rs === 0 ? 0 : rs, 100);
+    const sStart = hsvToHex(h, 0, v);
+    const sEnd = hsvToHex(h, 100, v);
+    const vEnd = hsvToHex(h, s === 0 ? 0 : s, 100);
 
     return (
         <div className="space-y-3 px-0.5 pt-2.5">
@@ -378,33 +479,39 @@ function HsvRgbSliders(props: { hex: string; onChange: (nextHex: string) => void
                 </p>
                 <ChannelSlider
                     label="H"
-                    value={rh}
+                    value={h}
                     min={0}
                     max={360}
+                    step={0.1}
+                    precision={1}
                     ariaLabel="Hue"
                     suffix="°"
                     gradient="linear-gradient(to right, #ff0000, #ffff00, #00ff00, #00ffff, #0000ff, #ff00ff, #ff0000)"
-                    onChange={(nh) => setHsv(nh, rs, rv)}
+                    onChange={(nh) => setHsv(nh, s, v)}
                 />
                 <ChannelSlider
                     label="S"
-                    value={rs}
+                    value={s}
                     min={0}
                     max={100}
+                    step={0.1}
+                    precision={1}
                     ariaLabel="Saturation"
                     suffix="%"
                     gradient={`linear-gradient(to right, ${sStart}, ${sEnd})`}
-                    onChange={(ns) => setHsv(rh, ns, rv)}
+                    onChange={(ns) => setHsv(h, ns, v)}
                 />
                 <ChannelSlider
                     label="V"
-                    value={rv}
+                    value={v}
                     min={0}
                     max={100}
+                    step={0.1}
+                    precision={1}
                     ariaLabel="Value (brightness)"
                     suffix="%"
                     gradient={`linear-gradient(to right, #000000, ${vEnd})`}
-                    onChange={(nv) => setHsv(rh, rs, nv)}
+                    onChange={(nv) => setHsv(h, s, nv)}
                 />
             </div>
             <div className="space-y-1.5">
@@ -416,6 +523,8 @@ function HsvRgbSliders(props: { hex: string; onChange: (nextHex: string) => void
                     value={r}
                     min={0}
                     max={255}
+                    step={1}
+                    precision={0}
                     ariaLabel="Red"
                     gradient={`linear-gradient(to right, rgb(0 ${g} ${b}), rgb(255 ${g} ${b}))`}
                     onChange={(nr) => setRgb(nr, g, b)}
@@ -425,6 +534,8 @@ function HsvRgbSliders(props: { hex: string; onChange: (nextHex: string) => void
                     value={g}
                     min={0}
                     max={255}
+                    step={1}
+                    precision={0}
                     ariaLabel="Green"
                     gradient={`linear-gradient(to right, rgb(${r} 0 ${b}), rgb(${r} 255 ${b}))`}
                     onChange={(ng) => setRgb(r, ng, b)}
@@ -434,6 +545,8 @@ function HsvRgbSliders(props: { hex: string; onChange: (nextHex: string) => void
                     value={b}
                     min={0}
                     max={255}
+                    step={1}
+                    precision={0}
                     ariaLabel="Blue"
                     gradient={`linear-gradient(to right, rgb(${r} ${g} 0), rgb(${r} ${g} 255))`}
                     onChange={(nb) => setRgb(r, g, nb)}
@@ -471,7 +584,13 @@ export function ThemeEditorToggle() {
 export function ThemeEditor({ className = "" }: ThemeEditorProps) {
     const [values, setValues] = useState<Record<string, string>>({});
     const [active, setActive] = useState<string | null>(null);
-    const [copied, setCopied] = useState(false);
+    const [copied, setCopied] = useState<"css" | "appcss" | null>(null);
+    const [themeName, setThemeName] = useState("");
+    const [saveBase, setSaveBase] = useState<"light" | "dark" | null>(null);
+    const [saveMsg, setSaveMsg] = useState<string | null>(null);
+    const { activeTheme, createTheme, updateThemeTokens } = useCustomThemes();
+    const effective = useEffectiveTheme();
+    const resolvedBase = saveBase ?? activeTheme?.base ?? effective;
 
     // hydrate from computed styles
     useEffect(() => {
@@ -482,6 +601,39 @@ export function ThemeEditor({ className = "" }: ThemeEditorProps) {
         }
         setValues(initial);
     }, []);
+
+    const refreshFromLive = () => {
+        const live = readLiveTokens();
+        setValues(live);
+    };
+
+    // When the stock base flips (e.g. previewing light vs dark) or a custom
+    // theme is applied from Settings, re-read so the sliders match the screen.
+    useEffect(() => {
+        const onThemeChange = () => refreshFromLive();
+        const observer = new MutationObserver((mutations) => {
+            if (mutations.some((m) => m.attributeName === "data-theme")) onThemeChange();
+        });
+        observer.observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
+        window.addEventListener("phi:custom-theme-applied", onThemeChange);
+        return () => {
+            observer.disconnect();
+            window.removeEventListener("phi:custom-theme-applied", onThemeChange);
+        };
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
+
+    const handlePreviewBase = (b: "light" | "dark") => {
+        setSaveBase(b);
+        setSaveMsg(null);
+        // Switching preview base gives a clean bundled base to edit from.
+        if (getStoredTheme() !== b) {
+            setStoredTheme(b);
+            clearActiveCustomTheme();
+            // Overrides are cleared synchronously; re-read on next frame.
+            requestAnimationFrame(() => refreshFromLive());
+        }
+    };
 
     const setToken = (name: string, hex: string) => {
         const original = values[name] ?? getComputedVar(name) ?? hex;
@@ -506,8 +658,45 @@ export function ThemeEditor({ className = "" }: ThemeEditorProps) {
 
     const copyCss = async () => {
         await navigator.clipboard.writeText(cssCode);
-        setCopied(true);
-        setTimeout(() => setCopied(false), 1200);
+        setCopied("css");
+        setTimeout(() => setCopied(null), 1200);
+    };
+
+    const copyForAppCss = async () => {
+        const live = readLiveTokens();
+        const fake = {
+            id: activeTheme?.id ?? "draft",
+            name: themeName.trim() || activeTheme?.name || "Custom",
+            base: resolvedBase,
+            tokens: live,
+            createdAt: Date.now(),
+            updatedAt: Date.now(),
+        };
+        await navigator.clipboard.writeText(formatThemeForAppCss(fake));
+        setCopied("appcss");
+        setTimeout(() => setCopied(null), 1200);
+    };
+
+    const handleSaveNew = () => {
+        const name = themeName.trim();
+        if (!name) {
+            setSaveMsg("Give the theme a name first.");
+            return;
+        }
+        const live = readLiveTokens();
+        const created = createTheme(name, resolvedBase, live);
+        setActiveCustomThemeId(created.id);
+        setSaveMsg(`Saved "${created.name}" (${created.base}).`);
+    };
+
+    const handleUpdateActive = () => {
+        if (!activeTheme) {
+            setSaveMsg("No custom theme is active.");
+            return;
+        }
+        const live = readLiveTokens();
+        updateThemeTokens(activeTheme.id, live);
+        setSaveMsg(`Updated "${activeTheme.name}".`);
     };
 
     const groups = useMemo(() => {
@@ -562,12 +751,9 @@ export function ThemeEditor({ className = "" }: ThemeEditorProps) {
                                                         {t.label}
                                                     </p>
                                                 </div>
-                                                <HexColorInput
-                                                    prefixed
-                                                    alpha={false}
-                                                    className="w-[88px] rounded-md border border-phi-border bg-phi-bg-sunken px-1.5 py-1 text-center font-mono text-[11px] text-phi-text-secondary outline-none focus:border-phi-accent/40"
-                                                    color={hex}
-                                                    onChange={(nextHex) => setToken(t.name, nextHex)}
+                                                <HexField
+                                                    hex={hex}
+                                                    onCommit={(nextHex) => setToken(t.name, nextHex)}
                                                 />
                                             </div>
                                             {isActive && (
@@ -586,20 +772,77 @@ export function ThemeEditor({ className = "" }: ThemeEditorProps) {
                     ))}
                 </div>
 
-                <div className="border-t border-phi-border-faint p-2">
-                    <Button
-                        onClick={copyCss}
-                        variant="primary"
-                        size="sm"
-                        className="w-full !rounded-xl !py-2"
-                    >
-                        {copied ? (
-                            <IconCheckFilled className="size-3.5" />
-                        ) : (
-                            <IconCopyFilled className="size-3.5" />
-                        )}
-                        {copied ? "Copied!" : "Copy CSS"}
-                    </Button>
+                <div className="border-t border-phi-border-faint p-2 space-y-2">
+                    <div className="rounded-xl bg-phi-bg-sunken p-2 space-y-2">
+                        <div className="flex items-center justify-between px-0.5">
+                            <p className="text-[11px] font-semibold text-phi-text-secondary">
+                                {activeTheme ? `Editing \u201c${activeTheme.name}\u201d (${activeTheme.base})` : "Save as custom theme"}
+                            </p>
+                            <button
+                                onClick={refreshFromLive}
+                                className="text-[11px] text-phi-text-tertiary underline hover:text-phi-text-secondary"
+                            >
+                                Re-read live
+                            </button>
+                        </div>
+                        <input
+                            value={themeName}
+                            onChange={(e) => setThemeName(e.target.value)}
+                            placeholder={activeTheme ? activeTheme.name : "My theme name"}
+                            aria-label="Custom theme name"
+                            className="w-full rounded-lg border border-phi-border bg-phi-bg-surface px-2 py-1.5 text-[12px] text-phi-text-primary outline-none placeholder:text-phi-text-faint focus:border-phi-accent/40"
+                        />
+                        <div className="flex items-center gap-1 rounded-lg border border-phi-border p-0.5">
+                            {(["light", "dark"] as const).map((b) => (
+                                <button
+                                    key={b}
+                                    onClick={() => handlePreviewBase(b)}
+                                    aria-pressed={resolvedBase === b}
+                                    className={`flex-1 rounded-md px-2 py-1 text-[11px] font-medium capitalize transition-colors ${resolvedBase === b ? "bg-phi-overlay-active text-phi-text-primary" : "text-phi-text-tertiary hover:text-phi-text-secondary"}`}
+                                >
+                                    {b}
+                                </button>
+                            ))}
+                        </div>
+                        <div className="flex gap-1.5">
+                            <Button onClick={handleSaveNew} variant="secondary" size="sm" className="flex-1 !rounded-lg !py-1.5 !text-[12px]">
+                                Save new
+                            </Button>
+                            {activeTheme && (
+                                <Button onClick={handleUpdateActive} variant="secondary" size="sm" className="flex-1 !rounded-lg !py-1.5 !text-[12px]">
+                                    Update active
+                                </Button>
+                            )}
+                        </div>
+                        {saveMsg && <p className="px-0.5 text-[11px] text-phi-text-tertiary">{saveMsg}</p>}
+                        <p className="px-0.5 text-[10.5px] leading-snug text-phi-text-faint">
+                            Saves locally and applies on its {resolvedBase} base. Use Copy for App.css to upstream it into the bundled theme.
+                        </p>
+                    </div>
+                    <div className="flex gap-1.5">
+                        <Button
+                            onClick={copyCss}
+                            variant="primary"
+                            size="sm"
+                            className="flex-1 !rounded-xl !py-2"
+                        >
+                            {copied === "css" ? (
+                                <IconCheckFilled className="size-3.5" />
+                            ) : (
+                                <IconCopyFilled className="size-3.5" />
+                            )}
+                            {copied === "css" ? "Copied!" : "Copy CSS"}
+                        </Button>
+                        <Button
+                            onClick={copyForAppCss}
+                            variant="secondary"
+                            size="sm"
+                            className="flex-1 !rounded-xl !py-2 !text-[12px]"
+                            title="Copy a block ready to paste into App.css"
+                        >
+                            {copied === "appcss" ? "Copied!" : "Copy for App.css"}
+                        </Button>
+                    </div>
                 </div>
             </PopoverContent>
         </Popover>

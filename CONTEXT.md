@@ -49,16 +49,20 @@ An OpenAI-compatible model endpoint defined by `{ baseUrl, apiKey }`, app-local 
 _Avoid_: integration, connection, credential, API config
 
 ### Theme
-A complete token set for one appearance (Dark, Light, or System which follows the OS). Hand-designed, not auto-inverted.
+A complete token set for one appearance (Dark, Light, or System which follows the OS, plus saved Custom themes pinned to a light or dark base). Stock themes are hand-designed, not auto-inverted.
 _Avoid_: skin, style, color scheme (in code)
+
+### Custom Theme
+A user-saved `{ name, base, tokens }` stored app-local in localStorage, applied as inline overrides on top of its light or dark base. Managed in Settings Appearance, created from the Playground. Copy for App.css upstreams it into the bundled theme.
+_Avoid_: skin, style
 
 ### Token
 A semantic CSS variable (`--color-phi-*`) that is the only allowed source of color. Hardcoded colors are a bug.
 _Avoid_: variable, color, constant
 
 ### Playground
-The temporary theme editor that mutates currently-applied tokens for preview. Resets on reload, exportable as JSON, not persisted as a theme.
-_Avoid_: theme editor, customizer, theme builder
+The floating theme editor that mutates currently-applied tokens for live preview. Unsaved tweaks are temporary and reset on reload. Save New persists the live tokens as a Custom theme; Update active overwrites the applied custom theme; Copy for App.css exports a paste-ready block for upstreaming into the bundled theme.
+_Avoid_: customizer, theme builder
 
 ### Draft
 Unsent composer text auto-saved per session (or per new-chat) to localStorage, indicated by a cursor icon next to the session name.
