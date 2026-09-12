@@ -1,14 +1,18 @@
 import { Popover, PopoverContent, PopoverTrigger } from "../ui/popover";
-import { Button } from "../ui/button";
+import { Button, buttonClass } from "../ui/button";
+import { Input } from "../ui/input";
 import { Switch } from "../ui/switch";
 import {
     IconBrush,
     IconCheckFilled,
+    IconChevronLeft,
     IconCopyFilled,
+    IconPencil,
+    IconPlusFilled,
 } from "@tabler/icons-react";
-import { useEffect, useMemo, useState, useSyncExternalStore } from "react";
-import { useCustomThemes, setActiveCustomThemeId, clearActiveCustomTheme } from "../../hooks/useCustomThemes";
-import { useEffectiveTheme, getStoredTheme, setStoredTheme } from "../../hooks/useTheme";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
+import { useCustomThemes, setActiveCustomThemeId } from "../../hooks/useCustomThemes";
+import { useEffectiveTheme, useTheme } from "../../hooks/useTheme";
 import { formatThemeForAppCss, readLiveTokens } from "../../lib/custom-themes";
 
 const THEME_EDITOR_ENABLED_KEY = "phi:theme-editor-enabled";
@@ -582,15 +586,45 @@ export function ThemeEditorToggle() {
 }
 
 export function ThemeEditor({ className = "" }: ThemeEditorProps) {
+    const [mode, setMode] = useState<"edit" | "save">("edit");
     const [values, setValues] = useState<Record<string, string>>({});
     const [active, setActive] = useState<string | null>(null);
-    const [copied, setCopied] = useState<"css" | "appcss" | null>(null);
+    const [copied, setCopied] = useState(false);
+    const [savedFlash, setSavedFlash] = useState(false);
     const [themeName, setThemeName] = useState("");
-    const [saveBase, setSaveBase] = useState<"light" | "dark" | null>(null);
-    const [saveMsg, setSaveMsg] = useState<string | null>(null);
-    const { activeTheme, createTheme, updateThemeTokens } = useCustomThemes();
+    const { appliedTheme, createTheme, updateThemeTokens, renameTheme } = useCustomThemes();
+    const { theme: storedTheme } = useTheme();
     const effective = useEffectiveTheme();
-    const resolvedBase = saveBase ?? activeTheme?.base ?? effective;
+    // What the sliders are editing right now: the applied custom theme, or
+    // the bundled base underneath. Switch themes elsewhere (e.g. Settings)
+    // to change the target — the editor just follows. Saving pins
+    // (or updates) exactly this.
+    const stockBase = storedTheme === "system" ? effective : storedTheme;
+    const customTarget = appliedTheme;
+    const targetBase = customTarget?.base ?? stockBase;
+
+    const editRef = useRef<HTMLDivElement>(null);
+    const formRef = useRef<HTMLDivElement>(null);
+    const nameInputRef = useRef<HTMLInputElement>(null);
+    const createButtonRef = useRef<HTMLButtonElement>(null);
+    const [contentHeight, setContentHeight] = useState<number | undefined>(undefined);
+
+    // Morph the popover height to fit the active view, like the directory picker.
+    useLayoutEffect(() => {
+        const el = mode === "edit" ? editRef.current : formRef.current;
+        if (!el) return;
+        const update = () => setContentHeight(el.offsetHeight);
+        update();
+        const ro = new ResizeObserver(update);
+        ro.observe(el);
+        return () => ro.disconnect();
+    }, [mode]);
+
+    // Keep focus on the active view's control across the morph.
+    useEffect(() => {
+        if (mode === "save") nameInputRef.current?.focus();
+        else createButtonRef.current?.focus();
+    }, [mode]);
 
     // hydrate from computed styles
     useEffect(() => {
@@ -607,8 +641,8 @@ export function ThemeEditor({ className = "" }: ThemeEditorProps) {
         setValues(live);
     };
 
-    // When the stock base flips (e.g. previewing light vs dark) or a custom
-    // theme is applied from Settings, re-read so the sliders match the screen.
+    // When the theme changes elsewhere (e.g. Settings) re-read so the
+    // sliders match the screen.
     useEffect(() => {
         const onThemeChange = () => refreshFromLive();
         const observer = new MutationObserver((mutations) => {
@@ -623,18 +657,6 @@ export function ThemeEditor({ className = "" }: ThemeEditorProps) {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
-    const handlePreviewBase = (b: "light" | "dark") => {
-        setSaveBase(b);
-        setSaveMsg(null);
-        // Switching preview base gives a clean bundled base to edit from.
-        if (getStoredTheme() !== b) {
-            setStoredTheme(b);
-            clearActiveCustomTheme();
-            // Overrides are cleared synchronously; re-read on next frame.
-            requestAnimationFrame(() => refreshFromLive());
-        }
-    };
-
     const setToken = (name: string, hex: string) => {
         const original = values[name] ?? getComputedVar(name) ?? hex;
         const alpha = getAlpha(original);
@@ -648,55 +670,45 @@ export function ThemeEditor({ className = "" }: ThemeEditorProps) {
         setValues((prev) => ({ ...prev, [name]: cssValue }));
     };
 
-    const cssCode = useMemo(() => {
-        const lines = TOKENS.map((t) => {
-            const v = values[t.name] ?? getComputedVar(t.name);
-            return `  ${t.name}: ${v};`;
-        }).join("\n");
-        return `:root {\n${lines}\n}`;
-    }, [values]);
-
-    const copyCss = async () => {
-        await navigator.clipboard.writeText(cssCode);
-        setCopied("css");
-        setTimeout(() => setCopied(null), 1200);
-    };
-
-    const copyForAppCss = async () => {
+    const copyAppCss = async () => {
         const live = readLiveTokens();
-        const fake = {
-            id: activeTheme?.id ?? "draft",
-            name: themeName.trim() || activeTheme?.name || "Custom",
-            base: resolvedBase,
+        const draft = {
+            id: customTarget?.id ?? "draft",
+            name: customTarget?.name ?? "Custom",
+            base: targetBase,
             tokens: live,
             createdAt: Date.now(),
             updatedAt: Date.now(),
         };
-        await navigator.clipboard.writeText(formatThemeForAppCss(fake));
-        setCopied("appcss");
-        setTimeout(() => setCopied(null), 1200);
+        await navigator.clipboard.writeText(formatThemeForAppCss(draft));
+        setCopied(true);
+        setTimeout(() => setCopied(false), 1200);
     };
 
-    const handleSaveNew = () => {
+    const flashSaved = () => {
+        setSavedFlash(true);
+        setTimeout(() => setSavedFlash(false), 1200);
+    };
+
+    const handleSave = () => {
         const name = themeName.trim();
-        if (!name) {
-            setSaveMsg("Give the theme a name first.");
-            return;
-        }
+        if (!name) return;
         const live = readLiveTokens();
-        const created = createTheme(name, resolvedBase, live);
-        setActiveCustomThemeId(created.id);
-        setSaveMsg(`Saved "${created.name}" (${created.base}).`);
+        if (customTarget) {
+            updateThemeTokens(customTarget.id, live);
+            if (name !== customTarget.name) renameTheme(customTarget.id, name);
+        } else {
+            const created = createTheme(name, targetBase, live);
+            setActiveCustomThemeId(created.id);
+        }
+        setThemeName("");
+        setMode("edit");
+        flashSaved();
     };
 
-    const handleUpdateActive = () => {
-        if (!activeTheme) {
-            setSaveMsg("No custom theme is active.");
-            return;
-        }
-        const live = readLiveTokens();
-        updateThemeTokens(activeTheme.id, live);
-        setSaveMsg(`Updated "${activeTheme.name}".`);
+    const enterSaveMode = () => {
+        setThemeName(customTarget?.name ?? "");
+        setMode("save");
     };
 
     const groups = useMemo(() => {
@@ -709,6 +721,8 @@ export function ThemeEditor({ className = "" }: ThemeEditorProps) {
         return Array.from(map.entries());
     }, []);
 
+    const editing = mode === "edit";
+
     return (
         <Popover className={`relative z-50 ${className}`}>
             <PopoverTrigger
@@ -720,131 +734,206 @@ export function ThemeEditor({ className = "" }: ThemeEditorProps) {
 
             <PopoverContent
                 anchor={{ to: "top end", gap: 12 }}
-                className="relative flex !max-h-[500px] w-[360px] flex-col overflow-hidden [--anchor-gap:12px]"
+                className="w-[360px] overflow-hidden p-0 [--anchor-gap:12px]"
             >
                 <style>{COLOR_SLIDER_CSS}</style>
-                <div className="min-h-0 flex-1 overflow-y-auto px-2 py-3 space-y-4">
-                    {groups.map(([group, tokens]) => (
-                        <div key={group}>
-                            <p className="px-2 pb-1.5 text-sm font-medium text-phi-text-primary">
-                                {group}
-                            </p>
-                            <div className="space-y-1">
-                                {tokens.map((t) => {
-                                    const val = values[t.name] ?? "";
-                                    const hex = val ? colorToHex(val) : "#000000";
-                                    const isActive = active === t.name;
-                                    return (
-                                        <div
-                                            key={t.name}
-                                            className={`rounded-lg border ${isActive ? "border-phi-accent/30 bg-phi-overlay" : "border-transparent hover:bg-phi-overlay-muted"} px-2 py-1.5`}
-                                        >
-                                            <div className="flex items-center gap-2.5">
-                                                <button
-                                                    onClick={() => setActive(isActive ? null : t.name)}
-                                                    aria-label={`Pick color for ${t.label}`}
-                                                    className="size-7 shrink-0 rounded-md border border-phi-border shadow-[inset_0_0_0_1px_var(--color-phi-border)]"
-                                                    style={{ background: val || hex }}
-                                                />
-                                                <div className="min-w-0 flex-1">
-                                                    <p className="truncate text-[12.5px] leading-none text-phi-text-secondary">
-                                                        {t.label}
-                                                    </p>
-                                                </div>
-                                                <HexField
-                                                    hex={hex}
-                                                    onCommit={(nextHex) => setToken(t.name, nextHex)}
-                                                />
-                                            </div>
-                                            {isActive && (
-                                                <div className="pt-1">
-                                                    <HsvRgbSliders
-                                                        hex={hex}
-                                                        onChange={(nextHex) => setToken(t.name, nextHex)}
-                                                    />
-                                                </div>
-                                            )}
+                <div
+                    className="relative w-full overflow-hidden transition-[height] duration-200 ease-[cubic-bezier(0.4,0,0.2,1)] motion-reduce:transition-none"
+                    style={contentHeight !== undefined ? { height: contentHeight } : undefined}
+                >
+                    <div
+                        ref={editRef}
+                        inert={!editing}
+                        aria-hidden={!editing}
+                        className={`w-full transition-opacity duration-150 motion-reduce:transition-none ${editing ? "relative opacity-100" : "pointer-events-none absolute inset-x-0 top-0 opacity-0"}`}
+                    >
+                        <div className="flex max-h-[500px] flex-col">
+                            <div className="min-h-0 flex-1 overflow-y-auto px-2 py-3 space-y-4">
+                                {groups.map(([group, tokens]) => (
+                                    <div key={group}>
+                                        <p className="px-2 pb-1.5 text-sm font-medium text-phi-text-primary">
+                                            {group}
+                                        </p>
+                                        <div className="space-y-1">
+                                            {tokens.map((t) => {
+                                                const val = values[t.name] ?? "";
+                                                const hex = val ? colorToHex(val) : "#000000";
+                                                const isActive = active === t.name;
+                                                return (
+                                                    <div
+                                                        key={t.name}
+                                                        className={`rounded-lg border ${isActive ? "border-phi-accent/30 bg-phi-overlay" : "border-transparent hover:bg-phi-overlay-muted"} px-2 py-1.5`}
+                                                    >
+                                                        <div className="flex items-center gap-2.5">
+                                                            <button
+                                                                onClick={() => setActive(isActive ? null : t.name)}
+                                                                aria-label={`Pick color for ${t.label}`}
+                                                                className="size-7 shrink-0 rounded-md border border-phi-border shadow-[inset_0_0_0_1px_var(--color-phi-border)]"
+                                                                style={{ background: val || hex }}
+                                                            />
+                                                            <div className="min-w-0 flex-1">
+                                                                <p className="truncate text-[12.5px] leading-none text-phi-text-secondary">
+                                                                    {t.label}
+                                                                </p>
+                                                            </div>
+                                                            <HexField
+                                                                hex={hex}
+                                                                onCommit={(nextHex) => setToken(t.name, nextHex)}
+                                                            />
+                                                        </div>
+                                                        {isActive && (
+                                                            <div className="pt-1">
+                                                                <HsvRgbSliders
+                                                                    hex={hex}
+                                                                    onChange={(nextHex) => setToken(t.name, nextHex)}
+                                                                />
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                );
+                                            })}
                                         </div>
-                                    );
-                                })}
+                                    </div>
+                                ))}
+                            </div>
+
+                            <div className="border-t border-phi-border-faint p-2">
+                                <div className="flex gap-1.5">
+                                    <Button
+                                        onClick={() => void copyAppCss()}
+                                        variant="secondary"
+                                        size="sm"
+                                        className="flex-1 !rounded-xl !py-2 !text-[12px]"
+                                        title="Copy a block ready to paste into App.css"
+                                    >
+                                        {copied ? (
+                                            <IconCheckFilled className="size-3.5" />
+                                        ) : (
+                                            <IconCopyFilled className="size-3.5" />
+                                        )}
+                                        {copied ? "Copied!" : "Copy"}
+                                    </Button>
+                                    <button
+                                        ref={createButtonRef}
+                                        onClick={enterSaveMode}
+                                        className={buttonClass("primary", "sm", "flex-1 !rounded-xl !py-2 !text-[12px]")}
+                                    >
+                                        {savedFlash ? (
+                                            <IconCheckFilled className="size-3.5" />
+                                        ) : customTarget ? (
+                                            <IconPencil className="size-3.5" />
+                                        ) : (
+                                            <IconPlusFilled className="size-3.5" />
+                                        )}
+                                        {savedFlash ? "Saved!" : customTarget ? "Update theme" : "Create theme"}
+                                    </button>
+                                </div>
                             </div>
                         </div>
-                    ))}
-                </div>
-
-                <div className="border-t border-phi-border-faint p-2 space-y-2">
-                    <div className="rounded-xl bg-phi-bg-sunken p-2 space-y-2">
-                        <div className="flex items-center justify-between px-0.5">
-                            <p className="text-[11px] font-semibold text-phi-text-secondary">
-                                {activeTheme ? `Editing \u201c${activeTheme.name}\u201d (${activeTheme.base})` : "Save as custom theme"}
-                            </p>
-                            <button
-                                onClick={refreshFromLive}
-                                className="text-[11px] text-phi-text-tertiary underline hover:text-phi-text-secondary"
-                            >
-                                Re-read live
-                            </button>
-                        </div>
-                        <input
-                            value={themeName}
-                            onChange={(e) => setThemeName(e.target.value)}
-                            placeholder={activeTheme ? activeTheme.name : "My theme name"}
-                            aria-label="Custom theme name"
-                            className="w-full rounded-lg border border-phi-border bg-phi-bg-surface px-2 py-1.5 text-[12px] text-phi-text-primary outline-none placeholder:text-phi-text-faint focus:border-phi-accent/40"
-                        />
-                        <div className="flex items-center gap-1 rounded-lg border border-phi-border p-0.5">
-                            {(["light", "dark"] as const).map((b) => (
-                                <button
-                                    key={b}
-                                    onClick={() => handlePreviewBase(b)}
-                                    aria-pressed={resolvedBase === b}
-                                    className={`flex-1 rounded-md px-2 py-1 text-[11px] font-medium capitalize transition-colors ${resolvedBase === b ? "bg-phi-overlay-active text-phi-text-primary" : "text-phi-text-tertiary hover:text-phi-text-secondary"}`}
-                                >
-                                    {b}
-                                </button>
-                            ))}
-                        </div>
-                        <div className="flex gap-1.5">
-                            <Button onClick={handleSaveNew} variant="secondary" size="sm" className="flex-1 !rounded-lg !py-1.5 !text-[12px]">
-                                Save new
-                            </Button>
-                            {activeTheme && (
-                                <Button onClick={handleUpdateActive} variant="secondary" size="sm" className="flex-1 !rounded-lg !py-1.5 !text-[12px]">
-                                    Update active
-                                </Button>
-                            )}
-                        </div>
-                        {saveMsg && <p className="px-0.5 text-[11px] text-phi-text-tertiary">{saveMsg}</p>}
-                        <p className="px-0.5 text-[10.5px] leading-snug text-phi-text-faint">
-                            Saves locally and applies on its {resolvedBase} base. Use Copy for App.css to upstream it into the bundled theme.
-                        </p>
                     </div>
-                    <div className="flex gap-1.5">
-                        <Button
-                            onClick={copyCss}
-                            variant="primary"
-                            size="sm"
-                            className="flex-1 !rounded-xl !py-2"
-                        >
-                            {copied === "css" ? (
-                                <IconCheckFilled className="size-3.5" />
-                            ) : (
-                                <IconCopyFilled className="size-3.5" />
-                            )}
-                            {copied === "css" ? "Copied!" : "Copy CSS"}
-                        </Button>
-                        <Button
-                            onClick={copyForAppCss}
-                            variant="secondary"
-                            size="sm"
-                            className="flex-1 !rounded-xl !py-2 !text-[12px]"
-                            title="Copy a block ready to paste into App.css"
-                        >
-                            {copied === "appcss" ? "Copied!" : "Copy for App.css"}
-                        </Button>
+                    <div
+                        ref={formRef}
+                        inert={editing}
+                        aria-hidden={editing}
+                        className={`w-full transition-opacity duration-150 motion-reduce:transition-none ${editing ? "pointer-events-none absolute inset-x-0 top-0 opacity-0" : "relative opacity-100"}`}
+                    >
+                        <ThemeSaveForm
+                            title={customTarget ? `Update "${customTarget.name}"` : "New theme"}
+                            name={themeName}
+                            onNameChange={setThemeName}
+                            nameInputRef={nameInputRef}
+                            note={
+                                customTarget
+                                    ? `Updates "${customTarget.name}" in place (${customTarget.base} base).`
+                                    : `Saves as a new custom theme on its ${targetBase} base.`
+                            }
+                            saveLabel={customTarget ? "Save changes" : "Save theme"}
+                            onBack={() => setMode("edit")}
+                            onSave={handleSave}
+                        />
                     </div>
                 </div>
             </PopoverContent>
         </Popover>
+    );
+}
+
+function ThemeSaveForm({
+    title,
+    name,
+    onNameChange,
+    nameInputRef,
+    note,
+    saveLabel,
+    onBack,
+    onSave,
+}: {
+    title: string;
+    name: string;
+    onNameChange: (v: string) => void;
+    nameInputRef: React.RefObject<HTMLInputElement | null>;
+    note: string;
+    saveLabel: string;
+    onBack: () => void;
+    onSave: () => void;
+}) {
+    const canSubmit = name.trim().length > 0;
+
+    return (
+        <form
+            onSubmit={(e) => {
+                e.preventDefault();
+                if (canSubmit) onSave();
+            }}
+            className="w-full"
+        >
+            <div className="flex items-center gap-2 px-2 pb-1 pt-2">
+                <Button variant="icon" size="icon" onClick={onBack} aria-label="Back to colors" className="!size-7">
+                    <IconChevronLeft className="size-5 shrink-0" />
+                </Button>
+                <p className="min-w-0 flex-1 truncate text-[13px] text-phi-text-primary">
+                    {title}
+                </p>
+            </div>
+
+            <div className="px-3 py-3">
+                <label
+                    htmlFor="new-theme-name"
+                    className="mb-1.5 block text-[13px] font-medium text-phi-text-primary"
+                >
+                    Name
+                </label>
+                <Input
+                    id="new-theme-name"
+                    ref={nameInputRef}
+                    value={name}
+                    onChange={(e) => onNameChange(e.target.value)}
+                    placeholder="My theme"
+                    aria-label="Theme name"
+                    spellCheck={false}
+                    autoComplete="off"
+                    variant="default"
+                    className="w-full !border-0 !bg-phi-overlay-strong !px-3 !text-[13px] placeholder:!text-phi-text-tertiary focus-visible:ring-2 focus-visible:ring-phi-accent/40"
+                />
+                <p className="mt-2 text-[11px] leading-4 text-phi-text-muted">
+                    {note}
+                </p>
+            </div>
+
+            <div className="flex items-center justify-end gap-1.5 px-2 pb-2 pt-2">
+                <Button variant="ghost" size="xs" onClick={onBack} className="!text-[12.5px]">
+                    Cancel
+                </Button>
+                <Button
+                    type="submit"
+                    variant="primary"
+                    size="xs"
+                    disabled={!canSubmit}
+                    className="!rounded-md !text-[12.5px]"
+                >
+                    {saveLabel}
+                </Button>
+            </div>
+        </form>
     );
 }
