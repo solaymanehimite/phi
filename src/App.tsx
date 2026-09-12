@@ -9,7 +9,7 @@ import { Conversation } from "./components/conversation/conversation";
 import { Streaming } from "./components/conversation/streaming";
 import { Sidebar } from "./components/sidebar";
 import { SearchSessionsButton, SessionCommand, type CommandAction } from "./components/session-command";
-import { SETTINGS_TAB_ID, Tabs, UI_DEMO_TAB_ID } from "./components/tabs";
+import { NEW_TAB_PREFIX, SETTINGS_TAB_ID, Tabs, UI_DEMO_TAB_ID, isNewTabId } from "./components/tabs";
 import {
     IconArrowDown,
     IconComponents,
@@ -213,8 +213,13 @@ export default function App() {
     const [homeCwd, setHomeCwd] = useState("");
     const [newChatCwd, setNewChatCwd] = useState<string | null>(null);
     const { projects, addProject, updateProject, removeProject } = useProjects();
-    const [openTabIds, setOpenTabIds] = useState<(string | null)[]>([null]);
-    const openTabIdsRef = useRef<(string | null)[]>([null]);
+    const newTabCounterRef = useRef(2);
+    const [openTabIds, setOpenTabIds] = useState<string[]>(([`${NEW_TAB_PREFIX}1`]));
+    const openTabIdsRef = useRef<string[]>(openTabIds);
+    const [activeNewTabId, setActiveNewTabId] = useState<string | null>(`${NEW_TAB_PREFIX}1`);
+    // Per-draft-tab project picker cwd. newChatCwd mirrors the active new tab;
+    // entries are created with the tab, restored on switch, dropped on promote/close.
+    const [newTabCwds, setNewTabCwds] = useState<Record<string, string | null>>({});
     // single inline notice per session — interrupts clear on next send, never stack
     const [inlineErrors, setInlineErrors] = useState<Record<string, InlineError>>({});
     const streamSonners = useSonners();
@@ -318,31 +323,52 @@ export default function App() {
 
     const openSessionTab = useCallback((id: string) => {
         const current = openTabIdsRef.current;
-        const next = current.filter((tabId) => tabId !== null);
-        if (!next.includes(id)) next.push(id);
-        if (next.length === current.length && next.every((tabId, index) => tabId === current[index])) return;
+        if (current.includes(id)) return;
+        const next = [...current, id];
         openTabIdsRef.current = next;
         setOpenTabIds(next);
     }, []);
 
-    const ensureNewChatTab = useCallback(() => {
-        const current = openTabIdsRef.current;
-        if (current.includes(null)) return;
-        const next = [...current, null];
+    // Always creates a fresh new-chat draft tab and activates it. Draft tabs are
+    // cheap and independent (own composer draft + project cwd); the only
+    // invariant is that at least one chat tab always exists.
+    const createNewChatTab = useCallback((cwd?: string | null) => {
+        const id = `${NEW_TAB_PREFIX}${newTabCounterRef.current++}`;
+        const initialCwd = cwd !== undefined ? cwd : newChatCwd;
+        setNewTabCwds((prev) => ({ ...prev, [id]: initialCwd }));
+        const next = [...openTabIdsRef.current, id];
         openTabIdsRef.current = next;
         setOpenTabIds(next);
+        setActiveNewTabId(id);
+        return id;
+    }, [newChatCwd]);
+
+    const dropNewTabState = useCallback((id: string) => {
+        clearDraftFor(id);
+        setNewTabCwds((prev) => {
+            if (!(id in prev)) return prev;
+            const { [id]: _, ...rest } = prev;
+            return rest;
+        });
     }, []);
 
+    // A sent draft tab becomes its session tab in place, preserving tab order.
     const promoteNewChatTab = useCallback((file: string) => {
         const current = openTabIdsRef.current;
         if (current.includes(file)) return;
         const next = [...current];
-        const draftIndex = next.indexOf(null);
-        if (draftIndex >= 0) next[draftIndex] = file;
-        else next.push(file);
+        const draftIndex = activeNewTabId ? next.indexOf(activeNewTabId) : -1;
+        if (draftIndex >= 0) {
+            const promotedId = next[draftIndex];
+            next[draftIndex] = file;
+            dropNewTabState(promotedId);
+        } else {
+            next.push(file);
+        }
         openTabIdsRef.current = next;
         setOpenTabIds(next);
-    }, []);
+        setActiveNewTabId((prev) => (prev && next.includes(prev) ? prev : null));
+    }, [activeNewTabId, dropNewTabState]);
 
     const openSettingsTab = useCallback(() => {
         const current = openTabIdsRef.current;
@@ -590,6 +616,16 @@ export default function App() {
     const focusComposer = useCallback(() => {
         requestAnimationFrame(() => { document.querySelector<HTMLTextAreaElement>('textarea[aria-label="Message Pi"]')?.focus(); });
     }, []);
+
+    const selectNewTab = useCallback((id: string) => {
+        setSettingsActive(false);
+        setUiDemoActive(false);
+        setActiveNewTabId(id);
+        const stored = newTabCwds[id];
+        if (stored !== undefined) setNewChatCwd(stored);
+        chat.clear();
+        focusComposer();
+    }, [chat.clear, focusComposer, newTabCwds]);
     const focusProjectPicker = useCallback(() => {
         const el = document.querySelector<HTMLElement>('[data-project-picker-trigger]');
         if (!el) return;
@@ -628,16 +664,21 @@ export default function App() {
         } finally { focusComposer(); }
     }, [openSessionTab, sessions.switchTo, chat.openFile, chat.hydrateFromSwitch, chat.hydrateFromCache, chat.hasCache, chat.revalidate, chat.activeFile, chat.prepareSwitch, focusComposer]);
 
-    const handleNewChat = useCallback(() => { setSettingsActive(false); setUiDemoActive(false); ensureNewChatTab(); chat.clear(); focusComposer(); }, [chat.clear, ensureNewChatTab, focusComposer]);
+    const handleNewChat = useCallback(() => { setSettingsActive(false); setUiDemoActive(false); createNewChatTab(); chat.clear(); focusComposer(); }, [chat.clear, createNewChatTab, focusComposer]);
 
     const handleNewChatInProject = useCallback((cwd: string) => {
         setSettingsActive(false);
         setUiDemoActive(false);
         if (cwd) setNewChatCwd(cwd);
-        ensureNewChatTab();
+        createNewChatTab(cwd || null);
         chat.clear();
         focusComposer();
-    }, [chat.clear, ensureNewChatTab, focusComposer]);
+    }, [chat.clear, createNewChatTab, focusComposer]);
+
+    const handleNewChatCwdChange = useCallback((cwd: string | null) => {
+        setNewChatCwd(cwd);
+        if (activeNewTabId) setNewTabCwds((prev) => ({ ...prev, [activeNewTabId]: cwd }));
+    }, [activeNewTabId]);
 
     const handleToggleTheme = useCallback(() => {
         clearActiveCustomTheme();
@@ -715,7 +756,7 @@ export default function App() {
         }
     }, [currentProjectCwd, handleNewChat, handleNewChatInProject, handleToggleTheme, openSettingsTab, openUiDemoTab]);
 
-    const handleCloseTab = useCallback((id: string | null) => {
+    const handleCloseTab = useCallback((id: string) => {
         const current = openTabIdsRef.current;
         // Settings + UI demo behave like any other tab.
         if (id === SETTINGS_TAB_ID || id === UI_DEMO_TAB_ID) {
@@ -729,29 +770,38 @@ export default function App() {
                 setUiDemoActive(false);
                 // The backend may point at a session whose tab was closed while a special tab was front.
                 const backend = chat.activeFile;
-                if (!next.includes(backend)) {
-                    const fallback = next.find((tabId) => tabId !== SETTINGS_TAB_ID && tabId !== UI_DEMO_TAB_ID) ?? null;
-                    if (fallback === null) handleNewChat();
+                if (!backend || !next.includes(backend)) {
+                    const fallback = next.find((tabId) => tabId !== SETTINGS_TAB_ID && tabId !== UI_DEMO_TAB_ID);
+                    if (fallback === undefined) handleNewChat();
+                    else if (isNewTabId(fallback)) selectNewTab(fallback);
                     else void handleSelect(fallback);
                 }
             }
             return;
         }
-        // Session tabs — always keep at least one chat tab (special tabs don't count).
+        // Chat tabs (sessions + new-chat drafts) — never close the last one.
         const chatTabs = current.filter((tabId) => tabId !== SETTINGS_TAB_ID && tabId !== UI_DEMO_TAB_ID);
-        if (id === null && chatTabs.length <= 1 && chatTabs.includes(null)) return;
+        if (chatTabs.length <= 1 && chatTabs.includes(id)) return;
         const index = current.indexOf(id);
         if (index < 0) return;
+        if (isNewTabId(id)) {
+            dropNewTabState(id);
+            if (activeNewTabId === id) setActiveNewTabId(null);
+        }
         const filtered = current.filter((tabId) => tabId !== id);
-        const nextActiveId = filtered[index] ?? filtered[index - 1] ?? null;
         let next = filtered;
         if (!next.some((tabId) => tabId !== SETTINGS_TAB_ID && tabId !== UI_DEMO_TAB_ID)) {
-            next = [...next, null];
+            // Unreachable while the last chat tab is unclosable — safety net that
+            // forces a fresh new tab rather than leaving zero chat tabs.
+            const fresh = `${NEW_TAB_PREFIX}${newTabCounterRef.current++}`;
+            setNewTabCwds((prev) => ({ ...prev, [fresh]: newChatCwd }));
+            next = [...next, fresh];
         }
-        openTabIdsRef.current = next.length > 0 ? next : [null];
-        setOpenTabIds(openTabIdsRef.current);
-        const isUiActive = !settingsActive && !uiDemoActive && (id === chat.activeFile || (id === null && chat.activeFile === null));
-        if (!isUiActive) return;
+        const nextActiveId = next[index] ?? next[index - 1];
+        openTabIdsRef.current = next;
+        setOpenTabIds(next);
+        const activeTab = settingsActive ? SETTINGS_TAB_ID : uiDemoActive ? UI_DEMO_TAB_ID : (chat.activeFile ?? activeNewTabId);
+        if (id !== activeTab) return;
         if (nextActiveId === SETTINGS_TAB_ID) {
             setSettingsActive(true);
             setUiDemoActive(false);
@@ -762,11 +812,12 @@ export default function App() {
             setUiDemoActive(true);
             return;
         }
-        if (nextActiveId === null) handleNewChat();
+        if (nextActiveId === undefined) handleNewChat();
+        else if (isNewTabId(nextActiveId)) selectNewTab(nextActiveId);
         else void handleSelect(nextActiveId);
-    }, [chat.activeFile, handleNewChat, handleSelect, settingsActive, uiDemoActive]);
+    }, [activeNewTabId, chat.activeFile, dropNewTabState, handleNewChat, handleSelect, newChatCwd, selectNewTab, settingsActive, uiDemoActive]);
 
-    const handleTabSelect = useCallback((id: string | null) => {
+    const handleTabSelect = useCallback((id: string) => {
         if (id === SETTINGS_TAB_ID) {
             openSettingsTab();
             return;
@@ -775,15 +826,39 @@ export default function App() {
             openUiDemoTab();
             return;
         }
-        if (id === null) handleNewChat();
-        else void handleSelect(id);
-    }, [handleNewChat, handleSelect, openSettingsTab, openUiDemoTab]);
+        if (isNewTabId(id)) {
+            if (!openTabIdsRef.current.includes(id)) return;
+            selectNewTab(id);
+            return;
+        }
+        void handleSelect(id);
+    }, [handleSelect, openSettingsTab, openUiDemoTab, selectNewTab]);
+
+    const handleCycleTab = useCallback((dir: 1 | -1) => {
+        const ids = openTabIdsRef.current;
+        if (ids.length <= 1) return;
+        const active = settingsActive ? SETTINGS_TAB_ID : uiDemoActive ? UI_DEMO_TAB_ID : (chat.activeFile ?? activeNewTabId ?? ids[0]);
+        const from = ids.indexOf(active);
+        const next = (((from < 0 ? 0 : from) + dir) + ids.length) % ids.length;
+        handleTabSelect(ids[next]);
+    }, [settingsActive, uiDemoActive, chat.activeFile, activeNewTabId, handleTabSelect]);
+
+    const handleSelectTabByIndex = useCallback((index: number) => {
+        const ids = openTabIdsRef.current;
+        if (ids.length === 0) return;
+        const target = ids[index < 0 ? ids.length - 1 : index];
+        if (target === undefined) return;
+        handleTabSelect(target);
+    }, [handleTabSelect]);
 
     const handleCloseActiveTab = useCallback(() => {
         if (settingsActive) handleCloseTab(SETTINGS_TAB_ID);
         else if (uiDemoActive) handleCloseTab(UI_DEMO_TAB_ID);
-        else handleCloseTab(chat.activeFile);
-    }, [settingsActive, uiDemoActive, handleCloseTab, chat.activeFile]);
+        else {
+            const active = chat.activeFile ?? activeNewTabId;
+            if (active) handleCloseTab(active);
+        }
+    }, [settingsActive, uiDemoActive, handleCloseTab, chat.activeFile, activeNewTabId]);
 
     const handleRename = useCallback(async (file: string, name: string) => {
         await sessions.rename(file, name);
@@ -970,7 +1045,7 @@ export default function App() {
         }
         // sending a new message clears the interrupt notice — no stacking
         if (chat.activeFile) setInlineFor(chat.activeFile, null);
-        else if (content.trim()) clearDraftFor(null);
+        else if (content.trim() && activeNewTabId) clearDraftFor(activeNewTabId);
         let preparedSessionFile: string | undefined;
         const selectedCwd = !chat.activeFile ? (newChatCwd ?? homeCwd) || undefined : undefined;
         if (!chat.activeFile && (draftModelKey || draftThinking)) {
@@ -1010,10 +1085,10 @@ export default function App() {
                 setInlineFor(target, err);
             } else setModelError(msg);
         }
-        if (chat.activeFile || preparedSessionFile) clearDraftFor(chat.activeFile ?? preparedSessionFile ?? null);
+        if (chat.activeFile || preparedSessionFile || activeNewTabId) clearDraftFor(chat.activeFile ?? preparedSessionFile ?? activeNewTabId);
         sessions.refresh({ silent: true });
         focusComposer();
-    }, [chat.prompt, chat.data?.cwd, activeCwd, newChatCwd, homeCwd, sessions.addOptimistic, sessions.refresh, chat.activeFile, chat.isStreaming, chat.abort, draftModelKey, draftThinking, models.setModel, models.setThinkingLevel, promoteNewChatTab, chat.patchModel, chat.openFile, chat.refreshSilent, sessions.switchTo, focusComposer, setInlineFor, compaction]);
+    }, [chat.prompt, chat.data?.cwd, activeCwd, activeNewTabId, newChatCwd, homeCwd, sessions.addOptimistic, sessions.refresh, chat.activeFile, chat.isStreaming, chat.abort, draftModelKey, draftThinking, models.setModel, models.setThinkingLevel, promoteNewChatTab, chat.patchModel, chat.openFile, chat.refreshSilent, sessions.switchTo, focusComposer, setInlineFor, compaction]);
 
     // ---- Message queueing and steering (M3) ----
     // Synchronous mirror of the running set so interrupt can wait for the
@@ -1093,7 +1168,7 @@ export default function App() {
     const sessionStats = useSessionStats(chat.activeFile, messages.length, chat.isStreaming);
 
     const tabItems = useMemo(() => openTabIds.map((id) => {
-        if (id === null) return { id, title: "New chat" };
+        if (isNewTabId(id)) return { id, title: "New chat" };
         if (id === SETTINGS_TAB_ID) return { id, title: "Settings" };
         if (id === UI_DEMO_TAB_ID) return { id, title: "UI demo" };
         const session = sessions.sessions.find((item) => item.path === id);
@@ -1111,6 +1186,9 @@ export default function App() {
         onOpenSearch: () => {},
         onOpenSettings: openSettingsTab,
         onAbort: () => { if (!settingsActive && !uiDemoActive) handleAbortRequest(); },
+        onNextTab: () => handleCycleTab(1),
+        onPrevTab: () => handleCycleTab(-1),
+        onSelectTabByIndex: handleSelectTabByIndex,
     }, { isStreaming: chat.isStreaming });
 
     // fatal gate
@@ -1177,7 +1255,7 @@ export default function App() {
                                 }
                                 sidebarCollapsed={!sidebarOpen}
                                 tabs={tabItems}
-                                activeId={settingsActive ? SETTINGS_TAB_ID : uiDemoActive ? UI_DEMO_TAB_ID : chat.activeFile}
+                                activeId={settingsActive ? SETTINGS_TAB_ID : uiDemoActive ? UI_DEMO_TAB_ID : (chat.activeFile ?? activeNewTabId)}
                                 onSelect={handleTabSelect}
                                 onClose={handleCloseTab}
                             />
@@ -1255,7 +1333,7 @@ export default function App() {
                                         )}
                                         {!chat.activeFile && (
                                             <div className="mx-auto pl-6 mb-1 flex w-full max-w-4xl min-w-0 items-center gap-1" ref={directoryPickerRef}>
-                                                <DirectoryPicker cwd={newChatCwd} projects={projectOptions} onChange={setNewChatCwd} onCreateProject={handleCreateProject} onUpdateProject={handleUpdateProject} onRemoveProject={handleRemoveProject} homeCwd={homeCwd} disabled={chat.isStreaming || (chat.activeFile ? compaction.isCompacting(chat.activeFile) : false)} />
+                                                <DirectoryPicker cwd={newChatCwd} projects={projectOptions} onChange={handleNewChatCwdChange} onCreateProject={handleCreateProject} onUpdateProject={handleUpdateProject} onRemoveProject={handleRemoveProject} homeCwd={homeCwd} disabled={chat.isStreaming || (chat.activeFile ? compaction.isCompacting(chat.activeFile) : false)} />
                                             </div>
                                         )}
                                         {(() => {
@@ -1289,7 +1367,7 @@ export default function App() {
                                                             )}
                                                         </div>
                                                     </div>
-                                                    <Composer onSend={handleSend} abortArmed={abortArmed} onQueue={handleQueue} isStreaming={chat.isStreaming} isCompacting={isCompacting} cwd={chat.activeFile ? activeCwd : (newChatCwd ?? homeCwd)} draftKey={chat.activeFile} beforeSend={<><ModelSelector models={models.models} value={selectedModelKey} thinkingLevel={thinkingLevel} onSelect={handleSelectModel} onThinkingChange={handleThinkingChange} disabled={chat.isStreaming || (cFile ? compaction.isCompacting(cFile) : false)} isStreaming={chat.isStreaming} loading={models.loading} error={models.error} /><ThinkingEffortSelector models={models.models} modelKey={selectedModelKey} value={thinkingLevel} onChange={handleThinkingChange} disabled={chat.isStreaming || (cFile ? compaction.isCompacting(cFile) : false)} /></>} />
+                                                    <Composer onSend={handleSend} abortArmed={abortArmed} onQueue={handleQueue} isStreaming={chat.isStreaming} isCompacting={isCompacting} cwd={chat.activeFile ? activeCwd : (newChatCwd ?? homeCwd)} draftKey={chat.activeFile ?? activeNewTabId} beforeSend={<><ModelSelector models={models.models} value={selectedModelKey} thinkingLevel={thinkingLevel} onSelect={handleSelectModel} onThinkingChange={handleThinkingChange} disabled={chat.isStreaming || (cFile ? compaction.isCompacting(cFile) : false)} isStreaming={chat.isStreaming} loading={models.loading} error={models.error} /><ThinkingEffortSelector models={models.models} modelKey={selectedModelKey} value={thinkingLevel} onChange={handleThinkingChange} disabled={chat.isStreaming || (cFile ? compaction.isCompacting(cFile) : false)} /></>} />
                                                 </div>
                                             );
                                         })()}

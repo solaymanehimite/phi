@@ -10,9 +10,14 @@ import { RunningOrb } from "./running-orb";
 
 export const SETTINGS_TAB_ID = "phi:settings";
 export const UI_DEMO_TAB_ID = "phi:ui-demo";
+export const NEW_TAB_PREFIX = "phi:new:";
+
+export function isNewTabId(id: string | null): boolean {
+    return typeof id === "string" && id.startsWith(NEW_TAB_PREFIX);
+}
 
 export type ChatTab = {
-    id: string | null;
+    id: string;
     title: string;
     isRunning?: boolean;
 };
@@ -22,13 +27,13 @@ type TabsProps = {
     sidebarCollapsed?: boolean;
     tabs: ChatTab[];
     activeId: string | null;
-    onSelect: (id: string | null) => void;
-    onClose: (id: string | null) => void;
+    onSelect: (id: string) => void;
+    onClose: (id: string) => void;
     hideClose?: boolean;
     tablistLabel?: string;
 };
 
-const TabItem = memo(function TabItem({ tab, active, canClose, onSelect, onClose }: { tab: ChatTab; active: boolean; canClose: boolean; onSelect: (id: string | null) => void; onClose: (id: string | null) => void }) {
+const TabItem = memo(function TabItem({ tab, active, canClose, onSelect, onClose }: { tab: ChatTab; active: boolean; canClose: boolean; onSelect: (id: string) => void; onClose: (id: string) => void }) {
     const hasDraft = useHasDraft(tab.id);
     const isSettings = tab.id === SETTINGS_TAB_ID;
     const isUiDemo = tab.id === UI_DEMO_TAB_ID;
@@ -74,6 +79,7 @@ export const Tabs = memo(function Tabs({
     hideClose = false,
     tablistLabel = "Open chats",
 }: TabsProps) {
+    const chatTabCount = tabs.filter((t) => t.id !== SETTINGS_TAB_ID && t.id !== UI_DEMO_TAB_ID).length;
     return (
         <div
             data-tauri-drag-region
@@ -92,11 +98,12 @@ export const Tabs = memo(function Tabs({
             >
                 {tabs.map((tab) => {
                     const active = tab.id === activeId;
-                    const chatTabCount = tabs.filter((t) => t.id !== SETTINGS_TAB_ID && t.id !== UI_DEMO_TAB_ID).length;
-                    // Settings + UI demo behave like any other tab (always closable). The sole
-                    // new-chat draft is never closable — special tabs don't count toward that minimum.
-                    const canClose = !hideClose && (tab.id !== null || chatTabCount > 1);
-                    return <TabItem key={tab.id ?? "new-chat"} tab={tab} active={active} canClose={canClose} onSelect={onSelect} onClose={onClose} />;
+                    // Settings + UI demo are always closable. Chat tabs (sessions and
+                    // new-chat drafts) are closable unless it's the last one — there is
+                    // always at least one chat tab; specials don't count toward that minimum.
+                    const isSpecialTab = tab.id === SETTINGS_TAB_ID || tab.id === UI_DEMO_TAB_ID;
+                    const canClose = !hideClose && (isSpecialTab || chatTabCount > 1);
+                    return <TabItem key={tab.id} tab={tab} active={active} canClose={canClose} onSelect={onSelect} onClose={onClose} />;
                 })}
             </div>
         </div>

@@ -8,6 +8,9 @@ type Handlers = {
   onOpenSearch: () => void;
   onOpenSettings: () => void;
   onAbort: () => void;
+  onNextTab: () => void;
+  onPrevTab: () => void;
+  onSelectTabByIndex: (index: number) => void;
 };
 
 function isEditable(el: EventTarget | null): boolean {
@@ -25,6 +28,29 @@ export function useShortcuts(handlers: Handlers, opts: { enabled?: boolean; isSt
     const onKeyDown = (e: KeyboardEvent) => {
       const meta = e.metaKey || e.ctrlKey;
       const target = e.target;
+
+      // Ctrl+Tab / Ctrl+Shift+Tab -> next / previous tab (works while typing).
+      // Ctrl-only (not Cmd) so Cmd+Tab stays with the OS app switcher.
+      if (e.ctrlKey && !e.metaKey && e.key === "Tab") {
+        e.preventDefault();
+        if (e.shiftKey) handlers.onPrevTab();
+        else handlers.onNextTab();
+        return;
+      }
+      // Ctrl+PageDown / Ctrl+PageUp -> next / previous tab (browser-style alias)
+      if (e.ctrlKey && !e.metaKey && (e.key === "PageDown" || e.key === "PageUp")) {
+        e.preventDefault();
+        if (e.key === "PageDown") handlers.onNextTab();
+        else handlers.onPrevTab();
+        return;
+      }
+      // Ctrl/Cmd+1..8 -> jump to tab N, Ctrl/Cmd+9 -> last tab
+      if (meta && !e.shiftKey && !e.altKey && /^[1-9]$/.test(e.key)) {
+        e.preventDefault();
+        const n = Number(e.key);
+        handlers.onSelectTabByIndex(n === 9 ? -1 : n - 1);
+        return;
+      }
 
       // Cmd/Ctrl+,  -> Settings
       if (meta && e.key === ",") {
