@@ -9,16 +9,29 @@ type Props = {
     isStreaming?: boolean;
     variant: "streaming" | "history";
     animateOnMount?: boolean;
+    startedAt?: number | null;
+    durationMs?: number | null;
 };
 
-export function WorkingBlock({ items, isStreaming, variant, animateOnMount }: Props) {
+function formatDuration(ms: number): string {
+    const totalSeconds = Math.max(0, Math.round(ms / 1000));
+    if (totalSeconds < 60) return `${totalSeconds}s`;
+    const minutes = Math.floor(totalSeconds / 60);
+    const seconds = totalSeconds % 60;
+    if (minutes < 60) return seconds === 0 ? `${minutes}m` : `${minutes}m ${seconds}s`;
+    const hours = Math.floor(minutes / 60);
+    const rest = minutes % 60;
+    return rest === 0 ? `${hours}h` : `${hours}h ${rest}m`;
+}
+
+export function WorkingBlock({ items, isStreaming, variant, animateOnMount, startedAt, durationMs }: Props) {
     const isStreamingVariant = variant === "streaming";
     const hasWork = items.length > 0;
-    if (!hasWork && !(isStreamingVariant && isStreaming)) return null;
 
     const [open, setOpen] = useState(() =>
         isStreamingVariant ? Boolean(isStreaming) : Boolean(animateOnMount),
     );
+    const [now, setNow] = useState(() => Date.now());
 
     useEffect(() => {
         if (isStreamingVariant) {
@@ -30,11 +43,36 @@ export function WorkingBlock({ items, isStreaming, variant, animateOnMount }: Pr
         return () => cancelAnimationFrame(frame);
     }, [animateOnMount, isStreaming, isStreamingVariant]);
 
-    let title: string;
+    const showLiveElapsed = Boolean(isStreamingVariant && isStreaming && startedAt);
+    useEffect(() => {
+        if (!showLiveElapsed) return;
+        const id = window.setInterval(() => setNow(Date.now()), 1000);
+        return () => window.clearInterval(id);
+    }, [showLiveElapsed, startedAt]);
+
+    if (!hasWork && !(isStreamingVariant && isStreaming)) return null;
+
+    const liveElapsedMs = showLiveElapsed && startedAt ? Math.max(0, now - startedAt) : null;
+
+    let title: React.ReactNode;
     if (isStreamingVariant) {
-        title = isStreaming ? "Working on it" : "Working";
+        title = (
+            <span className="inline-flex items-baseline gap-1.5 leading-none">
+                <span className="font-medium tracking-wide">{isStreaming ? "Working on it" : "Working"}</span>
+                {liveElapsedMs !== null && (
+                    <span className="font-mono text-[11px] tabular-nums leading-none text-phi-text-muted">{formatDuration(liveElapsedMs)}</span>
+                )}
+            </span>
+        );
+    } else if (durationMs !== null && durationMs !== undefined) {
+        title = (
+            <span className="inline-flex items-baseline gap-1.5 leading-none">
+                <span className="font-medium tracking-wide">Worked for</span>
+                <span className="font-mono text-[11px] tabular-nums leading-none">{formatDuration(durationMs)}</span>
+            </span>
+        );
     } else {
-        title = "Show work";
+        title = <span className="font-medium tracking-wide">Show work</span>;
     }
 
     return (
@@ -53,12 +91,12 @@ export function WorkingBlock({ items, isStreaming, variant, animateOnMount }: Pr
                             className={`size-4 shrink-0 text-phi-text-muted transition-transform duration-200 ${open ? "rotate-0" : "-rotate-90"}`}
                             aria-hidden
                         />
-                        <span className="font-medium tracking-wide">{title}</span>
+                        {title}
                     </>
                 ) : (
                     <>
                         {isStreaming && <Orb variant="S3" size={24} className="shrink-0" />}
-                        <span className="font-medium tracking-wide">{title}</span>
+                        {title}
                         <IconChevronDownFilled
                             className={`size-4 shrink-0 text-phi-text-muted transition-all duration-200 ${open ? "rotate-0" : "-rotate-90"} opacity-0 group-hover:opacity-100 group-focus-visible:opacity-100`}
                             aria-hidden

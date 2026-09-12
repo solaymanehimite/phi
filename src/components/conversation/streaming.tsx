@@ -9,11 +9,13 @@ export const Streaming = memo(function Streaming({
     workItems,
     error,
     isStreaming,
+    startedAt,
 }: {
     text: string;
     workItems: WorkItem[];
     error?: string;
     isStreaming?: boolean;
+    startedAt?: number | null;
 }) {
     const hasWork = workItems.length > 0;
     // Keep the live working block visible even after text starts. It is distinct
@@ -23,7 +25,7 @@ export const Streaming = memo(function Streaming({
     if (!text && !hasWork && !error) {
         return (
             <div className="space-y-3">
-                <WorkingBlock items={workItems} isStreaming={isStreaming} variant="streaming" />
+                <WorkingBlock items={workItems} isStreaming={isStreaming} variant="streaming" startedAt={startedAt} />
             </div>
         );
     }
@@ -35,6 +37,7 @@ export const Streaming = memo(function Streaming({
                     items={workItems}
                     isStreaming={isStreaming}
                     variant="streaming"
+                    startedAt={startedAt}
                 />
             )}
             {text && isStreaming && <Markdown text={text} />}

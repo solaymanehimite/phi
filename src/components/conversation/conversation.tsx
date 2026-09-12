@@ -99,8 +99,19 @@ type Turn = {
     user: Record<string, unknown> | null;
     text: string;
     workItems: WorkItem[];
+    durationMs?: number | null;
     __compactionMeta?: { summary: string; timestamp?: string; tokensBefore?: number; fromHook?: boolean };
 };
+
+function getMessageTimestamp(m: Record<string, unknown>): number | null {
+    const t = m.timestamp;
+    if (typeof t === "number" && Number.isFinite(t)) return t;
+    if (typeof t === "string") {
+        const parsed = Date.parse(t);
+        if (!Number.isNaN(parsed)) return parsed;
+    }
+    return null;
+}
 
 const TurnRow = memo(function TurnRow({
     turn,
@@ -168,6 +179,7 @@ const TurnRow = memo(function TurnRow({
                             items={workItems}
                             variant="history"
                             animateOnMount={animateWorkCollapse}
+                            durationMs={turn.durationMs}
                         />
                     )}
                     {text && <Markdown text={text} />}
@@ -218,12 +230,26 @@ export const Conversation = memo(function Conversation({
         const out: Turn[] = [];
         let cur: Turn | null = null;
         let assistantMessageIndex = 0;
+        let curStart: number | null = null;
+        let curEnd: number | null = null;
+
+        const stamp = (m: Record<string, unknown>, isStart = false) => {
+            const ts = getMessageTimestamp(m);
+            if (ts === null) return;
+            if (isStart || curStart === null) curStart = ts;
+            curEnd = curEnd === null ? ts : Math.max(curEnd, ts);
+        };
 
         const flush = () => {
             if (cur && (cur.user || cur.text || cur.workItems.length > 0)) {
+                cur.durationMs = curStart !== null && curEnd !== null && curEnd >= curStart
+                    ? curEnd - curStart
+                    : null;
                 out.push(cur);
             }
             cur = null;
+            curStart = null;
+            curEnd = null;
         };
 
         for (const m of msgs) {
@@ -231,8 +257,10 @@ export const Conversation = memo(function Conversation({
             if (role === "user") {
                 flush();
                 cur = { user: m, text: "", workItems: [] };
+                stamp(m, true);
             } else if (role === "assistant") {
                 if (!cur) cur = { user: null, text: "", workItems: [] };
+                stamp(m);
                 const content = Array.isArray(m.content) ? m.content : [];
                 const messageIndex = assistantMessageIndex++;
                 for (const [contentIndex, block] of content.entries()) {
@@ -264,7 +292,8 @@ export const Conversation = memo(function Conversation({
                     }
                 }
             } else if (role === "toolResult") {
-                // tool results are resolved via map, no separate turn
+                // tool results are resolved via map, no separate turn — still bound the turn
+                if (cur) stamp(m);
                 continue;
             } else if (role === "custom") {
                 // extension custom messages — respect display flag, render plain text only
@@ -289,6 +318,7 @@ export const Conversation = memo(function Conversation({
                 }
                 if (!text.trim()) continue;
                 if (!cur) cur = { user: null, text: "", workItems: [] };
+                stamp(m);
                 cur.text += (cur.text ? "\n\n" : "") + text;
             } else if (role === "compactionSummary" || String((m as Record<string, unknown>).type ?? "") === "compaction") {
                 flush();
@@ -335,6 +365,7 @@ export const Conversation = memo(function Conversation({
                 }
                 if (!text.trim()) continue;
                 if (!cur) cur = { user: null, text: "", workItems: [] };
+                stamp(m);
                 cur.text += (cur.text ? "\n\n" : "") + text;
             }
         }

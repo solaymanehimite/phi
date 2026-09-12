@@ -168,7 +168,7 @@ const ChatViewport = memo(function ChatViewport({
                     <Conversation messages={messages} hideLastWork={hideLastWork} isStreaming={isStreaming} />
                     {showLive && (
                         <div className="pt-2 phi-work-stagger">
-                            <Streaming text={streaming.text} workItems={streaming.workItems} error={streaming.error} isStreaming={isStreaming} />
+                            <Streaming text={streaming.text} workItems={streaming.workItems} error={streaming.error} isStreaming={isStreaming} startedAt={streaming.startedAt} />
                         </div>
                     )}
                     {inlineError && (isInterruption(inlineError.reason)
