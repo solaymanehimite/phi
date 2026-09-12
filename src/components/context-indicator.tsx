@@ -34,6 +34,8 @@ type ContextIndicatorProps = {
     stats: SessionStatsResponse | null;
     loading?: boolean;
     onRefresh?: () => void;
+    /** Where the stats popover opens. "above" for the composer, "below" for the top bar. */
+    placement?: "above" | "below";
 };
 
 export const ContextIndicator = memo(function ContextIndicator({
@@ -41,6 +43,7 @@ export const ContextIndicator = memo(function ContextIndicator({
     stats,
     loading,
     onRefresh,
+    placement = "above",
 }: ContextIndicatorProps) {
     const usage = stats?.contextUsage ?? null;
     const percent = usage?.percent ?? null;
@@ -61,6 +64,7 @@ export const ContextIndicator = memo(function ContextIndicator({
     const hasContext = usage != null && usage.contextWindow > 0;
     const showTokens = hasContext && usage.tokens != null;
     const tokens = stats?.tokens;
+    const hasTokens = tokens != null && tokens.total > 0;
     const hasCost =
         stats != null && (stats.cost > 0 || (tokens?.total ?? 0) > 0);
 
@@ -70,11 +74,11 @@ export const ContextIndicator = memo(function ContextIndicator({
                 onClick={handleOpen}
                 aria-label={label}
                 data-context-indicator="trigger"
-                className="inline-flex items-center justify-center rounded-full p-1 text-phi-text-secondary transition-colors hover:bg-phi-overlay-hover hover:text-phi-text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-phi-accent/40"
+                className="inline-flex items-center justify-center rounded-full p-1.5 text-phi-text-secondary transition-colors hover:bg-phi-overlay-hover hover:text-phi-text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-phi-accent/40"
             >
                 <svg
-                    width="18"
-                    height="18"
+                    width="22"
+                    height="22"
                     viewBox="0 0 20 20"
                     aria-hidden="true"
                     className="block"
@@ -85,7 +89,7 @@ export const ContextIndicator = memo(function ContextIndicator({
                         r={RING_R}
                         fill="none"
                         stroke="var(--color-phi-border-strong)"
-                        strokeWidth="2.4"
+                        strokeWidth="3"
                     />
                     {fraction > 0 && (
                         <circle
@@ -94,7 +98,7 @@ export const ContextIndicator = memo(function ContextIndicator({
                             r={RING_R}
                             fill="none"
                             stroke={ring}
-                            strokeWidth="2.4"
+                            strokeWidth="3"
                             strokeLinecap="round"
                             strokeDasharray={`${(fraction * RING_CIRC).toFixed(1)} ${RING_CIRC.toFixed(1)}`}
                             transform="rotate(-90 10 10)"
@@ -104,7 +108,8 @@ export const ContextIndicator = memo(function ContextIndicator({
             </PopoverTrigger>
 
             <PopoverContent
-                anchor={{ to: "top start", gap: 12 }}
+                anchor={placement === "below" ? { to: "bottom end", gap: 12 } : { to: "top start", gap: 12 }}
+                origin={placement === "below" ? "origin-top" : "origin-bottom"}
                 className="w-[268px] p-3.5"
             >
                 <div className="flex flex-col gap-3">
@@ -115,7 +120,7 @@ export const ContextIndicator = memo(function ContextIndicator({
                             </span>
                             {showTokens && percent != null && (
                                 <span
-                                    className="text-[12px] font-semibold tabular-nums"
+                                    className="font-mono text-[12px] font-semibold tabular-nums"
                                     style={{ color: ring }}
                                 >
                                     {percent.toFixed(1)}%
@@ -139,7 +144,7 @@ export const ContextIndicator = memo(function ContextIndicator({
                                         }}
                                     />
                                 </div>
-                                <p className="mt-1.5 text-[12px] leading-5 tabular-nums text-phi-text-secondary">
+                                <p className="mt-1.5 font-mono text-[12px] leading-5 tabular-nums text-phi-text-secondary">
                                     {formatTokens(usage.tokens ?? 0)} /{" "}
                                     {formatTokens(usage.contextWindow)} tokens
                                 </p>
@@ -153,6 +158,34 @@ export const ContextIndicator = memo(function ContextIndicator({
                                         : "Unknown until the next response."}
                             </p>
                         )}
+                        {hasTokens && tokens && (
+                            <div className="mt-2 grid grid-cols-2 gap-x-3 gap-y-1 border-t border-phi-border-faint pt-2 text-[12px] leading-5">
+                                <div className="flex items-baseline justify-between gap-2">
+                                    <span className="text-phi-text-muted">Input ↑</span>
+                                    <span className="font-mono tabular-nums text-phi-text-secondary">
+                                        {formatTokens(tokens.input)}
+                                    </span>
+                                </div>
+                                <div className="flex items-baseline justify-between gap-2">
+                                    <span className="text-phi-text-muted">Output ↓</span>
+                                    <span className="font-mono tabular-nums text-phi-text-secondary">
+                                        {formatTokens(tokens.output)}
+                                    </span>
+                                </div>
+                                <div className="flex items-baseline justify-between gap-2">
+                                    <span className="text-phi-text-muted">Cache read</span>
+                                    <span className="font-mono tabular-nums text-phi-text-secondary">
+                                        {formatTokens(tokens.cacheRead)}
+                                    </span>
+                                </div>
+                                <div className="flex items-baseline justify-between gap-2">
+                                    <span className="text-phi-text-muted">Cache write</span>
+                                    <span className="font-mono tabular-nums text-phi-text-secondary">
+                                        {formatTokens(tokens.cacheWrite)}
+                                    </span>
+                                </div>
+                            </div>
+                        )}
                     </section>
 
                     <div className="h-px bg-phi-border-faint" aria-hidden="true" />
@@ -162,56 +195,26 @@ export const ContextIndicator = memo(function ContextIndicator({
                             <span className="text-[11px] font-semibold text-phi-text-tertiary">
                                 Session cost
                             </span>
-                            <span className="text-[12px] font-semibold tabular-nums text-phi-text-primary">
+                            <span className="font-mono text-[12px] font-semibold tabular-nums text-phi-text-primary">
                                 {formatCost(stats?.cost ?? 0)}
                             </span>
                         </div>
-                        {hasCost && tokens ? (
-                            <>
-                                <div className="grid grid-cols-2 gap-x-3 gap-y-1 text-[12px] leading-5">
-                                    <div className="flex items-baseline justify-between gap-2">
-                                        <span className="text-phi-text-muted">Input ↑</span>
-                                        <span className="tabular-nums text-phi-text-secondary">
-                                            {formatTokens(tokens.input)}
+                        {hasCost && stats && stats.breakdown.length > 1 ? (
+                            <ul className="flex flex-col gap-1">
+                                {stats.breakdown.slice(0, 4).map((row) => (
+                                    <li
+                                        key={row.key}
+                                        className="flex items-baseline justify-between gap-2 text-[12px] leading-5"
+                                    >
+                                        <span className="min-w-0 truncate text-phi-text-muted">
+                                            {row.key}
                                         </span>
-                                    </div>
-                                    <div className="flex items-baseline justify-between gap-2">
-                                        <span className="text-phi-text-muted">Output ↓</span>
-                                        <span className="tabular-nums text-phi-text-secondary">
-                                            {formatTokens(tokens.output)}
+                                        <span className="shrink-0 font-mono tabular-nums text-phi-text-secondary">
+                                            {formatCost(row.cost)}
                                         </span>
-                                    </div>
-                                    <div className="flex items-baseline justify-between gap-2">
-                                        <span className="text-phi-text-muted">Cache read</span>
-                                        <span className="tabular-nums text-phi-text-secondary">
-                                            {formatTokens(tokens.cacheRead)}
-                                        </span>
-                                    </div>
-                                    <div className="flex items-baseline justify-between gap-2">
-                                        <span className="text-phi-text-muted">Cache write</span>
-                                        <span className="tabular-nums text-phi-text-secondary">
-                                            {formatTokens(tokens.cacheWrite)}
-                                        </span>
-                                    </div>
-                                </div>
-                                {stats && stats.breakdown.length > 1 && (
-                                    <ul className="mt-2 flex flex-col gap-1 border-t border-phi-border-faint pt-2">
-                                        {stats.breakdown.slice(0, 4).map((row) => (
-                                            <li
-                                                key={row.key}
-                                                className="flex items-baseline justify-between gap-2 text-[12px] leading-5"
-                                            >
-                                                <span className="min-w-0 truncate text-phi-text-muted">
-                                                    {row.key}
-                                                </span>
-                                                <span className="shrink-0 tabular-nums text-phi-text-secondary">
-                                                    {formatCost(row.cost)}
-                                                </span>
-                                            </li>
-                                        ))}
-                                    </ul>
-                                )}
-                            </>
+                                    </li>
+                                ))}
+                            </ul>
                         ) : (
                             <p className="text-[12px] leading-5 text-phi-text-muted">
                                 {!file

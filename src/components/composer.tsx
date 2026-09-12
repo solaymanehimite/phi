@@ -694,11 +694,13 @@ export const Composer = memo(function Composer({
             onDragLeave={handleDragLeave}
             onDrop={handleDrop}
             data-compacting={isCompacting ? "true" : "false"}
-            className="phi-composer-focus relative mx-auto w-full max-w-4xl rounded-[17px] rounded-b-none border border-b-0 border-phi-border-strong bg-phi-bg-surface p-2 shadow-[0_8px_24px_var(--color-phi-shadow),inset_0_1px_0_var(--color-phi-border)] transition-[border-color,box-shadow] focus-within:border-phi-border-strong focus-within:shadow-[0_10px_28px_var(--color-phi-shadow),0_0_0_1px_var(--color-phi-border)]"
+            className="phi-composer-focus relative mx-auto w-full max-w-4xl rounded-[17px] bg-phi-bg-surface p-2 shadow-[0_1px_4px_var(--color-phi-shadow),inset_0_1px_0_var(--color-phi-border)] transition-[border-color,box-shadow] focus-within:shadow-[0_2px_8px_var(--color-phi-shadow),0_0_0_1px_var(--color-phi-border)]"
         >
+            {/* fading edge: top border, sides fade, no bottom border */}
+            <div aria-hidden="true" className="phi-composer-edge pointer-events-none absolute inset-0 rounded-[17px]" />
             {/* drag overlay */}
             {isDragging && (
-                <div className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center rounded-[17px] rounded-b-none bg-phi-bg-surface/80 backdrop-blur-[1px] border-x-2 border-t-2 border-dashed border-phi-accent/60">
+                <div className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center rounded-[17px] bg-phi-bg-surface/80 backdrop-blur-[1px] border-2 border-dashed border-phi-accent/60">
                     <div className="flex items-center gap-2 rounded-full bg-phi-bg-elevated px-4 py-2 text-[13px] font-medium text-phi-text-primary shadow-lg border border-phi-border">
                         <IconPaperclip className="size-4" />
                         Drop images to attach

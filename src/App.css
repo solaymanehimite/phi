@@ -634,6 +634,28 @@ html[data-theme="light"] .phi-empty-logo:hover {
   animation: phi-composer-focus var(--phi-motion-composer) var(--phi-ease-default);
 }
 
+/* Composer edge — top border only, sides fading out, no bottom border.
+   Gradient ring via mask so only a 1px edge shows. */
+.phi-composer-edge {
+  border: 1px solid transparent;
+  background:
+    linear-gradient(
+      to bottom,
+      var(--color-phi-border-strong) 0%,
+      var(--color-phi-border-strong) 30%,
+      rgb(0 0 0 / 0) 78%
+    )
+    border-box;
+  -webkit-mask:
+    linear-gradient(#fff 0 0) padding-box,
+    linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask:
+    linear-gradient(#fff 0 0) padding-box,
+    linear-gradient(#fff 0 0);
+  mask-composite: exclude;
+}
+
 html[data-theme="light"] .phi-tab-active {
   background-color: var(--color-phi-bg-main);
 }
