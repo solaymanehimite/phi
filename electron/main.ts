@@ -269,6 +269,23 @@ function createWindow(): void {
 function registerIpc(): void {
     ipcMain.handle("phi:get-server-port", () => sidecarPort);
 
+    // Native zoom (Ctrl/Cmd +/-/0, driven by the renderer hook). This is real
+    // Chromium zoom, so viewport units like 100vh keep working — unlike CSS
+    // `zoom`, which shrinks 100vh layouts and breaks the main panel/composer.
+    ipcMain.handle("phi:get-zoom-factor", (event) => {
+        const win = BrowserWindow.fromWebContents(event.sender) ?? mainWindow;
+        return win?.webContents.getZoomFactor() ?? 1;
+    });
+    ipcMain.handle("phi:set-zoom-factor", (event, factor: number) => {
+        const win = BrowserWindow.fromWebContents(event.sender) ?? mainWindow;
+        if (!win) return;
+        const next =
+            typeof factor === "number" && Number.isFinite(factor)
+                ? Math.min(2, Math.max(0.5, factor))
+                : 1;
+        win.webContents.setZoomFactor(next);
+    });
+
     ipcMain.handle("phi:pick-directory", async (_event, defaultPath?: string) => {
         const win = BrowserWindow.getFocusedWindow() ?? undefined;
         const result = await dialog.showOpenDialog(win!, {

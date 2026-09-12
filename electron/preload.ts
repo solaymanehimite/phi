@@ -13,6 +13,11 @@ const phi = {
     /** Port the sidecar Express server listens on (picked by main at launch). */
     getServerPort: (): Promise<number> => ipcRenderer.invoke("phi:get-server-port"),
 
+    /** Native Chromium zoom factor. Real zoom keeps vh-based layout intact. */
+    getZoomFactor: (): Promise<number> => ipcRenderer.invoke("phi:get-zoom-factor"),
+    setZoomFactor: (factor: number): Promise<void> =>
+        ipcRenderer.invoke("phi:set-zoom-factor", factor),
+
     /** Native folder picker. Returns an absolute path or null when cancelled. */
     pickDirectory: (defaultPath?: string): Promise<string | null> =>
         ipcRenderer.invoke("phi:pick-directory", defaultPath),

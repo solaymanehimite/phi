@@ -13,6 +13,8 @@ export interface PhiBridge {
     onAbortAll(cb: () => void): () => void;
     windowControl(action: PhiWindowControl): void;
     openExternal(url: string): void;
+    getZoomFactor(): Promise<number>;
+    setZoomFactor(factor: number): Promise<void>;
 }
 
 declare global {

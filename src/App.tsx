@@ -46,6 +46,7 @@ import { SettingsPanel, type SettingsSection } from "./components/settings";
 import { UiDemoPanel } from "./components/ui-demo";
 import { ThemeEditor, useThemeEditorEnabled } from "./components/dev/ThemeEditor";
 import { useShortcuts } from "./hooks/useShortcuts";
+import { useZoom } from "./hooks/useZoom";
 import { clearDraftFor } from "./hooks/useDraft";
 import { InlineErrorBlock, InterruptedBlock, isInterruption, type InlineError } from "./components/inline-error";
 
@@ -196,6 +197,7 @@ export default function App() {
     const models = useModels();
     const { theme, setTheme } = useTheme();
     const effectiveTheme = useEffectiveTheme();
+    useZoom();
     const themeEditorEnabled = useThemeEditorEnabled();
     // Re-apply the saved custom theme (if any) on boot, after data-theme is set.
     useEffect(() => {
