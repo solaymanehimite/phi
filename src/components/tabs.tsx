@@ -1,11 +1,11 @@
 import {
     IconComponents,
-    IconLoader2,
     IconSendFilled,
     IconSettingsFilled,
     IconXFilled,
 } from "@tabler/icons-react";
-import { memo, type ReactNode } from "react";
+import { Orb } from "@aicss/react";
+import { memo, useEffect, useState, type ReactNode } from "react";
 import { useHasDraft } from "../hooks/useHasDraft";
 
 export const SETTINGS_TAB_ID = "phi:settings";
@@ -28,6 +28,44 @@ type TabsProps = {
     tablistLabel?: string;
 };
 
+/* Same orb spinner as the working block, with a scale pop on appear/disappear.
+   The wrapper stays mounted and animates its width so the title slides
+   instead of snapping when the orb arrives/leaves. */
+function TabRunningOrb({ running }: { running?: boolean }) {
+    const [renderOrb, setRenderOrb] = useState(Boolean(running));
+    const [leaving, setLeaving] = useState(false);
+
+    useEffect(() => {
+        if (running) {
+            setRenderOrb(true);
+            setLeaving(false);
+            return;
+        }
+        if (!renderOrb) return;
+        setLeaving(true);
+        const t = window.setTimeout(() => {
+            setRenderOrb(false);
+            setLeaving(false);
+        }, 200);
+        return () => window.clearTimeout(t);
+    }, [running, renderOrb]);
+
+    // Wrapper stays expanded while the shrink-out plays, then collapses.
+    const open = Boolean(running) || leaving;
+    return (
+        <span
+            aria-hidden
+            className={`flex shrink-0 items-center overflow-hidden transition-all duration-200 ease-out ${open ? "mr-2 w-[18px] opacity-100" : "mr-0 w-0 opacity-0"}`}
+        >
+            {renderOrb && (
+                <span className={`flex shrink-0 ${leaving ? "phi-orb-exit" : "phi-orb-enter"}`}>
+                    <Orb variant="S3" size={18} />
+                </span>
+            )}
+        </span>
+    );
+}
+
 const TabItem = memo(function TabItem({ tab, active, canClose, onSelect, onClose }: { tab: ChatTab; active: boolean; canClose: boolean; onSelect: (id: string | null) => void; onClose: (id: string | null) => void }) {
     const hasDraft = useHasDraft(tab.id);
     const isSettings = tab.id === SETTINGS_TAB_ID;
@@ -43,11 +81,11 @@ const TabItem = memo(function TabItem({ tab, active, canClose, onSelect, onClose
                 aria-selected={active}
                 aria-label={`Open ${tab.title}`}
                 onClick={() => onSelect(tab.id)}
-                className="flex min-w-0 flex-1 items-center gap-2 self-stretch truncate rounded-tl-lg pl-3 pr-1 text-left text-[12px] font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-phi-accent/50"
+                className="flex min-w-0 flex-1 items-center self-stretch truncate rounded-tl-lg pl-3 pr-1 text-left text-[12px] font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-phi-accent/50"
             >
-                {tab.isRunning ? <IconLoader2 className="size-3.5 shrink-0 animate-spin text-phi-text-primary" /> : isSettings ? <IconSettingsFilled className="size-3.5 shrink-0 text-phi-text-muted" /> : isUiDemo ? <IconComponents className="size-3.5 shrink-0 text-phi-text-muted" /> : null}
+                {isSettings ? <IconSettingsFilled className="mr-2 size-3.5 shrink-0 text-phi-text-muted" /> : isUiDemo ? <IconComponents className="mr-2 size-3.5 shrink-0 text-phi-text-muted" /> : <TabRunningOrb running={tab.isRunning} />}
                 <span className="min-w-0 truncate">{tab.title}</span>
-                {!isSpecial && hasDraft && <IconSendFilled className="size-3 shrink-0 text-phi-text-muted" aria-label="Has draft" title="Draft" />}
+                {!isSpecial && hasDraft && <IconSendFilled className="ml-2 size-3 shrink-0 text-phi-text-muted" aria-label="Has draft" title="Draft" />}
             </button>
             {canClose ? (
                 <button

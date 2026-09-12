@@ -470,6 +470,34 @@ html[data-theme="light"] .phi-empty-logo:hover {
 .phi-tab-exit {
   animation: phi-tab-out var(--phi-motion-tab) var(--phi-ease-default) forwards;
 }
+
+/* Tab running orb — scale pop on appear/disappear (matches working-block orb) */
+@keyframes phi-orb-in {
+  from {
+    opacity: 0;
+    transform: scale(0.4);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+@keyframes phi-orb-out {
+  from {
+    opacity: 1;
+    transform: scale(1);
+  }
+  to {
+    opacity: 0;
+    transform: scale(0.4);
+  }
+}
+.phi-orb-enter {
+  animation: phi-orb-in 160ms var(--phi-ease-out) both;
+}
+.phi-orb-exit {
+  animation: phi-orb-out 160ms var(--phi-ease-default) both;
+}
 .phi-work-stagger > * {
   animation: phi-work-in var(--phi-motion-stream) var(--phi-ease-out) both;
 }
