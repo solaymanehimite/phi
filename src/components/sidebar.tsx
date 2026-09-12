@@ -221,7 +221,7 @@ export const Sidebar = memo(function Sidebar({
                     ) : (
                         <div>
                             {pinnedSessions.length > 0 && (
-                                <div className="mb-1">
+                                <div className="mb-4">
                                     <MetaGroupTrigger
                                         collapsed={pinnedCollapsed}
                                         onClick={handleTogglePinned}
