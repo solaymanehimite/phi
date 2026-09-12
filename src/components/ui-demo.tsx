@@ -131,7 +131,7 @@ export function UiDemoPanel() {
                     <div className="mx-auto flex w-full max-w-3xl flex-col gap-8 pb-16">
                         <DemoSection id="buttons" title="Button">
                             <div className="flex flex-wrap items-center gap-2">
-                                <Button variant="primary" size="sm"><IconSendFilled className="size-3.5" /> Send</Button>
+                                <Button variant="primary" size="sm"><IconSendFilled className="size-3.5 rotate-45" /> Send</Button>
                                 <Button variant="secondary">Test connection</Button>
                                 <Button variant="ghost">Cancel</Button>
                                 <Button variant="icon" aria-label="More options"><IconDotsFilled className="size-4" /></Button>
@@ -145,7 +145,7 @@ export function UiDemoPanel() {
                                 <Button variant="icon" size="icon" aria-label="Search"><IconSearch className="size-4" /></Button>
                             </div>
                             <div className="mt-3 flex flex-wrap items-center gap-2">
-                                <Button variant="primary" size="sm" disabled><IconSendFilled className="size-3.5" /> Send</Button>
+                                <Button variant="primary" size="sm" disabled><IconSendFilled className="size-3.5 rotate-45" /> Send</Button>
                                 <Button variant="secondary" disabled>Test connection</Button>
                             </div>
                             <div className="mt-3 flex flex-wrap items-center gap-2">

@@ -830,7 +830,7 @@ const SessionRow = memo(function SessionRow({
                     <MarqueeTitle title={title} />
                     {hasDraft && (
                         <IconSendFilled
-                            className="size-3 shrink-0 text-phi-text-muted"
+                            className="size-3 shrink-0 rotate-45 text-phi-text-muted"
                             aria-label="Draft"
                             title="Draft"
                         />

@@ -85,7 +85,7 @@ const TabItem = memo(function TabItem({ tab, active, canClose, onSelect, onClose
             >
                 {isSettings ? <IconSettingsFilled className="mr-2 size-3.5 shrink-0 text-phi-text-muted" /> : isUiDemo ? <IconComponents className="mr-2 size-3.5 shrink-0 text-phi-text-muted" /> : <TabRunningOrb running={tab.isRunning} />}
                 <span className="min-w-0 truncate">{tab.title}</span>
-                {!isSpecial && hasDraft && <IconSendFilled className="ml-2 size-3 shrink-0 text-phi-text-muted" aria-label="Has draft" title="Draft" />}
+                {!isSpecial && hasDraft && <IconSendFilled className="ml-2 size-3 shrink-0 rotate-45 text-phi-text-muted" aria-label="Has draft" title="Draft" />}
             </button>
             {canClose ? (
                 <button
