@@ -156,6 +156,9 @@ const ChatViewport = memo(function ChatViewport({
             className="relative min-h-0 w-full flex-1"
             resize={resizeAnimation}
             initial="instant"
+            mass={0.9}
+            stiffness={0.08}
+            damping={0.75}
         >
             <StickToBottom.Content
                 scrollClassName="overflow-y-auto px-6 pt-6"
