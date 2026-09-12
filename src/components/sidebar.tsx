@@ -227,7 +227,6 @@ export const Sidebar = memo(function Sidebar({
                                         onClick={handleTogglePinned}
                                         label="Pinned"
                                         count={pinnedSessions.length}
-                                        icon={<IconPinnedFilled aria-hidden className="size-4 shrink-0 text-current" />}
                                     />
                                     <div
                                         className={`grid transition-all duration-300 ease-[cubic-bezier(0.4,0,0.2,1)] ${pinnedCollapsed ? "grid-rows-[0fr] opacity-0" : "grid-rows-[1fr] opacity-100"}`}
@@ -385,7 +384,7 @@ const MetaGroupTrigger = memo(function MetaGroupTrigger({
     onClick: () => void;
     label: string;
     count: number;
-    icon: ReactNode;
+    icon?: ReactNode;
 }) {
     return (
         <button

@@ -92,7 +92,7 @@ export const ThinkingEffortSelector = memo(function ThinkingEffortSelector({
         <Popover className="relative">
             <PopoverTrigger
                 disabled={disabled}
-                className="group inline-flex max-w-full min-w-0 items-center gap-1.5 rounded-md pl-2 pr-1.5 py-1 text-left text-phi-text-secondary hover:bg-phi-overlay-hover hover:text-phi-text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-phi-accent/40 disabled:pointer-events-none disabled:opacity-60"
+                className="group inline-flex max-w-full min-w-0 items-center gap-2 rounded-md py-1 pl-2.5 pr-1.5 text-left text-phi-text-secondary hover:bg-phi-overlay-hover hover:text-phi-text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-phi-accent/40 disabled:pointer-events-none disabled:opacity-60"
                 aria-label={`Change thinking effort, currently ${current}`}
             >
                 <span className="grid min-w-0 flex-1">

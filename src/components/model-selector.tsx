@@ -301,13 +301,16 @@ export const ModelSelector = memo(function ModelSelector({
                 <>
                     <PopoverTrigger
                         disabled={isDisabled}
-                        className="group inline-flex max-w-full min-w-0 items-center gap-1.5 rounded-md px-1.5 py-1 text-left text-phi-text-secondary transition-colors hover:bg-phi-overlay-hover hover:text-phi-text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-phi-accent/40 disabled:pointer-events-none disabled:opacity-60"
+                        className="group inline-flex max-w-full min-w-0 items-center gap-2 rounded-md py-1 pl-2.5 pr-1.5 text-left text-phi-text-secondary transition-colors hover:bg-phi-overlay-hover hover:text-phi-text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-phi-accent/40 disabled:pointer-events-none disabled:opacity-60"
                         aria-label={
                             selected
                                 ? `Change model, currently ${selected.provider}/${selected.id}`
                                 : "Change model"
                         }
                     >
+                        {selected && !loading && (
+                            <ProviderImg provider={selected.provider} size={14} className="shrink-0" />
+                        )}
                         <span className="min-w-0 truncate text-[12.5px] font-medium">
                             {loading
                                 ? "Loading models…"
