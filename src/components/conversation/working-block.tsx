@@ -85,20 +85,20 @@ export function WorkingBlock({ items, isStreaming, variant, animateOnMount, star
                 aria-expanded={open}
             >
                 {!isStreamingVariant ? (
-                    // history variant — keep chevron on left
+                    // history variant — chevron right next to the label
                     <>
+                        {title}
                         <IconChevronDownFilled
-                            className={`size-4 shrink-0 text-phi-text-muted transition-transform duration-200 ${open ? "rotate-0" : "-rotate-90"}`}
+                            className={`size-4 shrink-0 -translate-y-px text-phi-text-muted transition-transform duration-200 ${open ? "rotate-0" : "-rotate-90"}`}
                             aria-hidden
                         />
-                        {title}
                     </>
                 ) : (
                     <>
-                        {isStreaming && <Orb variant="S3" size={24} className="shrink-0" />}
+                        {isStreaming && <Orb variant="S3" size={24} className="-translate-y-px shrink-0" />}
                         {title}
                         <IconChevronDownFilled
-                            className={`size-4 shrink-0 text-phi-text-muted transition-all duration-200 ${open ? "rotate-0" : "-rotate-90"} opacity-0 group-hover:opacity-100 group-focus-visible:opacity-100`}
+                            className={`size-4 shrink-0 -translate-y-px text-phi-text-muted transition-all duration-200 ${open ? "rotate-0" : "-rotate-90"} opacity-0 group-hover:opacity-100 group-focus-visible:opacity-100`}
                             aria-hidden
                         />
                     </>
