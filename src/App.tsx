@@ -1268,11 +1268,13 @@ export default function App() {
                                     </section>
                                 ) : (
                                 <section className="relative flex min-h-0 flex-1 flex-col">
-                                    <div className="pointer-events-none absolute right-4 top-4 z-10 flex justify-end">
-                                        <div className="pointer-events-auto">
-                                            <ContextIndicator file={chat.activeFile} stats={sessionStats.stats} loading={sessionStats.loading} onRefresh={() => void sessionStats.refresh()} placement="below" />
+                                    {chat.activeFile ? (
+                                        <div className="pointer-events-none absolute right-4 top-4 z-10 flex justify-end">
+                                            <div className="pointer-events-auto">
+                                                <ContextIndicator file={chat.activeFile} stats={sessionStats.stats} loading={sessionStats.loading} onRefresh={() => void sessionStats.refresh()} placement="below" />
+                                            </div>
                                         </div>
-                                    </div>
+                                    ) : null}
                                     {!chat.activeFile ? (
                                         <div className="mx-auto flex w-full max-w-4xl flex-1 flex-col overflow-y-auto px-6 pt-6">
                                             <div className="flex flex-1 flex-col items-center justify-center pb-16 text-center">
