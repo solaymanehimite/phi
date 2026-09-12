@@ -38,12 +38,12 @@ export function WorkingBlock({ items, isStreaming, variant, animateOnMount }: Pr
     }
 
     return (
-        <div className="w-full pb-2">
+        <div className="mt-2 w-full pb-2">
             {/* muted label — no border/background container */}
             <button
                 type="button"
                 onClick={() => setOpen((v) => !v)}
-                className="group mb-2 flex min-h-6 items-center gap-2 text-left text-[12px] leading-none text-phi-text-muted hover:text-phi-text-tertiary transition-colors"
+                className="group flex min-h-6 items-center gap-2 text-left text-[12px] leading-none text-phi-text-muted hover:text-phi-text-tertiary transition-colors"
                 aria-expanded={open}
             >
                 {!isStreamingVariant ? (
