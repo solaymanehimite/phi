@@ -79,7 +79,6 @@ export const Tabs = memo(function Tabs({
     hideClose = false,
     tablistLabel = "Open chats",
 }: TabsProps) {
-    const chatTabCount = tabs.filter((t) => t.id !== SETTINGS_TAB_ID && t.id !== UI_DEMO_TAB_ID).length;
     return (
         <div
             data-tauri-drag-region
@@ -98,12 +97,9 @@ export const Tabs = memo(function Tabs({
             >
                 {tabs.map((tab) => {
                     const active = tab.id === activeId;
-                    // Settings + UI demo are always closable. Chat tabs (sessions and
-                    // new-chat drafts) are closable unless it's the last one — there is
-                    // always at least one chat tab; specials don't count toward that minimum.
-                    const isSpecialTab = tab.id === SETTINGS_TAB_ID || tab.id === UI_DEMO_TAB_ID;
-                    const canClose = !hideClose && (isSpecialTab || chatTabCount > 1);
-                    return <TabItem key={tab.id} tab={tab} active={active} canClose={canClose} onSelect={onSelect} onClose={onClose} />;
+                    // Every tab is closable. Closing the last chat tab swaps in a
+                    // fresh new-chat tab so there is always at least one.
+                    return <TabItem key={tab.id} tab={tab} active={active} canClose={!hideClose} onSelect={onSelect} onClose={onClose} />;
                 })}
             </div>
         </div>

@@ -779,9 +779,8 @@ export default function App() {
             }
             return;
         }
-        // Chat tabs (sessions + new-chat drafts) — never close the last one.
-        const chatTabs = current.filter((tabId) => tabId !== SETTINGS_TAB_ID && tabId !== UI_DEMO_TAB_ID);
-        if (chatTabs.length <= 1 && chatTabs.includes(id)) return;
+        // Chat tabs (sessions + new-chat drafts) — closing the last one swaps in
+        // a fresh new-chat tab so there is always at least one chat tab.
         const index = current.indexOf(id);
         if (index < 0) return;
         if (isNewTabId(id)) {
@@ -791,8 +790,7 @@ export default function App() {
         const filtered = current.filter((tabId) => tabId !== id);
         let next = filtered;
         if (!next.some((tabId) => tabId !== SETTINGS_TAB_ID && tabId !== UI_DEMO_TAB_ID)) {
-            // Unreachable while the last chat tab is unclosable — safety net that
-            // forces a fresh new tab rather than leaving zero chat tabs.
+            // Last chat tab closed — force a fresh new tab in its place.
             const fresh = `${NEW_TAB_PREFIX}${newTabCounterRef.current++}`;
             setNewTabCwds((prev) => ({ ...prev, [fresh]: newChatCwd }));
             next = [...next, fresh];
