@@ -795,7 +795,7 @@ const SessionRow = memo(function SessionRow({
                     onClick={onToggleArchive}
                     title={archived ? "Unarchive session" : "Archive session"}
                     aria-label={archived ? "Unarchive session" : "Archive session"}
-                    className="absolute left-1 top-1/2 grid size-6 -translate-y-1/2 place-items-center rounded text-phi-text-faint opacity-0 transition-all duration-150 hover:bg-phi-overlay-strong hover:text-phi-text-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-phi-accent/40 focus-visible:opacity-100 group-hover:opacity-100 group-focus-within:opacity-100"
+                    className="absolute left-1 top-1/2 grid size-6 -translate-y-1/2 place-items-center rounded text-phi-text-faint opacity-0 transition-colors hover:bg-phi-overlay-strong hover:text-phi-text-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-phi-accent/40 focus-visible:opacity-100 group-hover:opacity-100 group-focus-within:opacity-100"
                 >
                     {archived ? (
                         <IconArchiveOff className="size-[15px]" />
