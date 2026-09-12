@@ -454,15 +454,7 @@ html[data-theme="light"] .phi-empty-logo:hover {
   }
 }
 
-/* Composer focus — border/shadow microinteraction */
-@keyframes phi-composer-focus {
-  from {
-    border-color: var(--color-phi-border);
-  }
-  to {
-    border-color: var(--color-phi-border-strong);
-  }
-}
+
 
 .phi-tab-enter {
   animation: phi-tab-in var(--phi-motion-tab) var(--phi-ease-out);
@@ -656,10 +648,6 @@ html[data-theme="light"] .phi-empty-logo:hover {
   .phi-main {
     transition: none !important;
   }
-}
-
-.phi-composer-focus:focus-within {
-  animation: phi-composer-focus var(--phi-motion-composer) var(--phi-ease-default);
 }
 
 /* Composer edge — top border only, sides fading out, no bottom border.

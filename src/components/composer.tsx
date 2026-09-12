@@ -694,7 +694,7 @@ export const Composer = memo(function Composer({
             onDragLeave={handleDragLeave}
             onDrop={handleDrop}
             data-compacting={isCompacting ? "true" : "false"}
-            className="phi-composer-focus relative mx-auto w-full max-w-4xl rounded-[17px] bg-phi-bg-surface p-2 shadow-[0_1px_4px_var(--color-phi-shadow),inset_0_1px_0_var(--color-phi-border)] transition-[border-color,box-shadow] focus-within:shadow-[0_2px_8px_var(--color-phi-shadow),0_0_0_1px_var(--color-phi-border)]"
+            className="phi-composer-focus relative mx-auto w-full max-w-4xl rounded-[17px] bg-phi-bg-surface p-2 shadow-[0_1px_4px_var(--color-phi-shadow),inset_0_1px_0_var(--color-phi-border)]"
         >
             {/* fading edge: top border, sides fade, no bottom border */}
             <div aria-hidden="true" className="phi-composer-edge pointer-events-none absolute inset-0 rounded-[17px]" />
