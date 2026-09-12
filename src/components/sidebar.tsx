@@ -8,7 +8,6 @@ import {
     IconPinnedFilled,
     IconPinnedOff,
     IconPlusFilled,
-    IconLoader2,
     IconSearch,
     IconSendFilled,
     IconSettingsFilled,
@@ -26,6 +25,7 @@ import {
     DropdownMenuTrigger,
 } from "./ui/dropdown-menu";
 import { GroupCollapsibleTrigger } from "./ui/collapsible";
+import { RunningOrb } from "./running-orb";
 import { NavItem } from "./ui/nav-item";
 import { formatProjectPath, type ProjectGroup } from "../lib/projects";
 import type { SessionInfo } from "../types/session";
@@ -805,10 +805,8 @@ const SessionRow = memo(function SessionRow({
                 </button>
             )}
             {renaming ? (
-                <div className="flex min-w-0 flex-1 items-center gap-2.5 truncate rounded-lg px-1.5 py-1 pr-8">
-                    {isStreaming ? (
-                        <IconLoader2 className="size-4 shrink-0 animate-spin text-phi-text-primary" />
-                    ) : null}
+                <div className="flex min-w-0 flex-1 items-center truncate rounded-lg px-1.5 py-1 pr-8">
+                    <RunningOrb running={isStreaming} size={16} gap={10} />
                     <Input
                         autoFocus
                         value={draft}
@@ -822,15 +820,13 @@ const SessionRow = memo(function SessionRow({
                 <button
                     type="button"
                     onClick={onClick}
-                    className="flex min-w-0 flex-1 items-center gap-2.5 truncate rounded-lg px-1.5 py-1 pr-8 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-phi-accent/40"
+                    className="flex min-w-0 flex-1 items-center truncate rounded-lg px-1.5 py-1 pr-8 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-phi-accent/40"
                 >
-                    {isStreaming ? (
-                        <IconLoader2 className="size-4 shrink-0 animate-spin text-phi-text-primary" />
-                    ) : null}
+                    <RunningOrb running={isStreaming} size={16} gap={10} />
                     <MarqueeTitle title={title} />
                     {hasDraft && (
                         <IconSendFilled
-                            className="size-3 shrink-0 rotate-45 text-phi-text-muted"
+                            className="ml-2.5 size-3 shrink-0 rotate-45 text-phi-text-muted"
                             aria-label="Draft"
                             title="Draft"
                         />
