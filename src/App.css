@@ -913,13 +913,15 @@ html[data-theme="light"] .phi-tab-active {
     -webkit-app-region: no-drag;
   }
 
-  /* App-wide scrollbars — transparent track, themed thumb, no arrow buttons.
-     Covers Chromium/Electron (webkit) + Firefox. `.scrollbar-none` in
-     utilities still wins where we want no scrollbar at all. */
-  * {
-    scrollbar-width: thin;
-    scrollbar-color: var(--phi-scrollbar-thumb) transparent;
-  }
+  /* App-wide scrollbars — custom Chromium/Electron rendering with a
+     transparent track, themed thumb, and no arrow buttons. NOTE: do NOT
+     set the standard `scrollbar-width`/`scrollbar-color` here: since
+     Chrome 121 those take precedence and silently disable every
+     ::-webkit-scrollbar-* rule below, handing button visibility back to
+     the OS (which is where the top/bottom arrow buttons come from).
+     The standard properties are applied as a Firefox-only fallback
+     further down. `.scrollbar-none` in utilities still wins where we
+     want no scrollbar at all. */
   *::-webkit-scrollbar {
     width: 10px;
     height: 10px;
@@ -972,5 +974,15 @@ html[data-theme="light"] .phi-tab-active {
   }
   *::-webkit-scrollbar-corner {
     background: transparent;
+  }
+
+  /* Firefox (no ::-webkit-scrollbar support): themed thin native
+     scrollbars. Gated so Chromium/Electron never sees the standard
+     properties (see note above). */
+  @supports not selector(::-webkit-scrollbar) {
+    * {
+      scrollbar-width: thin;
+      scrollbar-color: var(--phi-scrollbar-thumb) transparent;
+    }
   }
 }
