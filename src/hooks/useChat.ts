@@ -3,43 +3,28 @@ import { abortPrompt, createSession, getMessages } from "../lib/api";
 import { streamPrompt, type SseEvent } from "../lib/sse";
 import { streamContinue } from "../lib/api";
 import type { SessionMessagesResponse } from "../types/session";
-import type { WorkItem, WorkOrder } from "../types/work";
 import {
-  asRecord,
-  extractCustomNotice,
-  extractToolResultText,
-  insertWorkItem,
-  patchWorkItem,
-  toolCallFromAssistantEvent,
-} from "../lib/stream-events";
+  createPendingStream,
+  emptyStreamState,
+  flushPendingToStream,
+  isLocalNoticeFallback,
+  reduceStreamEvent,
+  responseContainsNotices,
+  withNoticesAppended,
+  type StreamDraft,
+  type StreamingState,
+} from "../lib/stream-reducer";
 
-type StreamingState = {
-  text: string;
-  workItems: WorkItem[];
-  error?: string;
-  startedAt?: number | null;
-};
-
-type PendingThinking = {
-  id: string;
-  order: WorkOrder;
-  text: string;
-};
-
-type PendingStream = {
-  text: string;
-  thinking: PendingThinking[];
+// Effect handle for one in-flight stream. The rAF id stays here in the hook;
+// everything else lives in the pure `StreamDraft` owned by stream-reducer.
+type PendingEntry = {
+  draft: StreamDraft;
   rafId: number | null;
-  assistantMessageIndex: number;
-  currentThinkingContentIndex: number | null;
-  fallbackContentIndex: number;
 };
 
 const MAX_CACHE = 20;
 
-function emptyStream(): StreamingState {
-  return { text: "", workItems: [], startedAt: null };
-}
+const emptyStream = emptyStreamState;
 
 /**
  * Keeps transient chat state per persisted session file. The selected file only
@@ -59,7 +44,7 @@ export function useChat() {
   const cacheRef = useRef<Map<string, SessionMessagesResponse>>(new Map());
   const pendingPrefetchRef = useRef<Set<string>>(new Set());
   const controllersRef = useRef<Map<string, AbortController>>(new Map());
-  const pendingStreamsRef = useRef<Map<string, PendingStream>>(new Map());
+  const pendingStreamsRef = useRef<Map<string, PendingEntry>>(new Map());
   const noticesRef = useRef<Map<string, string[]>>(new Map());
   const seenAgentRef = useRef<Set<string>>(new Set());
 
@@ -131,39 +116,13 @@ export function useChat() {
   }, []);
 
   const flushStream = useCallback((file: string) => {
-    const pending = pendingStreamsRef.current.get(file);
-    if (!pending) return;
-    pending.rafId = null;
-    const { text, thinking } = pending;
-    if (!text && thinking.length === 0) return;
-    pending.text = "";
-    pending.thinking = [];
-    updateStream(file, (stream) => {
-      let workItems = stream.workItems;
-      for (const update of thinking) {
-        const index = workItems.findIndex((item) => item.id === update.id);
-        const item = index >= 0 ? workItems[index] : undefined;
-        if (item?.kind === "thinking") {
-          workItems = [...workItems];
-          workItems[index] = {
-            ...item,
-            text: item.text + update.text,
-          };
-        } else {
-          workItems = insertWorkItem(workItems, {
-            kind: "thinking",
-            id: update.id,
-            text: update.text,
-            order: update.order,
-          });
-        }
-      }
-      return {
-        ...stream,
-        text: stream.text + text,
-        workItems,
-      };
-    });
+    const entry = pendingStreamsRef.current.get(file);
+    if (!entry) return;
+    entry.rafId = null;
+    const captured = entry.draft;
+    if (!captured.text && captured.thinking.length === 0) return;
+    entry.draft = { ...captured, text: "", thinking: [] };
+    updateStream(file, (stream) => flushPendingToStream(captured, stream).stream);
   }, [updateStream]);
 
   const scheduleFlush = useCallback((file: string) => {
@@ -177,6 +136,61 @@ export function useChat() {
     if (pending?.rafId !== null && pending?.rafId !== undefined) cancelAnimationFrame(pending.rafId);
     pendingStreamsRef.current.delete(file);
   }, []);
+
+  // Single code path for prompt and continuation events. Pure reduction lives
+  // in `stream-reducer`; this only plumbs refs, stream state, and rAF.
+  const applyStreamEvent = useCallback((file: string, event: SseEvent) => {
+    const entry = pendingStreamsRef.current.get(file);
+    if (!entry) return;
+    const outcome = reduceStreamEvent(entry.draft, event);
+    entry.draft = outcome.draft;
+    if (outcome.sawAgent) seenAgentRef.current.add(file);
+    if (outcome.notice !== undefined) noticesRef.current.get(file)?.push(outcome.notice);
+    if (outcome.streamUpdate) updateStream(file, outcome.streamUpdate);
+    if (outcome.error !== undefined) setFileError(file, outcome.error);
+    if (outcome.buffered) scheduleFlush(file);
+  }, [scheduleFlush, setFileError, updateStream]);
+
+  const beginStream = useCallback((file: string) => {
+    const controller = new AbortController();
+    controllersRef.current.set(file, controller);
+    pendingStreamsRef.current.set(file, { draft: createPendingStream(), rafId: null });
+    noticesRef.current.set(file, []);
+    seenAgentRef.current.delete(file);
+    updateStream(file, () => ({ ...emptyStream(), startedAt: Date.now() }));
+    markRunning(file, true);
+    setFileError(file, null);
+    return controller;
+  }, [markRunning, setFileError, updateStream]);
+
+  // Shared post-stream finalization: drain buffers, revalidate history with
+  // custom notices merged, then tear down only this file's run. Prompt and
+  // continuation differ only in `isSlash`.
+  const finalizeStream = useCallback(async (file: string, controller: AbortController, isSlash: boolean) => {
+    flushStream(file);
+    const notices = noticesRef.current.get(file) ?? [];
+    const sawAgent = seenAgentRef.current.has(file);
+    try {
+      const response = await getMessages(file);
+      if (isLocalNoticeFallback(response, isSlash, sawAgent)) {
+        updateCachedResponse(file, (current) => withNoticesAppended(current, notices));
+      } else if (notices.length > 0) {
+        storeResponse(file, responseContainsNotices(response, notices) ? response : withNoticesAppended(response, notices));
+      } else {
+        storeResponse(file, response);
+      }
+    } catch {
+      // The optimistic transcript and live stream stay visible if refresh fails.
+    }
+    if (controllersRef.current.get(file) === controller) {
+      controllersRef.current.delete(file);
+      clearPendingStream(file);
+      noticesRef.current.delete(file);
+      seenAgentRef.current.delete(file);
+      markRunning(file, false);
+      setStreamsByFile((previous) => ({ ...previous, [file]: emptyStream() }));
+    }
+  }, [clearPendingStream, flushStream, markRunning, storeResponse, updateCachedResponse]);
 
   const openFile = useCallback(async (file: string) => {
     setActiveFile(file);
@@ -317,71 +331,15 @@ export function useChat() {
       setFileError(file, "A prompt is already running for this session");
       return;
     }
-    const controller = new AbortController();
-    controllersRef.current.set(file, controller);
-    pendingStreamsRef.current.set(file, {
-      text: "",
-      thinking: [],
-      rafId: null,
-      assistantMessageIndex: -1,
-      currentThinkingContentIndex: null,
-      fallbackContentIndex: 1_000_000,
-    });
-    noticesRef.current.set(file, []);
-    seenAgentRef.current.delete(file);
-    updateStream(file, () => ({ ...emptyStream(), startedAt: Date.now() }));
-    markRunning(file, true);
-    setFileError(file, null);
+    const controller = beginStream(file);
     try {
-      await streamContinue({ sessionFile: file, cwd }, (event: any) => {
-        const type = String(event.type ?? "");
-        const pending = pendingStreamsRef.current.get(file!);
-        if (!pending) return;
-        if (type === "agent_start") seenAgentRef.current.add(file!);
-        else if (type === "message_start" || type === "message_end") {
-          const message = asRecord(event.message);
-          if (type === "message_start") {
-            flushStream(file!);
-            if (message.role === "assistant") { pending.assistantMessageIndex += 1; pending.currentThinkingContentIndex = null; pending.fallbackContentIndex = 1_000_000; }
-          }
-          if (message.role === "custom" && message.display !== false) {
-            const notice = extractCustomNotice(message); if (notice) { noticesRef.current.get(file!)?.push(notice); pending.text += (pending.text ? "\n\n" : "") + notice; scheduleFlush(file!); }
-          }
-          if (type === "message_end") flushStream(file!);
-        } else if (type === "message_update") {
-          const assistantEvent = asRecord(event.assistantMessageEvent ?? event.event);
-          const assistantEventType = String(assistantEvent.type ?? "");
-          if (assistantEventType === "text_delta" && typeof assistantEvent.delta === "string") { pending.text += assistantEvent.delta; scheduleFlush(file!); }
-          else if (assistantEventType === "thinking_start" || assistantEventType === "thinking_delta") {
-            if (pending.assistantMessageIndex < 0) pending.assistantMessageIndex = 0;
-            const contentIndex = typeof assistantEvent.contentIndex === "number" ? assistantEvent.contentIndex : (pending.currentThinkingContentIndex ??= pending.fallbackContentIndex++);
-            pending.currentThinkingContentIndex = contentIndex;
-            if (assistantEventType === "thinking_delta" && typeof assistantEvent.delta === "string") { const id = `thinking:${pending.assistantMessageIndex}:${contentIndex}`; const existing = pending.thinking.find((item) => item.id === id); if (existing) existing.text += assistantEvent.delta; else pending.thinking.push({ id, order: { message: pending.assistantMessageIndex, content: contentIndex }, text: assistantEvent.delta }); scheduleFlush(file!); }
-          } else if (assistantEventType === "thinking_end") pending.currentThinkingContentIndex = null;
-          else if (assistantEventType === "toolcall_start" || assistantEventType === "toolcall_end") {
-            const call = toolCallFromAssistantEvent(assistantEvent); if (call) { flushStream(file!); if (pending.assistantMessageIndex < 0) pending.assistantMessageIndex = 0; const contentIndex = typeof assistantEvent.contentIndex === "number" ? assistantEvent.contentIndex : pending.fallbackContentIndex++; updateStream(file!, (stream) => ({ ...stream, workItems: insertWorkItem(stream.workItems, { kind: "tool", id: call.id, name: call.name, args: call.args, order: { message: pending.assistantMessageIndex, content: contentIndex } }) })); }
-          }
-        } else if (type === "tool_execution_start") {
-          flushStream(file!); if (pending.assistantMessageIndex < 0) pending.assistantMessageIndex = 0; const toolCallId = String(event.toolCallId ?? event.id ?? `${Date.now()}`); const toolName = String(event.toolName ?? event.name ?? "tool"); const args = asRecord(event.args ?? event.toolArgs); const fallbackOrder = { message: pending.assistantMessageIndex, content: pending.fallbackContentIndex++ }; updateStream(file!, (stream) => { const existing = stream.workItems.find((item) => item.id === toolCallId); return { ...stream, workItems: insertWorkItem(stream.workItems, { kind: "tool", id: toolCallId, name: toolName, args, startedAt: (existing as Extract<WorkItem, { kind: "tool" }> | undefined)?.startedAt ?? Date.now(), order: existing?.order ?? fallbackOrder }) }; });
-        } else if (type === "tool_execution_update") { flushStream(file!); const toolCallId = String(event.toolCallId ?? ""); const partial = event.partialResult ?? event.output ?? ""; const partialText = typeof partial === "string" ? partial : partial && typeof partial === "object" ? JSON.stringify(partial).slice(0, 500) : ""; updateStream(file!, (stream) => ({ ...stream, workItems: patchWorkItem(stream.workItems, toolCallId, { partial: partialText }) })); }
-        else if (type === "tool_execution_end") { flushStream(file!); const toolCallId = String(event.toolCallId ?? ""); const resultRecord = asRecord(event.result); const resultText = extractToolResultText(event.result); const resultDetails = asRecord(resultRecord.details); const resultDiff = typeof resultDetails.diff === "string" ? resultDetails.diff : undefined; updateStream(file!, (stream) => ({ ...stream, workItems: patchWorkItem(stream.workItems, toolCallId, { result: { text: resultText, isError: Boolean(event.isError), diff: resultDiff }, isError: Boolean(event.isError), done: true, durationMs: Date.now() - ((stream.workItems.find((item) => item.id === toolCallId) as Extract<WorkItem, { kind: "tool" }> | undefined)?.startedAt ?? Date.now()) }) })); }
-        else if (type === "error") { const message = String(event.error ?? "error"); updateStream(file!, (stream) => ({ ...stream, error: message })); setFileError(file!, message); }
-      }, controller.signal);
+      await streamContinue({ sessionFile: file, cwd }, (event) => applyStreamEvent(file, event), controller.signal);
     } catch (error) {
       if ((error as Error).name !== "AbortError") { const message = error instanceof Error ? error.message : String(error); updateStream(file, (stream) => ({ ...stream, error: message })); setFileError(file, message); }
     } finally {
-      flushStream(file);
-      const notices = noticesRef.current.get(file) ?? [];
-      const sawAgent = seenAgentRef.current.has(file);
-      const isSlash = false;
-      try {
-        const response = await getMessages(file);
-        const emptyHistory = response.context.messages.length === 0;
-        if (isSlash && emptyHistory && !sawAgent) { updateCachedResponse(file, (current) => { if (notices.length === 0) return current; return { ...current, context: { ...current.context, messages: [...current.context.messages, { role: "assistant", content: notices.map((notice) => ({ type: "text", text: notice })), timestamp: Date.now() } as unknown as SessionMessagesResponse["context"]["messages"][number]] } }; }); } else if (notices.length > 0) { const noticesInHistory = response.context.messages.some((message) => { const messageContent = (message as Record<string, unknown>).content; return Array.isArray(messageContent) && messageContent.some((part) => notices.includes(String((part as Record<string, unknown>).text ?? ""))); }); if (!noticesInHistory) { response.context.messages.push({ role: "assistant", content: notices.map((notice) => ({ type: "text", text: notice })), timestamp: Date.now() } as unknown as SessionMessagesResponse["context"]["messages"][number]); } storeResponse(file, response); } else { storeResponse(file, response); }
-      } catch {}
-      if (controllersRef.current.get(file) === controller) { controllersRef.current.delete(file); clearPendingStream(file); noticesRef.current.delete(file); seenAgentRef.current.delete(file); markRunning(file, false); setStreamsByFile((previous) => ({ ...previous, [file]: emptyStream() })); }
+      await finalizeStream(file, controller, false);
     }
-  }, [clearPendingStream, flushStream, markRunning, scheduleFlush, setFileError, storeResponse, updateCachedResponse, updateStream]);
+  }, [applyStreamEvent, beginStream, finalizeStream, setFileError, updateStream]);
 
   const prompt = useCallback(async (
     text: string,
@@ -460,226 +418,31 @@ export function useChat() {
       context: { ...initial.context, messages: [...initial.context.messages, userMessage] },
     });
 
-    const controller = new AbortController();
-    controllersRef.current.set(file, controller);
-    pendingStreamsRef.current.set(file, {
-      text: "",
-      thinking: [],
-      rafId: null,
-      assistantMessageIndex: -1,
-      currentThinkingContentIndex: null,
-      fallbackContentIndex: 1_000_000,
-    });
-    noticesRef.current.set(file, []);
-    seenAgentRef.current.delete(file);
-    updateStream(file, () => ({ ...emptyStream(), startedAt: Date.now() }));
-    markRunning(file, true);
-    setFileError(file, null);
+    const streamFile = file;
+    const controller = beginStream(streamFile);
 
     try {
       await streamPrompt(
-        { text: trimmed || " ", sessionFile: file, cwd, images: opts.images },
-        (event: SseEvent) => {
-          const type = String(event.type ?? "");
-          const pending = pendingStreamsRef.current.get(file!);
-          if (!pending) return;
-
-          if (type === "agent_start") {
-            seenAgentRef.current.add(file!);
-          } else if (type === "message_start" || type === "message_end") {
-            const message = asRecord(event.message);
-            if (type === "message_start") {
-              flushStream(file!);
-              if (message.role === "assistant") {
-                pending.assistantMessageIndex += 1;
-                pending.currentThinkingContentIndex = null;
-                pending.fallbackContentIndex = 1_000_000;
-              }
-            }
-
-            if (message.role === "custom" && message.display !== false) {
-              const notice = extractCustomNotice(message);
-              if (notice) {
-                noticesRef.current.get(file!)?.push(notice);
-                pending.text += (pending.text ? "\n\n" : "") + notice;
-                scheduleFlush(file!);
-              }
-            }
-
-            if (type === "message_end") flushStream(file!);
-          } else if (type === "message_update") {
-            const assistantEvent = asRecord(event.assistantMessageEvent ?? event.event);
-            const assistantEventType = String(assistantEvent.type ?? "");
-            if (assistantEventType === "text_delta" && typeof assistantEvent.delta === "string") {
-              pending.text += assistantEvent.delta;
-              scheduleFlush(file!);
-            } else if (assistantEventType === "thinking_start" || assistantEventType === "thinking_delta") {
-              if (pending.assistantMessageIndex < 0) pending.assistantMessageIndex = 0;
-              const contentIndex = typeof assistantEvent.contentIndex === "number"
-                ? assistantEvent.contentIndex
-                : (pending.currentThinkingContentIndex ??= pending.fallbackContentIndex++);
-              pending.currentThinkingContentIndex = contentIndex;
-
-              if (assistantEventType === "thinking_delta" && typeof assistantEvent.delta === "string") {
-                const id = `thinking:${pending.assistantMessageIndex}:${contentIndex}`;
-                const existing = pending.thinking.find((item) => item.id === id);
-                if (existing) existing.text += assistantEvent.delta;
-                else pending.thinking.push({
-                  id,
-                  order: { message: pending.assistantMessageIndex, content: contentIndex },
-                  text: assistantEvent.delta,
-                });
-                scheduleFlush(file!);
-              }
-            } else if (assistantEventType === "thinking_end") {
-              pending.currentThinkingContentIndex = null;
-            } else if (assistantEventType === "toolcall_start" || assistantEventType === "toolcall_end") {
-              const call = toolCallFromAssistantEvent(assistantEvent);
-              if (call) {
-                flushStream(file!);
-                if (pending.assistantMessageIndex < 0) pending.assistantMessageIndex = 0;
-                const contentIndex = typeof assistantEvent.contentIndex === "number"
-                  ? assistantEvent.contentIndex
-                  : pending.fallbackContentIndex++;
-                updateStream(file!, (stream) => ({
-                  ...stream,
-                  workItems: insertWorkItem(stream.workItems, {
-                    kind: "tool",
-                    id: call.id,
-                    name: call.name,
-                    args: call.args,
-                    order: { message: pending.assistantMessageIndex, content: contentIndex },
-                  }),
-                }));
-              }
-            }
-          } else if (type === "tool_execution_start") {
-            flushStream(file!);
-            if (pending.assistantMessageIndex < 0) pending.assistantMessageIndex = 0;
-            const toolCallId = String(event.toolCallId ?? event.id ?? `${Date.now()}`);
-            const toolName = String(event.toolName ?? event.name ?? "tool");
-            const args = asRecord(event.args ?? event.toolArgs);
-            const fallbackOrder = {
-              message: pending.assistantMessageIndex,
-              content: pending.fallbackContentIndex++,
-            };
-            updateStream(file!, (stream) => {
-              const existing = stream.workItems.find((item) => item.id === toolCallId);
-              return {
-                ...stream,
-                workItems: insertWorkItem(stream.workItems, {
-                  kind: "tool",
-                  id: toolCallId,
-                  name: toolName,
-                  args,
-                  startedAt: (existing as Extract<WorkItem, { kind: "tool" }> | undefined)?.startedAt ?? Date.now(),
-                  order: existing?.order ?? fallbackOrder,
-                }),
-              };
-            });
-          } else if (type === "tool_execution_update") {
-            flushStream(file!);
-            const toolCallId = String(event.toolCallId ?? "");
-            const partial = event.partialResult ?? event.output ?? "";
-            const partialText = typeof partial === "string"
-              ? partial
-              : partial && typeof partial === "object" ? JSON.stringify(partial).slice(0, 500) : "";
-            updateStream(file!, (stream) => ({
-              ...stream,
-              workItems: patchWorkItem(stream.workItems, toolCallId, { partial: partialText }),
-            }));
-          } else if (type === "tool_execution_end") {
-            flushStream(file!);
-            const toolCallId = String(event.toolCallId ?? "");
-            const resultRecord = asRecord(event.result);
-            const resultText = extractToolResultText(event.result);
-            const resultDetails = asRecord(resultRecord.details);
-            const resultDiff = typeof resultDetails.diff === "string" ? resultDetails.diff : undefined;
-            updateStream(file!, (stream) => ({
-              ...stream,
-              workItems: patchWorkItem(stream.workItems, toolCallId, {
-                result: { text: resultText, isError: Boolean(event.isError), diff: resultDiff },
-                isError: Boolean(event.isError),
-                done: true,
-                durationMs: Date.now() - ((stream.workItems.find((item) => item.id === toolCallId) as Extract<WorkItem, { kind: "tool" }> | undefined)?.startedAt ?? Date.now()),
-              }),
-            }));
-          } else if (type === "error") {
-            const message = String(event.error ?? "error");
-            updateStream(file!, (stream) => ({ ...stream, error: message }));
-            setFileError(file!, message);
-          }
-        },
+        { text: trimmed || " ", sessionFile: streamFile, cwd, images: opts.images },
+        (event: SseEvent) => applyStreamEvent(streamFile, event),
         controller.signal,
       );
     } catch (error) {
       if ((error as Error).name !== "AbortError") {
         const message = error instanceof Error ? error.message : String(error);
-        updateStream(file, (stream) => ({ ...stream, error: message }));
-        setFileError(file, message);
+        updateStream(streamFile, (stream) => ({ ...stream, error: message }));
+        setFileError(streamFile, message);
       }
     } finally {
-      flushStream(file);
-      const notices = noticesRef.current.get(file) ?? [];
-      const sawAgent = seenAgentRef.current.has(file);
-      const isSlash = trimmed.startsWith("/");
-
-      try {
-        const response = await getMessages(file);
-        const emptyHistory = response.context.messages.length === 0;
-        if (isSlash && emptyHistory && !sawAgent) {
-          updateCachedResponse(file, (current) => {
-            if (notices.length === 0) return current;
-            return {
-              ...current,
-              context: {
-                ...current.context,
-                messages: [...current.context.messages, {
-                  role: "assistant",
-                  content: notices.map((notice) => ({ type: "text", text: notice })),
-                  timestamp: Date.now(),
-                } as unknown as SessionMessagesResponse["context"]["messages"][number]],
-              },
-            };
-          });
-        } else if (notices.length > 0) {
-          const noticesInHistory = response.context.messages.some((message) => {
-            const messageContent = (message as Record<string, unknown>).content;
-            return Array.isArray(messageContent) && messageContent.some((part) => notices.includes(String((part as Record<string, unknown>).text ?? "")));
-          });
-          if (!noticesInHistory) {
-            response.context.messages.push({
-              role: "assistant",
-              content: notices.map((notice) => ({ type: "text", text: notice })),
-              timestamp: Date.now(),
-            } as unknown as SessionMessagesResponse["context"]["messages"][number]);
-          }
-          storeResponse(file, response);
-        } else {
-          storeResponse(file, response);
-        }
-      } catch {
-        // The optimistic transcript and live stream stay visible if refresh fails.
-      }
-
-      if (controllersRef.current.get(file) === controller) {
-        controllersRef.current.delete(file);
-        clearPendingStream(file);
-        noticesRef.current.delete(file);
-        seenAgentRef.current.delete(file);
-        markRunning(file, false);
-        setStreamsByFile((previous) => ({ ...previous, [file]: emptyStream() }));
-      }
+      await finalizeStream(streamFile, controller, trimmed.startsWith("/"));
     }
   }, [
-    clearPendingStream,
-    flushStream,
-    markRunning,
-    scheduleFlush,
+    applyStreamEvent,
+    beginStream,
+    finalizeStream,
     setActiveFile,
     setFileError,
     storeResponse,
-    updateCachedResponse,
     updateStream,
   ]);
 

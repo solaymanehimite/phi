@@ -2,7 +2,7 @@
 
 Living plan for paying down structure debt without a full rewrite. Work top to bottom. Each item is scoped so it can land on its own. Nothing here changes product behavior unless noted.
 
-Status: section 1 landed 2026-09-13 (68 characterization tests + test/typecheck/lint gates green, build green).
+Status: sections 1–4 landed 2026-09-13 (98 tests across 10 files; test/typecheck green, lint green with only pre-existing section 11/13 warnings, build green).
 
 ## How to use this doc
 
@@ -137,7 +137,9 @@ Then prompt, continuation, and compaction only supply path, body, and callback.
 
 Also move `SseEvent` into `src/types/session.ts` or a shared `src/types/sse.ts`. Both `lib/api.ts` and `lib/sse.ts` define it loosely today.
 
-## 4. Extract stream reducer from useChat
+## 4. Extract stream reducer from useChat — DONE 2026-09-13
+
+Landed, behavior-preserving. Pure reducer in `src/lib/stream-reducer.ts` (`reduceStreamEvent`, `createPendingStream`, `finishStream`; `extractCustomNotice`/`extractToolResultText` canonical in `src/lib/stream-events.ts` and re-exported). `useChat` (785 → 484 lines) has one event path (`applyStreamEvent`) and one finalization (`finalizeStream`) shared by prompt and continuation; it keeps controllers, cache, running flags, rAF batching, and the final `getMessages` refresh. `flushPendingToStream` delegates its stream half to `finishStream` so the commit path is single. Gates green: `bun run test` (98 pass, 10 files), `bun run typecheck`, `bun run lint` (only pre-existing section 11/13 warnings), `bun run build` green. Spec kept below for context.
 
 `src/hooks/useChat.ts` is 785 lines. Prompt handling around line 527 and continuation handling around line 383 duplicate the same branches. The continuation copy is compressed into hard one-liners.
 
