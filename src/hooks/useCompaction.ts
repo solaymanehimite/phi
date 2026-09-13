@@ -104,7 +104,7 @@ export function useCompaction(opts: {
         markCompacting(file, false);
       }
     },
-    [markCompacting, setErr, opts],
+    [markCompacting, setErr, opts.revalidate, opts.getMessages, opts.storeResponse],
   );
 
   const abort = useCallback(

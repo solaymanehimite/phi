@@ -193,7 +193,7 @@ export default function App() {
     const sessions = useSessions();
     const sessionFlags = useSessionFlags();
     const chat = useChat();
-    const compaction = useCompaction({ revalidate: chat.revalidate });
+    const compaction = useCompaction(useMemo(() => ({ revalidate: chat.revalidate }), [chat.revalidate]));
     const queue = useMessageQueue(chat.activeFile);
     const lastCompactInstructionsRef = useRef<Record<string, string | undefined>>({});
     const models = useModels();
@@ -1021,8 +1021,7 @@ export default function App() {
         // /compact with optional instructions — keep verbatim routing even while streaming (compact will abort streaming)
         if (trimmed.startsWith("/compact")) {
             const after = trimmed.slice("/compact".length).trim();
-            // allow "/compact" alone or with instructions; treat whitespace-only after as no instructions
-            const isCompactCommand = trimmed === "/compact" || trimmed.startsWith("/compact ") || trimmed.startsWith("/compact\t") || trimmed.startsWith("/compact\n") || after.length >= 0 && trimmed.startsWith("/compact");
+            const isCompactCommand = trimmed === "/compact" || /^\/compact\s/.test(trimmed);
             if (isCompactCommand) {
                 const instructions = after || undefined;
                 const targetFile = chat.activeFile;
@@ -1060,7 +1059,7 @@ export default function App() {
                 promoteNewChatTab(file);
                 try { await sessions.switchTo(file, selectedCwd); } catch {}
                 await chat.openFile(file);
-                sessions.addOptimistic(file, selectedCwd || "/home/solaymanehimite/Dev/ship/Phi", content);
+                sessions.addOptimistic(file, selectedCwd || "", content);
                 const parsed = draftModelKey?.includes("/") ? { provider: draftModelKey.split("/")[0], id: draftModelKey.split("/").slice(1).join("/") } : null;
                 if (parsed) {
                     try { const res: any = await models.setModel(file, parsed.provider, parsed.id); if (res?.model) chat.patchModel(res.model, res.thinkingLevel, file); } catch (e) { setModelError(e instanceof Error ? e.message : String(e)); }
@@ -1078,7 +1077,7 @@ export default function App() {
                 onNewFile: (file, cwd, firstMessage) => {
                     const realCwd = cwd || chat.data?.cwd || selectedCwd || "";
                     promoteNewChatTab(file);
-                    sessions.addOptimistic(file, realCwd || "/home/solaymanehimite/Dev/ship/Phi", firstMessage);
+                    sessions.addOptimistic(file, realCwd, firstMessage);
                 },
             });
         } catch (e) {
@@ -1187,7 +1186,6 @@ export default function App() {
         onCloseTab: handleCloseActiveTab,
         onDeleteSession: () => { if (!settingsActive && !uiDemoActive) void handleDeleteCurrent(); },
         onFocusProject: focusProjectPicker,
-        onOpenSearch: () => {},
         onOpenSettings: openSettingsTab,
         onAbort: () => { if (!settingsActive && !uiDemoActive) handleAbortRequest(); },
         onNextTab: () => handleCycleTab(1),
@@ -1203,9 +1201,8 @@ export default function App() {
     return (
         <SessionCommand groups={sessions.groups} projects={projectOptions} loading={sessions.loading} error={sessions.error} actions={commandActions} onAction={handleCommandAction} onSelect={(file) => void handleSelect(file)}>
             {(openSearch) => {
-                // inject openSearch into shortcuts
-                // we need to expose via ref hack: set onOpenSearch dynamic
-                // For simplicity, handle Cmd+K via SessionCommand itself; shortcuts for K is no-op
+                // Cmd+K ownership lives in SessionCommand alone; useShortcuts
+                // deliberately ignores that chord so there is one handler.
                 return (
                     <div className="phi-layout text-phi-text-primary antialiased selection:bg-phi-accent/25">
                         <div

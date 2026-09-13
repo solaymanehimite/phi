@@ -51,30 +51,24 @@ export function useProjects() {
             const path = normalizeProjectPath(input.path, homeCwd);
             if (!path) throw new Error("Project path is required");
             const name = input.name.trim() || path;
-            let result: Project | undefined;
+            // Compute the result from current state first, then store it.
+            // The old code read the id back out of the state updater, which
+            // React is free to run later, so the fallback could return an id
+            // that was never stored.
+            const existing = projects.find((p) => p.path === path);
+            const result: Project = existing
+                ? { ...existing, name }
+                : { id: createProjectId(), name, path, createdAt: Date.now() };
             setStored((prev) => {
                 const list = sanitizeProjects(prev);
-                const existing = list.find((p) => p.path === path);
-                if (existing) {
-                    result = { ...existing, name };
-                    return list.map((p) => (p.path === path ? result! : p));
+                if (list.some((p) => p.path === path)) {
+                    return list.map((p) => (p.path === path ? { ...p, name } : p));
                 }
-                result = {
-                    id: createProjectId(),
-                    name,
-                    path,
-                    createdAt: Date.now(),
-                };
                 return [...list, result];
             });
-            // setStored updater runs synchronously for useState — result is set.
-            // Fallback constructs the project if the updater was deferred.
-            if (!result) {
-                result = { id: createProjectId(), name, path, createdAt: Date.now() };
-            }
             return result;
         },
-        [setStored],
+        [projects, setStored],
     );
 
     const removeProject = useCallback(

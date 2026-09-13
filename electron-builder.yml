@@ -1,6 +1,6 @@
 # Phi — electron-builder config.
 # Tauri is gone: the sidecar is a self-contained Bun binary built to binaries/
-# via `bun run build:sidecar`, icons live in build/.
+# via `bun run build:sidecar`.
 appId: com.solaymanehimite.phi
 productName: phi
 directories:
@@ -24,17 +24,18 @@ extraResources:
     to: binaries/
     filter:
       - server*
+# No branded icons yet: win/mac/linux `icon` keys stay out on purpose so
+# packaging uses the default Electron icon (loud) instead of pointing at
+# build/icon.* files that do not exist (silent). Add real assets under
+# build/ and re-add the keys when they land.
 win:
-  icon: build/icon.ico
   target:
     - nsis
 mac:
-  icon: build/icon.icns
   category: public.app-category.developer-tools
   target:
     - dmg
 linux:
-  icon: build/icon.png
   category: Development
   target:
     - AppImage

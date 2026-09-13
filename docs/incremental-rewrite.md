@@ -66,7 +66,20 @@ Suggested:
 - `typecheck`: strict check for `src`, `server`, `electron`, and `scripts`.
 - `lint`: at least unused exports, banned terms in UI copy, and token violations.
 
-## 2. Small correctness fixes
+## 2. Small correctness fixes — DONE 2026-09-13
+
+All ten items landed, each independent. Gates green: `bun run test` (68 pass), `bun run typecheck`, `bun run lint` (only pre-existing section 11/13 warnings), `bun run build` green with the stale-asset warning gone.
+
+1. Workspace fallback (`src/App.tsx`): both `addOptimistic` calls now fall back to `""` instead of a machine-specific home path. The resolved cwd (`selectedCwd` / `realCwd`) still wins when present.
+2. Stale stylesheet (`index.html`): removed the hardcoded `index-D0ioivR4.css` link. Vite injects the hashed asset itself.
+3. Packaged icons (`electron-builder.yml`): dropped the `build/icon.*` references (no such files exist) with a comment saying why. Packaging now uses the default Electron icon, which is obvious, instead of pretending branded icons exist.
+4. Project creation (`src/hooks/useProjects.ts`): `addProject` computes the result from current state first, then stores via a merge updater. No longer reads the id back out of the state updater, which React may run later.
+5. Compaction options (`src/App.tsx`, `src/hooks/useCompaction.ts`): options object memoized on `chat.revalidate`, and the hook depends on individual fields instead of the whole `opts` object. `compact` keeps a stable identity across renders now.
+6. Compact check (`src/App.tsx`): replaced the always-true `after.length >= 0` clause with `/^\/compact\s/` plus the exact match, so `/compactfoo` no longer routes to compaction.
+7. Search shortcut (`src/App.tsx`, `src/hooks/useShortcuts.ts`): removed the dead `onOpenSearch: () => {}` prop. Cmd/Ctrl+K has one owner, `SessionCommand`; the shortcuts hook documents that and stays out of the way.
+8. Provider key display (`src/components/settings.tsx`): removed the fake Show/Hide toggle (the server only ever sends the masked value, so "Show" revealed nothing). The row shows the masked key with a title noting the full key stays on the sidecar. Test and Delete stay.
+9. Queue persistence (`src/hooks/useMessageQueue.ts`): persisted copy capped at 20 head items and 100KB, images stripped before write, tail-shrunk to fit. Write failures warn and emit `phi:queue-persist-error` instead of swallowing. In-memory queue untouched.
+10. Dialog overlay (`src/components/settings.tsx`): removed `role="presentation"` from the provider dialog so it no longer overrides the dialog semantics. Dismissal (scrim click) unchanged.
 
 These are cheap and show why tests matter. Each is independent.
 
@@ -459,7 +472,7 @@ Fix:
 ## Suggested first batch
 
 1. Add characterization tests. (Done — section 1.)
-2. Fix absolute fallback path and stale asset link.
+2. Fix absolute fallback path and stale asset link. (Done — section 2.)
 3. Extend strict typecheck to server and Electron. (Done — section 1.)
 4. Consolidate SSE transport.
 5. Extract stream reducer.

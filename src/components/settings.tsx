@@ -560,7 +560,6 @@ function ProvidersTab({ onChanged }: { onChanged?: () => void }) {
     const [error, setError] = useState<string | null>(null);
     const [form, setForm] = useState({ label: "", baseUrl: "", apiKey: "" });
     const [dialogOpen, setDialogOpen] = useState(false);
-    const [showKey, setShowKey] = useState<Record<string, boolean>>({});
     const [testing, setTesting] = useState<string | null>(null);
     const [testResult, setTestResult] = useState<Record<string, string>>({});
     const [saving, setSaving] = useState(false);
@@ -605,7 +604,7 @@ function ProvidersTab({ onChanged }: { onChanged?: () => void }) {
             {error && <Alert variant="error">{error}</Alert>}
 
             {dialogOpen && (
-                <DialogOverlay role="presentation" onMouseDown={(e) => { if (e.target === e.currentTarget) setDialogOpen(false); }}>
+                <DialogOverlay onMouseDown={(e) => { if (e.target === e.currentTarget) setDialogOpen(false); }}>
                     <DialogPanel aria-labelledby="add-provider-title">
                         <div className="flex items-center justify-between">
                             <DialogTitle id="add-provider-title">Add provider</DialogTitle>
@@ -631,8 +630,7 @@ function ProvidersTab({ onChanged }: { onChanged?: () => void }) {
                                     <div className="truncate text-[13px] font-medium text-phi-text-primary">{p.label || p.id}</div>
                                     <div className="truncate font-mono text-[11px] text-phi-text-muted">{p.baseUrl}</div>
                                     <div className="flex items-center gap-1 text-[11px]">
-                                        <span className="font-mono text-phi-text-muted">{showKey[p.id] ? (p.maskedKey ? p.maskedKey.replace(/•/g, "•") : "no key") : p.maskedKey || "••••"}</span>
-                                        <button onClick={() => setShowKey((m) => ({ ...m, [p.id]: !m[p.id] }))} className="text-phi-text-tertiary hover:text-phi-text-secondary underline">{showKey[p.id] ? "Hide" : "Show"}</button>
+                                        <span className="font-mono text-phi-text-muted" title="The full key stays on the sidecar. This masked value is all the UI ever sees.">{p.maskedKey || (p.hasKey ? "••••" : "no key saved")}</span>
                                     </div>
                                     {testResult[p.id] && <div className={`mt-1 text-[11px] ${testResult[p.id] === "OK" ? "text-phi-thinking-low" : "text-phi-error-text"}`}>{testResult[p.id]}</div>}
                                 </div>

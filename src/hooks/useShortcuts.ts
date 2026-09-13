@@ -5,7 +5,6 @@ type Handlers = {
   onCloseTab: () => void;
   onDeleteSession: () => void;
   onFocusProject: () => void;
-  onOpenSearch: () => void;
   onOpenSettings: () => void;
   onAbort: () => void;
   onNextTab: () => void;
@@ -86,7 +85,8 @@ export function useShortcuts(handlers: Handlers, opts: { enabled?: boolean; isSt
         handlers.onFocusProject();
         return;
       }
-      // Cmd/Ctrl+K is handled by SessionCommand cmdk, don't intercept
+      // Cmd/Ctrl+K belongs to SessionCommand alone. This hook never claims
+      // it, so there is exactly one owner for the search shortcut.
       if (meta && e.key.toLowerCase() === "k") {
         return;
       }

@@ -14,6 +14,12 @@ export type { QueuedImage, QueuedMessage };
 
 const PREFIX = "phi:queue:";
 const EXPIRY_MS = 14 * 24 * 60 * 60 * 1000;
+// Persistence caps. Queued messages can carry base64 images, and localStorage
+// is shared with drafts, themes, and projects, so the persisted copy stays
+// small: images never persist, only the head of the queue is kept, and the
+// JSON envelope has a byte ceiling. The in-memory queue is unaffected.
+const MAX_PERSISTED_ITEMS = 20;
+const MAX_PERSISTED_BYTES = 100_000;
 
 function keyFor(sessionFile: string | null): string | null {
   if (!sessionFile) return null;
@@ -37,15 +43,38 @@ function readQueue(sessionFile: string | null): QueuedMessage[] {
   }
 }
 
-function writeQueue(sessionFile: string, items: QueuedMessage[]) {
+function toPersistedItems(items: QueuedMessage[]): QueuedMessage[] {
+  // Strip images (base64 payloads) and keep the head of the queue, which is
+  // what drains next. Then shrink from the tail until the envelope fits.
+  let out = items.slice(0, MAX_PERSISTED_ITEMS).map((item) => {
+    if (!item.images?.length) return item;
+    const { images: _dropped, ...rest } = item;
+    return rest as QueuedMessage;
+  });
+  while (out.length > 1 && JSON.stringify({ items: out, at: 0 }).length > MAX_PERSISTED_BYTES) {
+    out = out.slice(0, out.length - 1);
+  }
+  return out;
+}
+
+function writeQueue(sessionFile: string, items: QueuedMessage[]): boolean {
   try {
     const key = keyFor(sessionFile)!;
     if (items.length === 0) {
       localStorage.removeItem(key);
-      return;
+      return true;
     }
-    localStorage.setItem(key, JSON.stringify({ items, at: Date.now() }));
-  } catch {}
+    localStorage.setItem(key, JSON.stringify({ items: toPersistedItems(items), at: Date.now() }));
+    return true;
+  } catch (err) {
+    // Quota or access failure: never lose the in-memory queue silently.
+    // Warn and let the UI surface it via the phi:queue-persist-error event.
+    console.warn(`queue persistence failed for session`, err);
+    try {
+      window.dispatchEvent(new CustomEvent("phi:queue-persist-error", { detail: { sessionFile } }));
+    } catch {}
+    return false;
+  }
 }
 
 // Evict expired queues on load
@@ -71,7 +100,9 @@ function evictExpired() {
 
 /**
  * Per-session follow-up queue. Persisted to localStorage so a reload or
- * tab switch never loses queued steering messages. Uncapped by design.
+ * tab switch never loses queued steering messages. Persistence is capped
+ * (head items, text only, byte ceiling) and write failures warn plus emit
+ * a phi:queue-persist-error event; the in-memory queue always wins.
  */
 export function useMessageQueue(activeFile: string | null) {
   const [queues, setQueues] = useState<Record<string, QueuedMessage[]>>(() => {
