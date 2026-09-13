@@ -1279,7 +1279,7 @@ export default function App() {
                                         <div className="mx-auto flex w-full max-w-4xl flex-1 flex-col overflow-y-auto px-6 pt-6">
                                             <div className="flex flex-1 flex-col items-center justify-center pb-16 text-center">
                                                 <img
-                                                    src={brandingUrl("logo_small.svg", effectiveTheme)}
+                                                    src={brandingUrl("logo.svg", effectiveTheme)}
                                                     alt=""
                                                     aria-hidden="true"
                                                     className="phi-empty-logo"
