@@ -729,7 +729,7 @@ export function ThemeEditor({ className = "" }: ThemeEditorProps) {
                 aria-label="Open advanced color settings"
                 className="inline-grid size-8 shrink-0 place-items-center rounded-lg text-phi-text-tertiary transition-colors hover:bg-phi-overlay hover:text-phi-text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-phi-accent/40"
             >
-                <IconBrush className="size-4" />
+                <IconBrush className="size-4" fill="currentColor" />
             </PopoverTrigger>
 
             <PopoverContent
