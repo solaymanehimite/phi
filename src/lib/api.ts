@@ -406,6 +406,32 @@ export async function testProvider(id: string, opts?: { baseUrl?: string; apiKey
   return jsonOrThrow(res);
 }
 
+export type SkillRow = {
+  name: string;
+  description: string;
+  filePath: string;
+  enabled: boolean;
+  scope: "user" | "project" | string;
+  origin: string;
+  source: string;
+  baseDir: string | null;
+};
+
+export async function listSkills(cwd?: string): Promise<{ skills: SkillRow[] }> {
+  const qs = cwd ? `?cwd=${encodeURIComponent(cwd)}` : "";
+  const res = await apiFetch(`/skills${qs}`);
+  return jsonOrThrow(res);
+}
+
+export async function toggleSkill(path: string, enabled: boolean, cwd?: string): Promise<{ ok: boolean; enabled: boolean }> {
+  const res = await apiFetch(`/skills/toggle`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ path, enabled, cwd }),
+  });
+  return jsonOrThrow(res);
+}
+
 export type SlashCommand = {
   name: string;
   description?: string;

@@ -4,7 +4,7 @@ import { execFile as execFileCb } from "node:child_process";
 import { createHash } from "node:crypto";
 import { existsSync, promises as fs } from "node:fs";
 import os from "node:os";
-import { resolve as resolvePath, join as joinPath, dirname } from "node:path";
+import { resolve as resolvePath, join as joinPath, dirname, basename, relative } from "node:path";
 import {
   SessionManager,
   ModelRuntime,
@@ -13,6 +13,9 @@ import {
   createAgentSessionRuntime,
   createAgentSessionServices,
   createAgentSessionFromServices,
+  DefaultPackageManager,
+  loadSkills,
+  CONFIG_DIR_NAME,
 } from "@earendil-works/pi-coding-agent";
 import { clampThinkingLevel } from "./thinking";
 import { isPathSafe, isUnderNestedRepo } from "./paths";
@@ -1712,6 +1715,110 @@ app.get("/api/commands", async (req, res) => {
     } finally {
       await source.dispose?.();
     }
+  } catch (error) {
+    res.status(errorStatus(error)).json({ error: errorMessage(error) });
+  }
+});
+
+// ---- Skills ----
+// Lists every discoverable skill (enabled and disabled) for `cwd`, with the
+// name/description Pi parsed from each SKILL.md. Toggling persists Pi's own
+// `+pattern` / `-pattern` overrides into settings.json, mirroring the TUI
+// config selector, so new sessions pick the change up.
+app.get("/api/skills", async (req, res) => {
+  try {
+    const cwd = normalisePath((req.query.cwd as string) || process.cwd());
+    const agentDir = getAgentDir();
+    const settings = SettingsManager.create(cwd, agentDir);
+    const pm = new DefaultPackageManager({ cwd, agentDir, settingsManager: settings });
+    const resolved = await pm.resolve();
+    const entries = resolved.skills ?? [];
+    let details = new Map<string, { name: string; description: string; filePath: string }>();
+    try {
+      const loaded = loadSkills({ cwd, agentDir, skillPaths: entries.map((e) => e.path), includeDefaults: true });
+      for (const s of loaded.skills) details.set(normalisePath(s.filePath), s);
+    } catch {
+      // Name/description enrichment is best effort; paths still list.
+    }
+    const skills = entries.map((e) => {
+      const d = details.get(normalisePath(e.path));
+      const fileName = basename(e.path);
+      const parent = basename(dirname(e.path));
+      return {
+        name: d?.name ?? (fileName === "SKILL.md" ? parent : fileName.replace(/\.md$/, "")),
+        description: d?.description ?? "",
+        filePath: e.path,
+        enabled: e.enabled,
+        scope: e.metadata.scope,
+        origin: e.metadata.origin,
+        source: e.metadata.source,
+        baseDir: e.metadata.baseDir ?? null,
+      };
+    });
+    skills.sort((a, b) => a.name.localeCompare(b.name));
+    res.json({ skills });
+  } catch (error) {
+    res.status(errorStatus(error)).json({ error: errorMessage(error) });
+  }
+});
+
+function stripSkillPatternPrefix(pattern: string): string {
+  return pattern.startsWith("!") || pattern.startsWith("+") || pattern.startsWith("-") ? pattern.slice(1) : pattern;
+}
+
+function toPosixRel(p: string): string {
+  return p.replace(/\\/g, "/");
+}
+
+app.post("/api/skills/toggle", async (req, res) => {
+  try {
+    const { path, enabled, cwd: rawCwd } = req.body as { path?: string; enabled?: boolean; cwd?: string };
+    if (!path || typeof path !== "string") throw new ApiError("missing path");
+    if (typeof enabled !== "boolean") throw new ApiError("missing enabled");
+    const cwd = normalisePath(typeof rawCwd === "string" && rawCwd.trim() ? rawCwd : process.cwd());
+    const agentDir = getAgentDir();
+    const settings = SettingsManager.create(cwd, agentDir);
+    const pm = new DefaultPackageManager({ cwd, agentDir, settingsManager: settings });
+    const resolved = await pm.resolve();
+    const entry = (resolved.skills ?? []).find((e) => normalisePath(e.path) === normalisePath(path));
+    if (!entry) throw new ApiError("skill not found", 404);
+    const scope = entry.metadata.scope === "project" ? "project" : "user";
+    const topLevelBaseDir = scope === "project" ? joinPath(cwd, CONFIG_DIR_NAME) : agentDir;
+
+    if (entry.metadata.origin === "top-level") {
+      const baseDir = entry.metadata.baseDir ?? topLevelBaseDir;
+      const pattern = toPosixRel(relative(baseDir, entry.path));
+      const current = scope === "project"
+        ? [...(settings.getProjectSettings().skills ?? [])]
+        : [...(settings.getGlobalSettings().skills ?? [])];
+      const updated = current.filter((p) => stripSkillPatternPrefix(p) !== pattern);
+      updated.push(`${enabled ? "+" : "-"}${pattern}`);
+      if (scope === "project") settings.setProjectSkillPaths(updated);
+      else settings.setSkillPaths(updated);
+      await settings.flush();
+    } else {
+      const baseDir = entry.metadata.baseDir ?? dirname(entry.path);
+      const pattern = toPosixRel(relative(baseDir, entry.path));
+      const current = [...(scope === "project"
+        ? (settings.getProjectSettings().packages ?? [])
+        : (settings.getGlobalSettings().packages ?? []))];
+      const idx = current.findIndex((pkg) => (typeof pkg === "string" ? pkg : pkg.source) === entry.metadata.source);
+      if (idx === -1) throw new ApiError("package source is not in settings", 400);
+      let pkg = current[idx];
+      if (typeof pkg === "string") {
+        pkg = { source: pkg };
+        current[idx] = pkg;
+      }
+      const skills = [...((pkg as { skills?: string[] }).skills ?? [])];
+      const next = skills.filter((p) => stripSkillPatternPrefix(p) !== pattern);
+      next.push(`${enabled ? "+" : "-"}${pattern}`);
+      (pkg as { skills?: string[] }).skills = next;
+      if (scope === "project") settings.setProjectPackages(current);
+      else settings.setPackages(current);
+      await settings.flush();
+    }
+    commandsCache = null;
+    res.json({ ok: true, enabled });
   } catch (error) {
     res.status(errorStatus(error)).json({ error: errorMessage(error) });
   }

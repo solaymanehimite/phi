@@ -1,9 +1,9 @@
-import { useCallback, useEffect, useMemo, useState, type ComponentType } from "react";
+import { useCallback, useEffect, useMemo, useState, type ComponentType, type ReactNode } from "react";
 import { useTheme, useEffectiveTheme, type Theme } from "../hooks/useTheme";
 import { useCustomThemes, setActiveCustomThemeId, clearActiveCustomTheme } from "../hooks/useCustomThemes";
 import { formatThemeForAppCss } from "../lib/custom-themes";
 import type { CustomTheme } from "../lib/custom-themes";
-import { IconCheckFilled, IconChevronDownFilled, IconCode, IconDotsFilled, IconKeyFilled, IconPaletteFilled, IconPencil, IconPencilFilled, IconServer, IconTrash, IconTrashFilled } from "@tabler/icons-react";
+import { IconBox, IconCheckFilled, IconChevronDownFilled, IconCloudFilled, IconCode, IconDotsFilled, IconKeyFilled, IconPaletteFilled, IconPencil, IconPencilFilled, IconPlus, IconTrash, IconTrashFilled } from "@tabler/icons-react";
 import { useClose } from "@headlessui/react";
 import { Alert } from "./ui/alert";
 import { Button, buttonClass } from "./ui/button";
@@ -15,17 +15,20 @@ import { Popover, PopoverContent, PopoverTrigger } from "./ui/popover";
 import { Highlight, type PrismTheme } from "prism-react-renderer";
 import { CODE_THEMES, setCodeTheme, useCodeTheme, type CodeThemeId } from "./code-theme";
 import { ThemeEditorToggle } from "./dev/ThemeEditor";
+import { LocalHomeIcon, RemoteCloudIcon } from "./host-picker";
 import { ProviderLogo } from "./provider-logo";
-import { listProviders, deleteProvider, testProvider, listPiAuth, type ProviderRow, type PiAuthRow } from "../lib/api";
+import { Switch } from "./ui/switch";
+import { listProviders, deleteProvider, testProvider, listPiAuth, listSkills, toggleSkill, type ProviderRow, type PiAuthRow, type SkillRow } from "../lib/api";
 import { LOCAL_HOST_ID, useHosts, type NewHostInput } from "../hooks/useHosts";
 
 
-export type SettingsSection = "appearance" | "providers" | "hosts";
+export type SettingsSection = "appearance" | "providers" | "hosts" | "skills";
 
 const sections: { id: SettingsSection; label: string; description: string; icon: ComponentType<{ className?: string }> }[] = [
     { id: "appearance", label: "Appearance", description: "Theme and colors", icon: IconPaletteFilled },
+    { id: "skills", label: "Skills", description: "Agent skills", icon: IconBox },
     { id: "providers", label: "Auth", description: "Models and API keys", icon: IconKeyFilled },
-    { id: "hosts", label: "Hosts", description: "Local and remote sidecars", icon: IconServer },
+    { id: "hosts", label: "Hosts", description: "Local and remote sidecars", icon: IconCloudFilled },
 ];
 
 export function SettingsPanel({
@@ -34,12 +37,15 @@ export function SettingsPanel({
     providersVersion,
     section: controlledSection,
     onSectionChange,
+    cwd,
 }: {
     onProvidersChanged?: () => void;
     onAddProvider: () => void;
     providersVersion: number;
     section?: SettingsSection;
     onSectionChange?: (section: SettingsSection) => void;
+    /** Active workspace — project-scoped skills resolve against it. */
+    cwd?: string;
 }) {
     const [internalSection, setInternalSection] = useState<SettingsSection>("appearance");
     const section = controlledSection ?? internalSection;
@@ -64,17 +70,13 @@ export function SettingsPanel({
                 </nav>
             </aside>
 
-            <div className="flex min-w-0 flex-1 flex-col">
-                <header className="shrink-0 px-6 pb-5 pt-12">
-                    <div className="mx-auto w-full max-w-3xl">
+            <div className="min-h-0 flex-1 overflow-y-auto">
+                <div className="mx-auto w-full max-w-3xl px-6 pb-6">
+                    <header className="pb-5 pt-12">
                         <h1 className="text-[20px] font-semibold tracking-[-0.02em] text-phi-text-primary">{active.label}</h1>
                         <p className="mt-1 text-[12px] text-phi-text-muted">{active.description}</p>
-                    </div>
-                </header>
-                <div className="min-h-0 flex-1 overflow-y-auto p-6 pt-1">
-                    <div className="mx-auto w-full max-w-3xl">
-                        {section === "appearance" ? <AppearanceTab /> : section === "hosts" ? <HostsTab /> : <ProvidersTab onChanged={onProvidersChanged} onAddProvider={onAddProvider} providersVersion={providersVersion} />}
-                    </div>
+                    </header>
+                    {section === "appearance" ? <AppearanceTab /> : section === "skills" ? <SkillsTab cwd={cwd} /> : section === "hosts" ? <HostsTab /> : <ProvidersTab onChanged={onProvidersChanged} onAddProvider={onAddProvider} providersVersion={providersVersion} />}
                 </div>
             </div>
         </div>
@@ -419,6 +421,79 @@ function AppearanceTab() {
 }
 
 
+/** Attached settings rows — one rounded object, same sizing as the Advanced Settings toggle row. */
+function ListGroup({ children }: { children: ReactNode }) {
+    return (
+        <div className="overflow-hidden rounded-2xl bg-phi-bg-surface">{children}</div>
+    );
+}
+
+const LIST_ROW_CLASS = "group relative flex min-h-[60px] w-full items-center gap-4 px-4 py-3 text-left hover:bg-phi-overlay-hover";
+
+function ListRow({ children }: { children: ReactNode }) {
+    return <div className={LIST_ROW_CLASS}>{children}</div>;
+}
+
+function SkillsTab({ cwd }: { cwd?: string }) {
+    const [skills, setSkills] = useState<SkillRow[]>([]);
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState<string | null>(null);
+    const [toggling, setToggling] = useState<string | null>(null);
+
+    const refresh = useCallback(async () => {
+        setLoading(true);
+        try {
+            const r = await listSkills(cwd || undefined);
+            setSkills(r.skills);
+            setError(null);
+        } catch (e) {
+            setError(e instanceof Error ? e.message : String(e));
+        } finally {
+            setLoading(false);
+        }
+    }, [cwd]);
+    useEffect(() => { void refresh(); }, [refresh]);
+
+    const handleToggle = useCallback(async (skill: SkillRow) => {
+        const next = !skill.enabled;
+        setToggling(skill.filePath);
+        setSkills((prev) => prev.map((s) => (s.filePath === skill.filePath ? { ...s, enabled: next } : s)));
+        try {
+            await toggleSkill(skill.filePath, next, cwd || undefined);
+        } catch (e) {
+            setSkills((prev) => prev.map((s) => (s.filePath === skill.filePath ? { ...s, enabled: !next } : s)));
+            setError(e instanceof Error ? e.message : String(e));
+        } finally {
+            setToggling(null);
+        }
+    }, [cwd]);
+
+    if (loading) return <p className="text-[12px] text-phi-text-muted">Loading…</p>;
+
+    return (
+        <div>
+            {error && <Alert variant="error">{error}</Alert>}
+            {skills.length === 0 ? (
+                <p className="rounded-lg border border-dashed border-phi-border px-3 py-3 text-[12px] text-phi-text-muted">No skills found — add SKILL.md files under <span className="font-mono">~/.pi/agent/skills</span>.</p>
+            ) : (
+                <ListGroup>
+                    {skills.map((skill) => (
+                        <label key={skill.filePath} className={`${LIST_ROW_CLASS} cursor-pointer`}>
+                            <span aria-hidden="true" className="grid size-6 shrink-0 place-items-center text-phi-text-tertiary"><IconBox className="size-5" /></span>
+                            <div className="min-w-0 flex-1" title={skill.filePath}>
+                                <div className="truncate text-[13px] font-medium text-phi-text-primary">{skill.name}</div>
+                                {skill.description && <div className="mt-0.5 truncate text-[12px] text-phi-text-muted">{skill.description}</div>}
+                            </div>
+                            <span className="shrink-0 text-[13px] text-phi-text-muted">{skill.scope === "project" ? "Project" : "Personal"}</span>
+                            <Switch checked={skill.enabled} disabled={toggling === skill.filePath} label={`${skill.enabled ? "Disable" : "Enable"} skill ${skill.name}`} onClick={() => void handleToggle(skill)} />
+                        </label>
+                    ))}
+                </ListGroup>
+            )}
+        </div>
+    );
+}
+
 function HostName({ name, isCurrent }: { name: string; isCurrent: boolean }) {
     return (
         <div className={`flex min-w-0 items-center transition-all duration-200 ease-out motion-reduce:transition-none ${isCurrent ? "gap-1.5" : "gap-0"}`}>
@@ -457,7 +532,7 @@ function HostFormBody({ form, setForm, saveLabel, onCancel, onSave }: {
 }
 
 function HostsTab() {
-    const { hosts, activeHostId, addHost, updateHost, removeHost } = useHosts();
+    const { hosts, activeHostId, setActiveHostId, addHost, updateHost, removeHost } = useHosts();
     const [error, setError] = useState<string | null>(null);
     const [editingId, setEditingId] = useState<string | null>(null);
     const [form, setForm] = useState<NewHostInput>({ name: "", url: "", token: "" });
@@ -509,28 +584,28 @@ function HostsTab() {
         <div className="space-y-4">
             {error && <Alert variant="error">{error}</Alert>}
 
-            <div className="space-y-2">
-                <h4 className="text-[12px] font-semibold text-phi-text-primary">Hosts</h4>
-                <div className="space-y-2">
-                    <div className="flex flex-wrap items-center gap-2 rounded-lg border border-phi-border bg-phi-bg-surface px-3 py-2">
-                        <div className="min-w-0 flex-1">
+            <ListGroup>
+                <ListRow>
+                        <span aria-hidden="true" className="grid size-6 shrink-0 place-items-center text-phi-text-tertiary"><LocalHomeIcon className="size-5 shrink-0" /></span>
+                        <button type="button" onClick={() => setActiveHostId(LOCAL_HOST_ID)} title="Switch to the local sidecar" className="min-w-0 flex-1 rounded text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-phi-accent/40">
                             <HostName name="Local" isCurrent={activeHostId === LOCAL_HOST_ID} />
-                            <div className="truncate font-mono text-[11px] text-phi-text-muted">This machine</div>
-                        </div>
-                    </div>
+                            <div className="mt-0.5 truncate text-[12px] text-phi-text-muted">This machine</div>
+                        </button>
+                        <span className="shrink-0 text-[13px] text-phi-text-muted">{activeHostId === LOCAL_HOST_ID ? "Active" : ""}</span>
+                </ListRow>
                     {hosts.map((host) => (
                         editingId === host.id && showForm ? (
-                            <div key={host.id} className="rounded-2xl border border-phi-border bg-phi-bg-surface p-2">
+                            <ListRow key={host.id}>
                                 <HostFormBody form={form} setForm={setForm} saveLabel="Save changes" onCancel={handleCancel} onSave={handleSave} />
-                            </div>
+                            </ListRow>
                         ) : (
-                        <div key={host.id} className="group relative flex flex-wrap items-center gap-2 rounded-lg border border-phi-border bg-phi-bg-surface px-3 py-2">
-                            <div className="min-w-0 flex-1 pr-6">
+                        <ListRow key={host.id}>
+                            <span aria-hidden="true" className="grid size-6 shrink-0 place-items-center text-phi-text-tertiary"><RemoteCloudIcon className="size-5 shrink-0" /></span>
+                            <button type="button" onClick={() => setActiveHostId(host.id)} title={`Switch to ${host.name}`} className="min-w-0 flex-1 rounded pr-8 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-phi-accent/40">
                                 <HostName name={host.name} isCurrent={activeHostId === host.id} />
-                                <div className="truncate font-mono text-[11px] text-phi-text-muted">{host.url}</div>
-                                <div className="text-[11px] text-phi-text-muted">{host.token ? "Token saved" : "No token"}</div>
-                            </div>
-                            <DropdownMenu className="absolute right-2 top-2">
+                                <div className="mt-0.5 truncate font-mono text-[12px] text-phi-text-muted">{host.url}</div>
+                            </button>
+                            <DropdownMenu className="absolute right-2 top-2 shrink-0">
                                 <DropdownMenuTrigger aria-label={`Actions for ${host.name}`}>
                                     <IconDotsFilled className="size-3.5" />
                                 </DropdownMenuTrigger>
@@ -539,14 +614,19 @@ function HostsTab() {
                                     <DropdownMenuItem icon={<IconTrashFilled className="size-[15px]" />} onClick={() => handleDelete(host.id, host.name)}>Delete</DropdownMenuItem>
                                 </DropdownMenuContent>
                             </DropdownMenu>
-                        </div>
+                        </ListRow>
                         )
                     ))}
                     {!showForm && (
-                        <button onClick={startAdd} className="w-full rounded-lg border border-dashed border-phi-border px-3 py-3 text-left text-[12px] font-medium text-phi-text-muted hover:border-phi-input-border-focus hover:text-phi-text-primary">+ Add host</button>
+                        <button
+                            onClick={startAdd}
+                            className="flex min-h-[60px] w-full items-center gap-3 border-t border-phi-border px-6 py-3 text-left text-[13px] font-medium text-phi-text-muted hover:bg-phi-overlay-hover hover:text-phi-text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-phi-accent/40"
+                        >
+                            <IconPlus className="size-4 shrink-0" />
+                            Add host
+                        </button>
                     )}
-                </div>
-            </div>
+                </ListGroup>
 
             {showForm && !editingId && (
                 <div className="space-y-2 rounded-lg border border-phi-border bg-phi-bg-surface p-3">
@@ -590,46 +670,56 @@ function ProvidersTab({ onChanged, onAddProvider, providersVersion }: { onChange
         <div className="space-y-4">
             {error && <Alert variant="error">{error}</Alert>}
 
-            <div className="space-y-2">
-                <h4 className="text-[12px] font-semibold text-phi-text-primary">Pi CLI</h4>
-                {piLoading ? <p className="text-[12px] text-phi-text-muted">Loading…</p> : piProviders.length === 0 ? (
-                    <p className="rounded-lg border border-dashed border-phi-border px-3 py-3 text-[12px] text-phi-text-muted">No Pi CLI logins yet — run <span className="font-mono">pi login</span> in the terminal.</p>
+            <ListGroup>
+                {piProviders.map((p) => (
+                    <ListRow key={`pi-${p.id}`}>
+                        <ProviderLogo id={p.id} name={p.name} />
+                        <div className="min-w-0 flex-1" title={p.source ? `${p.type} · ${p.source}` : p.type}>
+                            <div className="truncate text-[13px] font-medium text-phi-text-primary">{p.name}</div>
+                            <div className="mt-0.5 truncate text-[12px] text-phi-text-muted">{p.source ? `${p.type} · ${p.source}` : p.type}</div>
+                        </div>
+                    </ListRow>
+                ))}
+                {loading ? (
+                    <ListRow>
+                        <div className="min-w-0 flex-1">
+                            <div className="text-[12px] text-phi-text-muted">Loading…</div>
+                        </div>
+                    </ListRow>
                 ) : (
-                    <div className="space-y-2">
-                        {piProviders.map((p) => (
-                            <div key={p.id} className="flex items-center gap-3 rounded-xl border border-phi-border bg-phi-bg-surface px-3 py-2.5">
-                                <ProviderLogo id={p.id} name={p.name} />
-                                <div className="min-w-0 flex-1 truncate text-[13px] font-medium text-phi-text-primary">{p.name}</div>
-                            </div>
-                        ))}
-                    </div>
-                )}
-            </div>
-
-            <div className="space-y-2">
-                <h4 className="text-[12px] font-semibold text-phi-text-primary">Custom providers</h4>
-                {loading ? <p className="text-[12px] text-phi-text-muted">Loading…</p> : (
-                    <div className="space-y-2">
-                        {providers.map((p) => (
-                            <div key={p.id} className="flex flex-wrap items-center gap-2 rounded-lg border border-phi-border bg-phi-bg-surface px-3 py-2">
-                                <div className="min-w-0 flex-1">
-                                    <div className="truncate text-[13px] font-medium text-phi-text-primary">{p.label || p.id}</div>
-                                    <div className="truncate font-mono text-[11px] text-phi-text-muted">{p.baseUrl}</div>
-                                    <div className="flex items-center gap-1 text-[11px]">
-                                        <span className="font-mono text-phi-text-muted" title="The full key stays on the sidecar. This masked value is all the UI ever sees.">{p.maskedKey || (p.hasKey ? "••••" : "no key saved")}</span>
-                                    </div>
-                                    {testResult[p.id] && <div className={`mt-1 text-[11px] ${testResult[p.id] === "OK" ? "text-phi-thinking-low" : "text-phi-error-text"}`}>{testResult[p.id]}</div>}
+                    providers.map((p) => (
+                        <ListRow key={`custom-${p.id}`}>
+                            <ProviderLogo id={p.id} name={p.label || p.id} />
+                            <div className="min-w-0 flex-1" title={p.baseUrl}>
+                                <div className="truncate text-[13px] font-medium text-phi-text-primary">{p.label || p.id}</div>
+                                <div className="mt-0.5 truncate font-mono text-[12px] text-phi-text-muted">{p.baseUrl}</div>
+                                <div className="mt-0.5 flex items-center gap-1 text-[11px]">
+                                    <span className="font-mono text-phi-text-muted" title="The full key stays on the sidecar. This masked value is all the UI ever sees.">{p.maskedKey || (p.hasKey ? "••••" : "no key saved")}</span>
                                 </div>
-                                <div className="flex items-center gap-1">
-                                    <Button onClick={() => void handleTest(p.id)} disabled={testing === p.id} variant="secondary" size="xs" className="!text-[11px]">{testing === p.id ? "Testing…" : "Test connection"}</Button>
-                                    <Button onClick={() => void handleDelete(p.id)} variant="secondary" size="xs" className="!border-phi-error-border !bg-phi-error-bg !text-[11px] !text-phi-error-text hover:!bg-phi-error-bg">Delete</Button>
-                                </div>
+                                {testResult[p.id] && <div className={`mt-1 text-[11px] ${testResult[p.id] === "OK" ? "text-phi-thinking-low" : "text-phi-error-text"}`}>{testResult[p.id]}</div>}
                             </div>
-                        ))}
-                        <button onClick={onAddProvider} className="w-full rounded-lg border border-dashed border-phi-border px-4 py-3 text-left text-[12px] font-medium text-phi-text-muted hover:border-phi-input-border-focus hover:text-phi-text-primary">+ Add provider</button>
-                    </div>
+                            <div className="flex shrink-0 items-center gap-1">
+                                <Button onClick={() => void handleTest(p.id)} disabled={testing === p.id} variant="secondary" size="xs" className="!text-[11px]">{testing === p.id ? "Testing…" : "Test connection"}</Button>
+                                <Button onClick={() => void handleDelete(p.id)} variant="secondary" size="xs" className="!border-phi-error-border !bg-phi-error-bg !text-[11px] !text-phi-error-text hover:!bg-phi-error-bg">Delete</Button>
+                            </div>
+                        </ListRow>
+                    ))
                 )}
-            </div>
+                {!piLoading && !loading && piProviders.length === 0 && providers.length === 0 && (
+                    <ListRow>
+                        <div className="min-w-0 flex-1">
+                            <div className="text-[12px] text-phi-text-muted">No providers yet — run <span className="font-mono">pi login</span> in the terminal.</div>
+                        </div>
+                    </ListRow>
+                )}
+                <button
+                    onClick={onAddProvider}
+                    className="flex min-h-[60px] w-full items-center gap-3 border-t border-phi-border px-6 py-3 text-left text-[13px] font-medium text-phi-text-muted hover:bg-phi-overlay-hover hover:text-phi-text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-phi-accent/40"
+                >
+                    <IconPlus className="size-4 shrink-0" />
+                    Add provider
+                </button>
+            </ListGroup>
         </div>
     );
 }
