@@ -234,7 +234,7 @@ html[data-theme="light"] {
 /* Motion system */
 
 :root {
-  --phi-sidebar-width: 268px;
+  --phi-sidebar-width: 240px;
   /* Two 32px buttons, their 4px gap, and a 20px inset into the sidebar. */
   --phi-tabs-sidebar-extension: 85px;
   --phi-tabs-action-width: 68px;
@@ -245,7 +245,7 @@ html[data-theme="light"] {
   --phi-ease-default: cubic-bezier(0.4, 0, 0.2, 1);
   --phi-ease-out: cubic-bezier(0.16, 1, 0.3, 1);
   --phi-ease-in-out: cubic-bezier(0.4, 0, 0.2, 1);
-  --phi-ease-sidebar: cubic-bezier(0.4, 0, 0.2, 1);
+  --phi-ease-sidebar: cubic-bezier(0.4, 0, 0.1, 1);
 
   /* Scrollbars — themed thumb on transparent track, no buttons */
   --phi-scrollbar-thumb: rgb(242 240 255 / 0.16);

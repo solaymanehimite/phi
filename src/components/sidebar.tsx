@@ -153,7 +153,7 @@ export const Sidebar = memo(function Sidebar({
     const handleToggleArchived = useCallback(() => onToggleGroup("archived"), [onToggleGroup]);
 
     return (
-        <aside className="flex h-full w-[268px] min-w-[268px] shrink-0 flex-col bg-phi-bg-sidebar">
+        <aside className="flex h-full w-(--phi-sidebar-width) min-w-(--phi-sidebar-width) shrink-0 flex-col bg-phi-bg-sidebar">
             <div
                 data-tauri-drag-region
                 className="mb-2 flex h-10 shrink-0 items-end pl-2 pr-[85px]"

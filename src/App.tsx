@@ -8,13 +8,13 @@ import { ContextIndicator } from "./components/context-indicator";
 import { Conversation } from "./components/conversation/conversation";
 import { Streaming } from "./components/conversation/streaming";
 import { Sidebar } from "./components/sidebar";
+import { SidebarToggleIcon } from "./components/sidebar-toggle-icon";
 import { SearchSessionsButton, SessionCommand, type CommandAction } from "./components/session-command";
 import { NEW_TAB_PREFIX, SETTINGS_TAB_ID, Tabs, UI_DEMO_TAB_ID, isNewTabId } from "./components/tabs";
 import {
     IconArrowDown,
     IconComponents,
     IconLayoutSidebarFilled,
-    IconLayoutSidebarLeftCollapse,
     IconMessageCircleFilled,
     IconMoonFilled,
     IconPlusFilled,
@@ -1258,7 +1258,7 @@ export default function App() {
                                             title={sidebarOpen ? "Close sidebar" : "Open sidebar"}
                                             onClick={() => setSidebarOpen((open) => !open)}
                                         >
-                                            <IconLayoutSidebarLeftCollapse className="size-4" />
+                                            <SidebarToggleIcon expanded={sidebarOpen} className="size-4" />
                                         </Button>
                                     </div>
                                 }
