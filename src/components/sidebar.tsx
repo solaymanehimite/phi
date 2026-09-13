@@ -312,33 +312,18 @@ export const Sidebar = memo(function Sidebar({
                             count={archivedSessions.length}
                             icon={<ArchiveBinIcon />}
                         />
-                        <div
-                            className={`grid transition-all duration-300 ease-[cubic-bezier(0.4,0,0.2,1)] ${archivedCollapsed ? "grid-rows-[0fr] opacity-0" : "grid-rows-[1fr] opacity-100"}`}
-                        >
-                            <div className="overflow-hidden">
-                                <nav
-                                    aria-label="Archived"
-                                    className="mt-1 max-h-44 space-y-0.5 overflow-y-auto scrollbar-none pb-0.5"
-                                >
-                                    {archivedSessions.map((s) => (
-                                        <SessionRowMemo
-                                            key={s.path}
-                                            session={s}
-                                            active={s.path === activeFile}
-                                            isStreaming={runningFiles.has(s.path)}
-                                            pinned={false}
-                                            archived
-                                            onSelect={onSelect}
-                                            onRename={onRename}
-                                            onDelete={onDelete}
-                                            onTogglePin={onTogglePin}
-                                            onToggleArchive={onToggleArchive}
-                                            onPrefetch={onPrefetch}
-                                        />
-                                    ))}
-                                </nav>
-                            </div>
-                        </div>
+                        <ArchivedList
+                            collapsed={archivedCollapsed}
+                            sessions={archivedSessions}
+                            activeFile={activeFile}
+                            runningFiles={runningFiles}
+                            onSelect={onSelect}
+                            onRename={onRename}
+                            onDelete={onDelete}
+                            onTogglePin={onTogglePin}
+                            onToggleArchive={onToggleArchive}
+                            onPrefetch={onPrefetch}
+                        />
                     </div>
                 )}
                 <NavItem
@@ -460,6 +445,146 @@ const MetaGroupTrigger = memo(function MetaGroupTrigger({
                 className={`size-3.5 shrink-0 opacity-0 transition-all duration-200 group-hover:opacity-100 group-focus-within:opacity-100 focus-visible:opacity-100 ${collapsed ? "-rotate-90" : ""}`}
             />
         </button>
+    );
+});
+
+// Archived list with its own overflow fades + scroll chevrons, mirroring the
+// main sidebar scroll treatment at a smaller scale (max-h-44 viewport).
+const ArchivedList = memo(function ArchivedList({
+    collapsed,
+    sessions,
+    activeFile,
+    runningFiles,
+    onSelect,
+    onRename,
+    onDelete,
+    onTogglePin,
+    onToggleArchive,
+    onPrefetch,
+}: {
+    collapsed: boolean;
+    sessions: SessionInfo[];
+    activeFile: string | null;
+    runningFiles: ReadonlySet<string>;
+    onSelect: (file: string) => void;
+    onRename: (file: string, name: string) => Promise<void>;
+    onDelete: (file: string) => Promise<void>;
+    onTogglePin: (file: string) => void;
+    onToggleArchive: (file: string) => void;
+    onPrefetch?: (file: string) => void;
+}) {
+    const scrollRef = useRef<HTMLElement>(null);
+    const [canScrollUp, setCanScrollUp] = useState(false);
+    const [canScrollDown, setCanScrollDown] = useState(false);
+
+    const updateScrollEdges = useCallback(() => {
+        const el = scrollRef.current;
+        if (!el) return;
+        const threshold = 2;
+        setCanScrollUp(el.scrollTop > threshold);
+        setCanScrollDown(el.scrollHeight - el.scrollTop - el.clientHeight > threshold);
+    }, []);
+
+    useEffect(() => {
+        updateScrollEdges();
+        const el = scrollRef.current;
+        if (!el) return;
+        const ro = new ResizeObserver(() => updateScrollEdges());
+        ro.observe(el);
+        // Collapse transition animates height; re-check after it settles
+        const t = window.setTimeout(updateScrollEdges, 320);
+        return () => {
+            window.clearTimeout(t);
+            ro.disconnect();
+        };
+    }, [sessions, collapsed, updateScrollEdges]);
+
+    const scrollByPage = useCallback((direction: 1 | -1) => {
+        const el = scrollRef.current;
+        if (!el) return;
+        const reduceMotion =
+            typeof window !== "undefined" &&
+            typeof window.matchMedia === "function" &&
+            window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+        el.scrollBy({
+            top: direction * Math.max(el.clientHeight * 0.8, 80),
+            behavior: reduceMotion ? "instant" as ScrollBehavior : "smooth",
+        });
+    }, []);
+    const scrollUp = useCallback(() => scrollByPage(-1), [scrollByPage]);
+    const scrollDown = useCallback(() => scrollByPage(1), [scrollByPage]);
+
+    const showUp = canScrollUp && !collapsed;
+    const showDown = canScrollDown && !collapsed;
+
+    return (
+        <div
+            className={`grid transition-all duration-300 ease-[cubic-bezier(0.4,0,0.2,1)] ${collapsed ? "grid-rows-[0fr] opacity-0" : "grid-rows-[1fr] opacity-100"}`}
+        >
+            <div className="overflow-hidden">
+                <div className="relative">
+                    <nav
+                        ref={scrollRef}
+                        aria-label="Archived"
+                        onScroll={updateScrollEdges}
+                        className="mt-1 max-h-44 space-y-0.5 overflow-y-auto scrollbar-none pb-0.5"
+                    >
+                        {sessions.map((s) => (
+                            <SessionRowMemo
+                                key={s.path}
+                                session={s}
+                                active={s.path === activeFile}
+                                isStreaming={runningFiles.has(s.path)}
+                                pinned={false}
+                                archived
+                                onSelect={onSelect}
+                                onRename={onRename}
+                                onDelete={onDelete}
+                                onTogglePin={onTogglePin}
+                                onToggleArchive={onToggleArchive}
+                                onPrefetch={onPrefetch}
+                            />
+                        ))}
+                    </nav>
+
+                    {/* Top fade + more-content indicator */}
+                    <div
+                        aria-hidden={!showUp}
+                        className={`pointer-events-none absolute inset-x-0 top-0 z-10 flex h-8 items-start justify-center pt-0.5 transition-opacity duration-200 ${showUp ? "opacity-100" : "opacity-0"}`}
+                        style={{ background: "linear-gradient(to bottom, var(--color-phi-bg-sidebar) 15%, transparent)" }}
+                    >
+                        <button
+                            type="button"
+                            tabIndex={showUp ? 0 : -1}
+                            aria-label="Scroll archived up"
+                            title="Scroll up"
+                            onClick={scrollUp}
+                            className={`pointer-events-auto inline-flex items-center justify-center text-phi-text-tertiary transition-all duration-200 hover:text-phi-text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-phi-accent/40 ${showUp ? "translate-y-0 opacity-100" : "pointer-events-none -translate-y-1 opacity-0"}`}
+                        >
+                            <IconChevronDownFilled className="size-3.5 rotate-180" />
+                        </button>
+                    </div>
+
+                    {/* Bottom fade + more-content indicator */}
+                    <div
+                        aria-hidden={!showDown}
+                        className={`pointer-events-none absolute inset-x-0 bottom-0 z-10 flex h-8 items-end justify-center pb-0.5 transition-opacity duration-200 ${showDown ? "opacity-100" : "opacity-0"}`}
+                        style={{ background: "linear-gradient(to top, var(--color-phi-bg-sidebar) 15%, transparent)" }}
+                    >
+                        <button
+                            type="button"
+                            tabIndex={showDown ? 0 : -1}
+                            aria-label="Scroll archived down"
+                            title="Scroll down"
+                            onClick={scrollDown}
+                            className={`pointer-events-auto inline-flex items-center justify-center text-phi-text-tertiary transition-all duration-200 hover:text-phi-text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-phi-accent/40 ${showDown ? "translate-y-0 opacity-100" : "pointer-events-none translate-y-1 opacity-0"}`}
+                        >
+                            <IconChevronDownFilled className="size-3.5" />
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
     );
 });
 
