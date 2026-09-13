@@ -279,7 +279,7 @@ function HostTrigger({ disabled }: { disabled?: boolean }) {
             disabled={disabled}
             data-host-picker-trigger
             onMouseEnter={handleMouseEnter}
-            className={`group flex w-full min-w-0 items-center gap-2 rounded-lg h-8 px-2.5 text-left text-[13px] font-medium text-phi-text-tertiary transition-colors hover:bg-phi-overlay-hover hover:text-phi-text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-phi-accent/40 disabled:pointer-events-none disabled:opacity-60${cloudPlaying ? " phi-cloud-play" : ""}`}
+            className={`group flex w-full min-w-0 items-center gap-2 rounded-lg h-8 px-2.5 text-left text-[13px] font-medium text-phi-text-tertiary hover:bg-phi-overlay-hover hover:text-phi-text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-phi-accent/40 disabled:pointer-events-none disabled:opacity-60${cloudPlaying ? " phi-cloud-play" : ""}`}
             aria-label={`Change host${activeHost ? `, currently ${activeHost.name}` : ""}`}
         >
             {isLocal ? (
