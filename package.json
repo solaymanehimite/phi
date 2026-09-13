@@ -22,7 +22,10 @@
     "electron:build": "tsc && vite build && bun run build:sidecar && node scripts/build-electron.mjs",
     "electron:dist": "electron-builder --config electron-builder.yml",
     "electron:dist-dir": "electron-builder --config electron-builder.yml --dir",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "test": "bun test",
+    "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.node.json",
+    "lint": "bun scripts/lint.mjs"
   },
   "dependencies": {
     "@aicss/react": "^0.1.3",

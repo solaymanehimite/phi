@@ -1,17 +1,16 @@
 import { useCallback, useEffect, useState } from "react";
+import {
+  appendQueuedMessage,
+  createQueuedMessage,
+  removeQueuedMessage,
+  sanitizeQueuedItems,
+  shiftQueuedMessage,
+  updateQueuedMessageText,
+  type QueuedImage,
+  type QueuedMessage,
+} from "../lib/queue";
 
-export type QueuedImage = {
-  type: "image";
-  data: string;
-  mimeType: string;
-};
-
-export type QueuedMessage = {
-  id: string;
-  text: string;
-  images?: QueuedImage[];
-  createdAt: number;
-};
+export type { QueuedImage, QueuedMessage };
 
 const PREFIX = "phi:queue:";
 const EXPIRY_MS = 14 * 24 * 60 * 60 * 1000;
@@ -32,8 +31,7 @@ function readQueue(sessionFile: string | null): QueuedMessage[] {
       localStorage.removeItem(keyFor(sessionFile)!);
       return [];
     }
-    return parsed.items
-      .filter((item) => item && typeof item.text === "string" && (item.text.trim() || (item.images?.length ?? 0) > 0));
+    return sanitizeQueuedItems(parsed.items);
   } catch {
     return [];
   }
@@ -103,18 +101,12 @@ export function useMessageQueue(activeFile: string | null) {
 
   const enqueue = useCallback(
     (file: string, text: string, images?: QueuedImage[]): QueuedMessage | null => {
-      const trimmed = text.trim();
-      if (!trimmed && (!images || images.length === 0)) return null;
+      const item = createQueuedMessage(text, images);
+      if (!item) return null;
       // Read synchronously so the full-check and the return value are exact.
       // (Never side-effect inside a setState updater — StrictMode double-invokes it.)
       const current: QueuedMessage[] = queues[file] ?? readQueue(file);
-      const item: QueuedMessage = {
-        id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-        text: trimmed,
-        images: images?.length ? [...images] : undefined,
-        createdAt: Date.now(),
-      };
-      const next = [...current, item];
+      const next = appendQueuedMessage(current, item);
       persist(file, next);
       setQueues((prev) => ({ ...prev, [file]: next }));
       return item;
@@ -126,8 +118,8 @@ export function useMessageQueue(activeFile: string | null) {
   const shift = useCallback(
     (file: string): QueuedMessage | null => {
       const current = queues[file] ?? readQueue(file);
-      if (current.length === 0) return null;
-      const [head, ...rest] = current;
+      const { head, rest } = shiftQueuedMessage(current);
+      if (!head) return null;
       setQueues((prev) => ({ ...prev, [file]: rest }));
       persist(file, rest);
       return head;
@@ -139,7 +131,7 @@ export function useMessageQueue(activeFile: string | null) {
     (file: string, id: string) => {
       setQueues((prev) => {
         const current = prev[file] ?? readQueue(file);
-        const next = current.filter((item) => item.id !== id);
+        const next = removeQueuedMessage(current, id);
         if (next.length === current.length) return prev;
         persist(file, next);
         return { ...prev, [file]: next };
@@ -150,11 +142,10 @@ export function useMessageQueue(activeFile: string | null) {
 
   const update = useCallback(
     (file: string, id: string, text: string) => {
-      const trimmed = text.trim();
-      if (!trimmed) return;
+      if (!text.trim()) return;
       setQueues((prev) => {
         const current = prev[file] ?? readQueue(file);
-        const next = current.map((item) => (item.id === id ? { ...item, text: trimmed } : item));
+        const next = updateQueuedMessageText(current, id, text);
         persist(file, next);
         return { ...prev, [file]: next };
       });

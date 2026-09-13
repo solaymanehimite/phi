@@ -4,6 +4,14 @@ import { streamPrompt, type SseEvent } from "../lib/sse";
 import { streamContinue } from "../lib/api";
 import type { SessionMessagesResponse } from "../types/session";
 import type { WorkItem, WorkOrder } from "../types/work";
+import {
+  asRecord,
+  extractCustomNotice,
+  extractToolResultText,
+  insertWorkItem,
+  patchWorkItem,
+  toolCallFromAssistantEvent,
+} from "../lib/stream-events";
 
 type StreamingState = {
   text: string;
@@ -26,61 +34,6 @@ type PendingStream = {
   currentThinkingContentIndex: number | null;
   fallbackContentIndex: number;
 };
-
-function asRecord(value: unknown): Record<string, unknown> {
-  return value && typeof value === "object" && !Array.isArray(value)
-    ? value as Record<string, unknown>
-    : {};
-}
-
-function compareWorkOrder(a: WorkOrder, b: WorkOrder): number {
-  return a.message - b.message || a.content - b.content;
-}
-
-function insertWorkItem(items: WorkItem[], item: WorkItem): WorkItem[] {
-  const existingIndex = items.findIndex((current) => current.id === item.id);
-  const next = [...items];
-  if (existingIndex >= 0) {
-    next[existingIndex] = {
-      ...next[existingIndex],
-      ...item,
-      order: next[existingIndex].order,
-    } as WorkItem;
-  } else {
-    next.push(item);
-  }
-  next.sort((a, b) => compareWorkOrder(a.order, b.order));
-  return next;
-}
-
-function patchWorkItem(items: WorkItem[], id: string, patch: Record<string, unknown>): WorkItem[] {
-  const index = items.findIndex((item) => item.id === id);
-  if (index < 0) return items;
-  const next = [...items];
-  next[index] = { ...next[index], ...patch } as WorkItem;
-  return next;
-}
-
-function toolCallFromAssistantEvent(event: Record<string, unknown>): {
-  id: string;
-  name: string;
-  args: Record<string, unknown>;
-} | null {
-  const direct = asRecord(event.toolCall);
-  const partial = asRecord(event.partial);
-  const content = Array.isArray(partial.content) ? partial.content : [];
-  const contentIndex = typeof event.contentIndex === "number" ? event.contentIndex : -1;
-  const block = contentIndex >= 0 ? asRecord(content[contentIndex]) : {};
-  const call = Object.keys(direct).length > 0 ? direct : block;
-  const id = typeof call.id === "string" ? call.id : "";
-  const name = typeof call.name === "string" ? call.name : "";
-  if (!id || !name) return null;
-  return {
-    id,
-    name,
-    args: asRecord(call.arguments ?? call.args),
-  };
-}
 
 const MAX_CACHE = 20;
 
@@ -392,7 +345,7 @@ export function useChat() {
             if (message.role === "assistant") { pending.assistantMessageIndex += 1; pending.currentThinkingContentIndex = null; pending.fallbackContentIndex = 1_000_000; }
           }
           if (message.role === "custom" && message.display !== false) {
-            const mc = message.content; let notice = typeof mc === "string" ? mc : Array.isArray(mc) ? (mc as any[]).map((part: any) => part && typeof part === "object" && "text" in part ? String(part.text ?? "") : typeof part === "string" ? part : "").filter(Boolean).join("\n") : ""; if (notice.trim()) { noticesRef.current.get(file!)?.push(notice.trim()); pending.text += (pending.text ? "\n\n" : "") + notice.trim(); scheduleFlush(file!); }
+            const notice = extractCustomNotice(message); if (notice) { noticesRef.current.get(file!)?.push(notice); pending.text += (pending.text ? "\n\n" : "") + notice; scheduleFlush(file!); }
           }
           if (type === "message_end") flushStream(file!);
         } else if (type === "message_update") {
@@ -411,7 +364,7 @@ export function useChat() {
         } else if (type === "tool_execution_start") {
           flushStream(file!); if (pending.assistantMessageIndex < 0) pending.assistantMessageIndex = 0; const toolCallId = String(event.toolCallId ?? event.id ?? `${Date.now()}`); const toolName = String(event.toolName ?? event.name ?? "tool"); const args = asRecord(event.args ?? event.toolArgs); const fallbackOrder = { message: pending.assistantMessageIndex, content: pending.fallbackContentIndex++ }; updateStream(file!, (stream) => { const existing = stream.workItems.find((item) => item.id === toolCallId); return { ...stream, workItems: insertWorkItem(stream.workItems, { kind: "tool", id: toolCallId, name: toolName, args, startedAt: (existing as Extract<WorkItem, { kind: "tool" }> | undefined)?.startedAt ?? Date.now(), order: existing?.order ?? fallbackOrder }) }; });
         } else if (type === "tool_execution_update") { flushStream(file!); const toolCallId = String(event.toolCallId ?? ""); const partial = event.partialResult ?? event.output ?? ""; const partialText = typeof partial === "string" ? partial : partial && typeof partial === "object" ? JSON.stringify(partial).slice(0, 500) : ""; updateStream(file!, (stream) => ({ ...stream, workItems: patchWorkItem(stream.workItems, toolCallId, { partial: partialText }) })); }
-        else if (type === "tool_execution_end") { flushStream(file!); const toolCallId = String(event.toolCallId ?? ""); const result = event.result; const resultRecord = asRecord(result); let resultText = ""; if (typeof result === "string") resultText = result; else if (Array.isArray(resultRecord.content)) resultText = resultRecord.content.map((part) => String(asRecord(part).text ?? "")).join("\n"); else if (result) resultText = JSON.stringify(result).slice(0, 4000); const resultDetails = asRecord(resultRecord.details); const resultDiff = typeof resultDetails.diff === "string" ? resultDetails.diff : undefined; updateStream(file!, (stream) => ({ ...stream, workItems: patchWorkItem(stream.workItems, toolCallId, { result: { text: resultText, isError: Boolean(event.isError), diff: resultDiff }, isError: Boolean(event.isError), done: true, durationMs: Date.now() - ((stream.workItems.find((item) => item.id === toolCallId) as Extract<WorkItem, { kind: "tool" }> | undefined)?.startedAt ?? Date.now()) }) })); }
+        else if (type === "tool_execution_end") { flushStream(file!); const toolCallId = String(event.toolCallId ?? ""); const resultRecord = asRecord(event.result); const resultText = extractToolResultText(event.result); const resultDetails = asRecord(resultRecord.details); const resultDiff = typeof resultDetails.diff === "string" ? resultDetails.diff : undefined; updateStream(file!, (stream) => ({ ...stream, workItems: patchWorkItem(stream.workItems, toolCallId, { result: { text: resultText, isError: Boolean(event.isError), diff: resultDiff }, isError: Boolean(event.isError), done: true, durationMs: Date.now() - ((stream.workItems.find((item) => item.id === toolCallId) as Extract<WorkItem, { kind: "tool" }> | undefined)?.startedAt ?? Date.now()) }) })); }
         else if (type === "error") { const message = String(event.error ?? "error"); updateStream(file!, (stream) => ({ ...stream, error: message })); setFileError(file!, message); }
       }, controller.signal);
     } catch (error) {
@@ -545,20 +498,10 @@ export function useChat() {
             }
 
             if (message.role === "custom" && message.display !== false) {
-              const messageContent = message.content;
-              const notice = typeof messageContent === "string"
-                ? messageContent
-                : Array.isArray(messageContent)
-                  ? messageContent
-                    .map((part) => part && typeof part === "object" && "text" in (part as Record<string, unknown>)
-                      ? String((part as Record<string, unknown>).text ?? "")
-                      : typeof part === "string" ? part : "")
-                    .filter(Boolean)
-                    .join("\n")
-                  : "";
-              if (notice.trim()) {
-                noticesRef.current.get(file!)?.push(notice.trim());
-                pending.text += (pending.text ? "\n\n" : "") + notice.trim();
+              const notice = extractCustomNotice(message);
+              if (notice) {
+                noticesRef.current.get(file!)?.push(notice);
+                pending.text += (pending.text ? "\n\n" : "") + notice;
                 scheduleFlush(file!);
               }
             }
@@ -648,15 +591,8 @@ export function useChat() {
           } else if (type === "tool_execution_end") {
             flushStream(file!);
             const toolCallId = String(event.toolCallId ?? "");
-            const result = event.result;
-            const resultRecord = asRecord(result);
-            let resultText = "";
-            if (typeof result === "string") resultText = result;
-            else if (Array.isArray(resultRecord.content)) {
-              resultText = resultRecord.content
-                .map((part) => String(asRecord(part).text ?? ""))
-                .join("\n");
-            } else if (result) resultText = JSON.stringify(result).slice(0, 4000);
+            const resultRecord = asRecord(event.result);
+            const resultText = extractToolResultText(event.result);
             const resultDetails = asRecord(resultRecord.details);
             const resultDiff = typeof resultDetails.diff === "string" ? resultDetails.diff : undefined;
             updateStream(file!, (stream) => ({

@@ -11,6 +11,7 @@ import { Sidebar } from "./components/sidebar";
 import { SidebarToggleIcon } from "./components/sidebar-toggle-icon";
 import { SearchSessionsButton, SessionCommand, type CommandAction } from "./components/session-command";
 import { NEW_TAB_PREFIX, SETTINGS_TAB_ID, Tabs, UI_DEMO_TAB_ID, isNewTabId } from "./components/tabs";
+import { closeTab, nextTabAfterClose, promoteDraftTab } from "./lib/tabs";
 import {
     IconArrowDown,
     IconComponents,
@@ -357,15 +358,8 @@ export default function App() {
     const promoteNewChatTab = useCallback((file: string) => {
         const current = openTabIdsRef.current;
         if (current.includes(file)) return;
-        const next = [...current];
-        const draftIndex = activeNewTabId ? next.indexOf(activeNewTabId) : -1;
-        if (draftIndex >= 0) {
-            const promotedId = next[draftIndex];
-            next[draftIndex] = file;
-            dropNewTabState(promotedId);
-        } else {
-            next.push(file);
-        }
+        const { ids: next, retiredDraftId } = promoteDraftTab(current, activeNewTabId, file);
+        if (retiredDraftId) dropNewTabState(retiredDraftId);
         openTabIdsRef.current = next;
         setOpenTabIds(next);
         setActiveNewTabId((prev) => (prev && next.includes(prev) ? prev : null));
@@ -792,21 +786,22 @@ export default function App() {
         }
         // Chat tabs (sessions + new-chat drafts) — closing the last one swaps in
         // a fresh new-chat tab so there is always at least one chat tab.
-        const index = current.indexOf(id);
-        if (index < 0) return;
+        const closed = closeTab(current, id, {
+            isChatTab: (tabId) => tabId !== SETTINGS_TAB_ID && tabId !== UI_DEMO_TAB_ID,
+            makeFreshId: () => {
+                // Last chat tab closed — force a fresh new tab in its place.
+                const fresh = `${NEW_TAB_PREFIX}${newTabCounterRef.current++}`;
+                setNewTabCwds((prev) => ({ ...prev, [fresh]: newChatCwd }));
+                return fresh;
+            },
+        });
+        if (closed.removedIndex < 0) return;
         if (isNewTabId(id)) {
             dropNewTabState(id);
             if (activeNewTabId === id) setActiveNewTabId(null);
         }
-        const filtered = current.filter((tabId) => tabId !== id);
-        let next = filtered;
-        if (!next.some((tabId) => tabId !== SETTINGS_TAB_ID && tabId !== UI_DEMO_TAB_ID)) {
-            // Last chat tab closed — force a fresh new tab in its place.
-            const fresh = `${NEW_TAB_PREFIX}${newTabCounterRef.current++}`;
-            setNewTabCwds((prev) => ({ ...prev, [fresh]: newChatCwd }));
-            next = [...next, fresh];
-        }
-        const nextActiveId = next[index] ?? next[index - 1];
+        const next = closed.ids;
+        const nextActiveId = nextTabAfterClose(next, closed.removedIndex);
         openTabIdsRef.current = next;
         setOpenTabIds(next);
         const activeTab = settingsActive ? SETTINGS_TAB_ID : uiDemoActive ? UI_DEMO_TAB_ID : (chat.activeFile ?? activeNewTabId);

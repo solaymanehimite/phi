@@ -2,11 +2,11 @@
 
 Living plan for paying down structure debt without a full rewrite. Work top to bottom. Each item is scoped so it can land on its own. Nothing here changes product behavior unless noted.
 
-Status: audit only. No code changed for this doc.
+Status: section 1 landed 2026-09-13 (68 characterization tests + test/typecheck/lint gates green, build green).
 
 ## How to use this doc
 
-1. Start with section 1. Add tests before structural work.
+1. Start with section 1. Add tests before structural work. (Done 2026-09-13.)
 2. Do one numbered section at a time.
 3. Keep behavior unchanged unless the item says otherwise.
 4. Update this file when an item lands: mark done, note what changed.
@@ -33,7 +33,11 @@ Good enough for active development. Not yet safe for fast production changes. Re
 10. Dead code and repo hygiene
 11. Terminology and accessibility
 
-## 1. Safety net before structural work
+## 1. Safety net before structural work — DONE 2026-09-13
+
+Gates: `bun run test` (68 tests, 8 files), `bun run typecheck` (src + server/electron/vite), `bun run lint` (token gate + drift warnings). `bun run build` still green.
+
+Pure extractions (behavior-preserving, call sites rewired): `src/lib/stream-events.ts`, `src/lib/queue.ts`, `src/lib/tabs.ts`, `server/thinking.ts`, `server/paths.ts`, `server/nav.ts`, `server/providers.ts`. Typecheck fix: `tsconfig.node.json` now strict ES2020 over server/electron/vite (dropped the stale composite reference; removed two stale `@ts-expect-error` lines in `vite.config.ts`). Lint confirms two known suspects: `formatThemeJson`/`parseThemeJson` look unused (see section 11).
 
 There are no tests and no lint script. The build is the only gate.
 
@@ -454,9 +458,9 @@ Fix:
 
 ## Suggested first batch
 
-1. Add characterization tests.
+1. Add characterization tests. (Done — section 1.)
 2. Fix absolute fallback path and stale asset link.
-3. Extend strict typecheck to server and Electron.
+3. Extend strict typecheck to server and Electron. (Done — section 1.)
 4. Consolidate SSE transport.
 5. Extract stream reducer.
 6. Extract tab state.

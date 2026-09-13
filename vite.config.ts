@@ -3,9 +3,8 @@ import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
 import svgr from "vite-plugin-svgr";
 
-// @ts-expect-error process is a nodejs global
+// process is typed via @types/node.
 const tauriHost = process.env.TAURI_DEV_HOST;
-// @ts-expect-error process is a nodejs global
 const apiTarget = process.env.PHI_API_TARGET || "http://127.0.0.1:3001";
 
 // https://vite.dev/config/
