@@ -457,7 +457,7 @@ const MetaGroupTrigger = memo(function MetaGroupTrigger({
             </span>
             <IconChevronDownFilled
                 aria-hidden
-                className={`size-3.5 shrink-0 transition-transform duration-200 ${collapsed ? "-rotate-90" : ""}`}
+                className={`size-3.5 shrink-0 opacity-0 transition-all duration-200 group-hover:opacity-100 group-focus-within:opacity-100 focus-visible:opacity-100 ${collapsed ? "-rotate-90" : ""}`}
             />
         </button>
     );
