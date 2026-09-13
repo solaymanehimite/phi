@@ -411,6 +411,73 @@ html[data-theme="light"] .phi-empty-logo {
   }
 }
 
+/* Remote-host cloud drift (host picker) — a one-shot playthrough fired from
+   React state (phi-cloud-play): the cloud streams left with two small puffs
+   trailing it while a fresh identical cloud arrives from the right and parks
+   exactly where the original sat, so the end state matches rest. Trailing
+   puffs wear the muted tone (a theme-aware step toward the background)
+   instead of relying on opacity. */
+@keyframes phi-cloud-exit {
+  0% { transform: translateX(0); opacity: 1; }
+  60% { opacity: 1; }
+  100% { transform: translateX(-28px); opacity: 0; }
+}
+@keyframes phi-cloud-trail1 {
+  0% { transform: translateX(20px); opacity: 0; }
+  30% { opacity: 1; }
+  100% { transform: translateX(-18px); opacity: 0; }
+}
+@keyframes phi-cloud-trail2 {
+  0% { transform: translateX(27px); opacity: 0; }
+  35% { opacity: 1; }
+  100% { transform: translateX(-13px); opacity: 0; }
+}
+@keyframes phi-cloud-trail3 {
+  0% { transform: translateX(23px); opacity: 0; }
+  30% { opacity: 1; }
+  100% { transform: translateX(-16px); opacity: 0; }
+}
+@keyframes phi-cloud-arrive {
+  0% { transform: translateX(30px); opacity: 0; }
+  18% { opacity: 1; }
+  100% { transform: translateX(0); opacity: 1; }
+}
+.phi-cloud-puff1,
+.phi-cloud-puff2,
+.phi-cloud-puff3,
+.phi-cloud-incoming {
+  opacity: 0;
+}
+.phi-cloud-incoming {
+  transform: translateX(30px);
+}
+.phi-cloud-play .phi-cloud-main {
+  animation: phi-cloud-exit 0.7s ease-in forwards;
+}
+.phi-cloud-play .phi-cloud-puff1 {
+  animation: phi-cloud-trail1 0.8s ease-out forwards;
+}
+.phi-cloud-play .phi-cloud-puff2 {
+  animation: phi-cloud-trail2 0.9s ease-out forwards;
+}
+.phi-cloud-play .phi-cloud-puff3 {
+  animation: phi-cloud-trail3 0.75s ease-out forwards;
+  animation-delay: 0.25s;
+}
+.phi-cloud-play .phi-cloud-incoming {
+  animation: phi-cloud-arrive 1s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+  animation-delay: 0.35s;
+}
+@media (prefers-reduced-motion: reduce) {
+  .phi-cloud-play .phi-cloud-main,
+  .phi-cloud-play .phi-cloud-puff1,
+  .phi-cloud-play .phi-cloud-puff2,
+  .phi-cloud-play .phi-cloud-puff3,
+  .phi-cloud-play .phi-cloud-incoming {
+    animation: none;
+  }
+}
+
 /* Compaction surfaces enter through a collapsed grid row so their natural
    height can be revealed without measuring it in JavaScript. */
 @keyframes phi-compaction-appear {
@@ -593,10 +660,16 @@ html[data-theme="light"] .phi-empty-logo {
   overflow: hidden;
   padding-right: calc(var(--spacing) * 2);
   box-sizing: border-box;
+  /* Click-through: the slot overlaps the sidebar header via the bar's
+     negative margin, so its empty area must not swallow the picker below. */
+  pointer-events: none;
   transition:
     flex-basis var(--phi-motion-sidebar) var(--phi-ease-sidebar),
     width var(--phi-motion-sidebar) var(--phi-ease-sidebar),
     padding-right var(--phi-motion-sidebar) var(--phi-ease-sidebar);
+}
+.phi-tab-sidebar-slot button {
+  pointer-events: auto;
 }
 .phi-tabs-bar-extended[data-sidebar-collapsed="true"] .phi-tab-sidebar-slot {
   flex-basis: var(--phi-tabs-action-width);

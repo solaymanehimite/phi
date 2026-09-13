@@ -4,11 +4,9 @@ import {
     IconCheckFilled,
     IconChevronDownFilled,
     IconChevronLeft,
-    IconHome,
     IconPencilFilled,
     IconPlusFilled,
     IconSearch,
-    IconServer,
     IconTrashFilled,
     IconXFilled,
 } from "@tabler/icons-react";
@@ -180,9 +178,72 @@ function StatusDot({ online }: { online: boolean | undefined }) {
     );
 }
 
+// Local-host mark: Tabler's filled home with the door split into its own
+// path so it can slide open (pocket-door collapse into the left jamb) when
+// the picker row is hovered. Resting pixels match IconHomeFilled exactly.
+const HOME_BODY_D =
+    "M12.707 2.293l9 9c.63 .63 .184 1.707 -.707 1.707h-1v6a3 3 0 0 1 -3 3h-1v-7a3 3 0 0 0 -2.824 -2.995l-.176 -.005h-2a3 3 0 0 0 -3 3v7h-1a3 3 0 0 1 -3 -3v-6h-1c-.89 0 -1.337 -1.077 -.707 -1.707l9 -9a1 1 0 0 1 1.414 0";
+const HOME_DOOR_D = "M13 14a1 1 0 0 1 1 1v7h-4v-7a1 1 0 0 1 .883 -.993L11 14z";
+
+// Tabler's filled cloud path, reused for every drift layer.
+const CLOUD_D =
+    "M10.04 4.305c2.195 -.667 4.615 -.224 6.36 1.176c1.386 1.108 2.188 2.686 2.252 4.34l.003 .212l.091 .003c2.3 .107 4.143 1.961 4.25 4.27l.004 .211c0 2.407 -1.885 4.372 -4.255 4.482l-.21 .005h-11.878l-.222 -.008c-2.94 -.11 -5.317 -2.399 -5.43 -5.263l-.005 -.216c0 -2.747 2.08 -5.01 4.784 -5.417l.114 -.016l.07 -.181c.663 -1.62 2.056 -2.906 3.829 -3.518l.244 -.08z";
+
+function LocalHomeIcon({ className = "size-4 shrink-0" }: { className?: string }) {
+    return (
+        <svg
+            aria-hidden
+            viewBox="0 0 24 24"
+            fill="currentColor"
+            stroke="none"
+            className={className}
+        >
+            <path d={HOME_BODY_D} />
+            <path
+                d={HOME_DOOR_D}
+                className="origin-left [transform-box:fill-box] transition-transform duration-300 ease-out group-hover:scale-x-0 motion-reduce:transition-none"
+            />
+        </svg>
+    );
+}
+
+function RemoteCloudIcon({ className = "size-4 shrink-0" }: { className?: string }) {
+    return (
+        <svg
+            aria-hidden
+            viewBox="0 0 24 24"
+            fill="currentColor"
+            stroke="none"
+            className={`overflow-hidden ${className}`}
+        >
+            <g className="phi-cloud-main">
+                <path d={CLOUD_D} />
+            </g>
+            <g className="phi-cloud-puff1 text-phi-text-muted">
+                <g transform="translate(12 14.5) scale(0.5) translate(-12 -12)">
+                    <path d={CLOUD_D} />
+                </g>
+            </g>
+            <g className="phi-cloud-puff2 text-phi-text-muted">
+                <g transform="translate(12 10) scale(0.34) translate(-12 -12)">
+                    <path d={CLOUD_D} />
+                </g>
+            </g>
+            <g className="phi-cloud-puff3 text-phi-text-muted">
+                <g transform="translate(12 11) scale(0.65) translate(-12 -12)">
+                    <path d={CLOUD_D} />
+                </g>
+            </g>
+            <g className="phi-cloud-incoming">
+                <path d={CLOUD_D} />
+            </g>
+        </svg>
+    );
+}
+
 export function HostPicker({ disabled }: { disabled?: boolean }) {
     return (
-        <Popover className="relative min-w-0">
+        <Popover className="relative min-w-0 w-full">
             <HostTrigger disabled={disabled} />
             <PopoverContent anchor={{ to: "top start", gap: 12 }} className="w-max max-w-[min(360px,calc(100vw-32px))] overflow-hidden p-0">
                 <HostPanel />
@@ -194,19 +255,39 @@ export function HostPicker({ disabled }: { disabled?: boolean }) {
 function HostTrigger({ disabled }: { disabled?: boolean }) {
     const { activeHost } = useHosts();
     const isLocal = activeHost.id === LOCAL_HOST_ID;
+    // One-shot cloud drift: fired on hover, runs to completion on a timer
+    // so leaving the row mid-flight never cuts it short.
+    const [cloudPlaying, setCloudPlaying] = useState(false);
+    const cloudTimer = useRef<number | null>(null);
+    useEffect(
+        () => () => {
+            if (cloudTimer.current != null) window.clearTimeout(cloudTimer.current);
+        },
+        [],
+    );
+    const handleMouseEnter = useCallback(() => {
+        if (isLocal || cloudPlaying) return;
+        setCloudPlaying(true);
+        if (cloudTimer.current != null) window.clearTimeout(cloudTimer.current);
+        cloudTimer.current = window.setTimeout(() => {
+            cloudTimer.current = null;
+            setCloudPlaying(false);
+        }, 1400);
+    }, [isLocal, cloudPlaying]);
     return (
         <PopoverTrigger
             disabled={disabled}
             data-host-picker-trigger
-            className="group inline-flex max-w-full min-w-0 items-center gap-1.5 rounded-md px-1.5 py-1 text-left text-phi-text-secondary transition-colors hover:bg-phi-overlay-hover hover:text-phi-text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-phi-accent/40 disabled:pointer-events-none disabled:opacity-60"
+            onMouseEnter={handleMouseEnter}
+            className={`group flex w-full min-w-0 items-center gap-2 rounded-lg h-8 px-2.5 text-left text-[13px] font-medium text-phi-text-tertiary transition-colors hover:bg-phi-overlay-hover hover:text-phi-text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-phi-accent/40 disabled:pointer-events-none disabled:opacity-60${cloudPlaying ? " phi-cloud-play" : ""}`}
             aria-label={`Change host${activeHost ? `, currently ${activeHost.name}` : ""}`}
         >
             {isLocal ? (
-                <IconHome className="size-4 shrink-0 text-phi-text-secondary" />
+                <LocalHomeIcon />
             ) : (
-                <IconServer className="size-4 shrink-0 text-phi-text-secondary" />
+                <RemoteCloudIcon />
             )}
-            <span className="min-w-0 truncate text-[12.5px] font-medium">{activeHost.name}</span>
+            <span className="min-w-0 flex-1 truncate text-left">{activeHost.name}</span>
             <IconChevronDownFilled className="size-3.5 shrink-0 text-phi-text-muted transition-transform group-data-open:rotate-180" />
         </PopoverTrigger>
     );

@@ -3,11 +3,12 @@ import { useTheme, useEffectiveTheme, type Theme } from "../hooks/useTheme";
 import { useCustomThemes, setActiveCustomThemeId, clearActiveCustomTheme } from "../hooks/useCustomThemes";
 import { formatThemeForAppCss } from "../lib/custom-themes";
 import type { CustomTheme } from "../lib/custom-themes";
-import { IconCheckFilled, IconChevronDownFilled, IconCode, IconKeyFilled, IconPaletteFilled, IconPencil, IconServer, IconTrash } from "@tabler/icons-react";
+import { IconCheckFilled, IconChevronDownFilled, IconCode, IconDotsFilled, IconKeyFilled, IconPaletteFilled, IconPencil, IconPencilFilled, IconServer, IconTrash, IconTrashFilled } from "@tabler/icons-react";
 import { useClose } from "@headlessui/react";
 import { Alert } from "./ui/alert";
 import { Button, buttonClass } from "./ui/button";
 import { DialogOverlay, DialogPanel, DialogTitle } from "./ui/dialog";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "./ui/dropdown-menu";
 import { Input } from "./ui/input";
 import { MenuItem } from "./ui/menu";
 import { NavItem } from "./ui/nav-item";
@@ -414,8 +415,45 @@ function AppearanceTab() {
 }
 
 
+function HostName({ name, isCurrent }: { name: string; isCurrent: boolean }) {
+    return (
+        <div className={`flex min-w-0 items-center transition-all duration-200 ease-out motion-reduce:transition-none ${isCurrent ? "gap-1.5" : "gap-0"}`}>
+            <span className={`shrink-0 overflow-hidden transition-all duration-200 ease-out motion-reduce:transition-none ${isCurrent ? "w-3.5 opacity-100" : "w-0 opacity-0"}`}>
+                <IconCheckFilled className="size-3.5 text-phi-thinking-low" />
+            </span>
+            <span className={`min-w-0 flex-1 truncate text-[13px] font-medium transition-colors duration-200 motion-reduce:transition-none ${isCurrent ? "text-phi-thinking-low" : "text-phi-text-primary"}`}>
+                {name}
+            </span>
+        </div>
+    );
+}
+
+function HostFormBody({ form, setForm, saveLabel, onCancel, onSave }: {
+    form: NewHostInput;
+    setForm: (next: (prev: NewHostInput) => NewHostInput) => void;
+    saveLabel: string;
+    onCancel: () => void;
+    onSave: () => void;
+}) {
+    const canSubmit = form.name.trim().length > 0 && form.url.trim().length > 0;
+    // Same treatment as the popover forms (host creator, project creator).
+    const inputClass =
+        "w-full !border-0 !bg-phi-overlay-strong !px-3 !text-[13px] placeholder:!text-phi-text-tertiary focus-visible:ring-2 focus-visible:ring-phi-accent/40";
+    return (
+        <div className="min-w-0 flex-1 space-y-2">
+            <Input autoFocus placeholder="Name" aria-label="Host name" value={form.name} onChange={(e) => setForm((p) => ({ ...p, name: e.target.value }))} variant="default" className={inputClass} />
+            <Input placeholder="URL http://host:port" aria-label="Host URL" value={form.url} onChange={(e) => setForm((p) => ({ ...p, url: e.target.value }))} variant="default" className={inputClass} />
+            <Input placeholder="Token (optional)" aria-label="Host token" type="password" value={form.token ?? ""} onChange={(e) => setForm((p) => ({ ...p, token: e.target.value }))} variant="default" className={inputClass} />
+            <div className="flex items-center justify-end gap-1.5 pt-1">
+                <Button onClick={onCancel} variant="ghost" size="xs" className="!text-[12px]">Cancel</Button>
+                <Button onClick={onSave} disabled={!canSubmit} variant="primary" size="xs" className="!text-[12px]">{saveLabel}</Button>
+            </div>
+        </div>
+    );
+}
+
 function HostsTab() {
-    const { hosts, activeHostId, setActiveHostId, addHost, updateHost, removeHost } = useHosts();
+    const { hosts, activeHostId, addHost, updateHost, removeHost } = useHosts();
     const [error, setError] = useState<string | null>(null);
     const [editingId, setEditingId] = useState<string | null>(null);
     const [form, setForm] = useState<NewHostInput>({ name: "", url: "", token: "" });
@@ -433,6 +471,12 @@ function HostsTab() {
         setEditingId(id);
         setForm({ ...current });
         setShowForm(true);
+    }, []);
+
+    const handleCancel = useCallback(() => {
+        setShowForm(false);
+        setEditingId(null);
+        setError(null);
     }, []);
 
     const handleSave = useCallback(() => {
@@ -457,8 +501,6 @@ function HostsTab() {
         removeHost(id);
     }, [removeHost]);
 
-    const canSubmit = form.name.trim().length > 0 && form.url.trim().length > 0;
-
     return (
         <div className="space-y-4">
             {error && <Alert variant="error">{error}</Alert>}
@@ -468,32 +510,33 @@ function HostsTab() {
                 <div className="space-y-2">
                     <div className="flex flex-wrap items-center gap-2 rounded-lg border border-phi-border bg-phi-bg-surface px-3 py-2">
                         <div className="min-w-0 flex-1">
-                            <div className="truncate text-[13px] font-medium text-phi-text-primary">Local</div>
+                            <HostName name="Local" isCurrent={activeHostId === LOCAL_HOST_ID} />
                             <div className="truncate font-mono text-[11px] text-phi-text-muted">This machine</div>
                         </div>
-                        {activeHostId === LOCAL_HOST_ID ? (
-                            <span className="inline-flex items-center gap-1 text-[11px] font-medium text-phi-thinking-low"><IconCheckFilled className="size-3.5" />Current</span>
-                        ) : (
-                            <Button onClick={() => setActiveHostId(LOCAL_HOST_ID)} variant="secondary" size="xs" className="!text-[11px]">Use</Button>
-                        )}
                     </div>
                     {hosts.map((host) => (
-                        <div key={host.id} className="flex flex-wrap items-center gap-2 rounded-lg border border-phi-border bg-phi-bg-surface px-3 py-2">
-                            <div className="min-w-0 flex-1">
-                                <div className="truncate text-[13px] font-medium text-phi-text-primary">{host.name}</div>
+                        editingId === host.id && showForm ? (
+                            <div key={host.id} className="rounded-2xl border border-phi-border bg-phi-bg-surface p-2">
+                                <HostFormBody form={form} setForm={setForm} saveLabel="Save changes" onCancel={handleCancel} onSave={handleSave} />
+                            </div>
+                        ) : (
+                        <div key={host.id} className="group relative flex flex-wrap items-center gap-2 rounded-lg border border-phi-border bg-phi-bg-surface px-3 py-2">
+                            <div className="min-w-0 flex-1 pr-6">
+                                <HostName name={host.name} isCurrent={activeHostId === host.id} />
                                 <div className="truncate font-mono text-[11px] text-phi-text-muted">{host.url}</div>
                                 <div className="text-[11px] text-phi-text-muted">{host.token ? "Token saved" : "No token"}</div>
                             </div>
-                            <div className="flex items-center gap-1">
-                                {activeHostId === host.id ? (
-                                    <span className="inline-flex items-center gap-1 text-[11px] font-medium text-phi-thinking-low"><IconCheckFilled className="size-3.5" />Current</span>
-                                ) : (
-                                    <Button onClick={() => setActiveHostId(host.id)} variant="secondary" size="xs" className="!text-[11px]">Use</Button>
-                                )}
-                                <Button onClick={() => startEdit(host.id, { name: host.name, url: host.url, token: host.token })} variant="secondary" size="xs" className="!text-[11px]">Edit</Button>
-                                <Button onClick={() => handleDelete(host.id, host.name)} variant="secondary" size="xs" className="!border-phi-error-border !bg-phi-error-bg !text-[11px] !text-phi-error-text hover:!bg-phi-error-bg">Delete</Button>
-                            </div>
+                            <DropdownMenu className="absolute right-2 top-2">
+                                <DropdownMenuTrigger aria-label={`Actions for ${host.name}`}>
+                                    <IconDotsFilled className="size-3.5" />
+                                </DropdownMenuTrigger>
+                                <DropdownMenuContent>
+                                    <DropdownMenuItem icon={<IconPencilFilled className="size-[15px]" />} onClick={() => startEdit(host.id, { name: host.name, url: host.url, token: host.token })}>Edit</DropdownMenuItem>
+                                    <DropdownMenuItem icon={<IconTrashFilled className="size-[15px]" />} onClick={() => handleDelete(host.id, host.name)}>Delete</DropdownMenuItem>
+                                </DropdownMenuContent>
+                            </DropdownMenu>
                         </div>
+                        )
                     ))}
                     {!showForm && (
                         <button onClick={startAdd} className="w-full rounded-lg border border-dashed border-phi-border px-3 py-3 text-left text-[12px] font-medium text-phi-text-muted hover:border-phi-input-border-focus hover:text-phi-text-primary">+ Add host</button>
@@ -501,16 +544,10 @@ function HostsTab() {
                 </div>
             </div>
 
-            {showForm && (
+            {showForm && !editingId && (
                 <div className="space-y-2 rounded-lg border border-phi-border bg-phi-bg-surface p-3">
-                    <h4 className="text-[12px] font-semibold text-phi-text-primary">{editingId ? "Edit host" : "New host"}</h4>
-                    <Input autoFocus placeholder="Name" aria-label="Host name" value={form.name} onChange={(e) => setForm((p) => ({ ...p, name: e.target.value }))} variant="default" />
-                    <Input placeholder="URL http://host:port" aria-label="Host URL" value={form.url} onChange={(e) => setForm((p) => ({ ...p, url: e.target.value }))} variant="default" />
-                    <Input placeholder="Token (optional)" aria-label="Host token" type="password" value={form.token ?? ""} onChange={(e) => setForm((p) => ({ ...p, token: e.target.value }))} variant="default" />
-                    <div className="flex items-center justify-end gap-1.5 pt-1">
-                        <Button onClick={() => { setShowForm(false); setEditingId(null); setError(null); }} variant="ghost" size="xs" className="!text-[12px]">Cancel</Button>
-                        <Button onClick={handleSave} disabled={!canSubmit} variant="primary" size="xs" className="!text-[12px]">{editingId ? "Save changes" : "Add host"}</Button>
-                    </div>
+                    <h4 className="text-[12px] font-semibold text-phi-text-primary">New host</h4>
+                    <HostFormBody form={form} setForm={setForm} saveLabel="Add host" onCancel={handleCancel} onSave={handleSave} />
                 </div>
             )}
         </div>

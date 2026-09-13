@@ -29,8 +29,6 @@ import { NavItem } from "./ui/nav-item";
 import { formatProjectPath, type ProjectGroup } from "../lib/projects";
 import type { SessionInfo } from "../types/session";
 import { useHasDraft } from "../hooks/useHasDraft";
-import { useEffectiveTheme } from "../hooks/useTheme";
-import { brandingUrl } from "../lib/themed-assets";
 
 type SidebarProps = {
     projectGroups: ProjectGroup[];
@@ -82,18 +80,6 @@ function titleFor(s: { name?: string; firstMessage: string }): string {
     const t = s.firstMessage.trim();
     if (!t) return "Untitled session";
     return t.length > 42 ? `${t.slice(0, 42).trim()}…` : t;
-}
-
-function BrandLogo({ className = "" }: { className?: string }) {
-    const theme = useEffectiveTheme();
-    return (
-        <img
-            src={brandingUrl("logo.svg", theme)}
-            alt="Phi"
-            className={className}
-            draggable={false}
-        />
-    );
 }
 
 export const Sidebar = memo(function Sidebar({
@@ -170,21 +156,14 @@ export const Sidebar = memo(function Sidebar({
         <aside className="flex h-full w-[268px] min-w-[268px] shrink-0 flex-col bg-phi-bg-sidebar">
             <div
                 data-tauri-drag-region
-                className="mb-4 mt-2 flex shrink-0 items-center px-3"
+                className="mb-2 flex h-10 shrink-0 items-end pl-2 pr-[85px]"
             >
-                <button
-                    type="button"
-                    onClick={onNewChat}
-                    className="ml-2 mt-2 flex items-center focus-visible:outline-none"
-                >
-                    <BrandLogo className="h-5 w-auto" />
-                </button>
+                <div className="flex min-w-0 w-full items-center">
+                    <HostPicker />
+                </div>
             </div>
 
             <div className="shrink-0 space-y-0.5 px-2 pt-2">
-                <div className="flex min-w-0 items-center px-1.5 py-0.5">
-                    <HostPicker />
-                </div>
                 <Button className="w-full justify-start" onClick={onNewChat}>
                     <IconPlusFilled className="size-4" />
                     New chat
