@@ -6,6 +6,8 @@ type NavItemProps = {
   children?: ReactNode;
   onClick: () => void;
   icon?: ComponentType<{ className?: string }>;
+  /** Extra classes applied to the icon (e.g. hover animations). */
+  iconClassName?: string;
   className?: string;
   title?: string;
   ariaLabel?: string;
@@ -22,6 +24,7 @@ export function NavItem({
   children,
   onClick,
   icon: Icon,
+  iconClassName = "",
   className = "",
   title,
   ariaLabel,
@@ -42,7 +45,7 @@ export function NavItem({
     >
       {Icon && (
         <Icon
-          className={`size-4 shrink-0 ${active ? "text-phi-icon-active" : "text-phi-icon group-hover:text-phi-text-secondary"}`}
+          className={`size-4 shrink-0 ${active ? "text-phi-icon-active" : "text-phi-icon group-hover:text-phi-text-secondary"} ${iconClassName}`}
         />
       )}
       {label != null ? <span className="min-w-0 flex-1 truncate">{label}</span> : children}

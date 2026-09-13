@@ -1,5 +1,4 @@
 import {
-    IconArchive,
     IconArchiveFilled,
     IconArchiveOff,
     IconChevronDownFilled,
@@ -8,7 +7,6 @@ import {
     IconPinnedFilled,
     IconPinnedOff,
     IconPlusFilled,
-    IconSearch,
     IconSendFilled,
     IconSettingsFilled,
     IconTrashFilled,
@@ -119,6 +117,7 @@ export const Sidebar = memo(function Sidebar({
     onPrefetch,
 }: SidebarProps) {
     const scrollRef = useRef<HTMLDivElement>(null);
+    const searchLensPlay = useRef<(() => void) | null>(null);
     const [canScrollUp, setCanScrollUp] = useState(false);
     const [canScrollDown, setCanScrollDown] = useState(false);
 
@@ -189,10 +188,11 @@ export const Sidebar = memo(function Sidebar({
                 <Button
                     className="group w-full justify-start"
                     onClick={onOpenSearch}
+                    onMouseEnter={() => searchLensPlay.current?.()}
                     aria-keyshortcuts="Meta+K Control+K"
                     title="Search sessions and commands (⌘K)"
                 >
-                    <IconSearch className="size-4" />
+                    <SearchLensIcon playRef={searchLensPlay} />
                     <span className="min-w-0 flex-1 truncate text-left">Search</span>
                     <span className="shrink-0 text-[11px] text-phi-text-faint opacity-0 transition-opacity duration-150 group-hover:opacity-100 group-focus-within:opacity-100">⌘K</span>
                 </Button>
@@ -327,7 +327,7 @@ export const Sidebar = memo(function Sidebar({
                             onClick={handleToggleArchived}
                             label="Archived"
                             count={archivedSessions.length}
-                            icon={<IconArchiveFilled aria-hidden className="size-4 shrink-0 text-current" />}
+                            icon={<ArchiveBinIcon />}
                         />
                         <div
                             className={`grid transition-all duration-300 ease-[cubic-bezier(0.4,0,0.2,1)] ${archivedCollapsed ? "grid-rows-[0fr] opacity-0" : "grid-rows-[1fr] opacity-100"}`}
@@ -361,12 +361,86 @@ export const Sidebar = memo(function Sidebar({
                 <NavItem
                     label="Settings"
                     icon={IconSettingsFilled}
+                    iconClassName="group-hover:animate-spin motion-reduce:group-hover:animate-none"
                     onClick={() => onOpenSettings?.()}
                     title="Settings (Cmd+,)"
                     ariaLabel="Open settings"
                 />
             </div>
         </aside>
+    );
+});
+
+// Test: search lens that flips around its handle axis on hover (lollipop
+// spin). True geometry animation — each frame rewrites the lens `d` as a
+// rotated ellipse with a shrinking minor axis, so the stroke stays a uniform
+// 2px throughout (no perspective warping). Vendored from Tabler's outline
+// search; only the lens animates, the handle sits on the axis.
+const LENS_CX = 10;
+const LENS_CY = 10;
+const LENS_R = 7;
+// Semi-major extent along the 45° handle diagonal.
+const LENS_MAJ = LENS_R * Math.SQRT1_2;
+
+function lensD(ry: number): string {
+    const r = (n: number) => Number(n.toFixed(3));
+    const sx = LENS_CX - LENS_MAJ;
+    const sy = LENS_CY - LENS_MAJ;
+    const d = LENS_MAJ * 2;
+    return `M ${r(sx)} ${r(sy)} a ${LENS_R} ${r(ry)} 45 1 0 ${r(d)} ${r(d)} a ${LENS_R} ${r(ry)} 45 1 0 ${r(-d)} ${r(-d)}`;
+}
+
+const SearchLensIcon = memo(function SearchLensIcon({
+    playRef,
+}: {
+    /** Hover intent channel — set to the flip player on mount. */
+    playRef?: { current: (() => void) | null };
+}) {
+    const lensRef = useRef<SVGPathElement>(null);
+    const rafRef = useRef<number | null>(null);
+
+    const playFlip = useCallback(() => {
+        const el = lensRef.current;
+        if (!el) return;
+        if (typeof window !== "undefined" && typeof window.matchMedia === "function" && window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+        if (rafRef.current != null) cancelAnimationFrame(rafRef.current);
+        const DURATION = 700;
+        const start = performance.now();
+        const tick = (now: number) => {
+            const t = Math.min((now - start) / DURATION, 1);
+            const eased = t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2;
+            const ry = Math.max(LENS_R * Math.abs(Math.cos(eased * Math.PI)), 0.4);
+            el.setAttribute("d", lensD(ry));
+            rafRef.current = t < 1 ? requestAnimationFrame(tick) : null;
+        };
+        rafRef.current = requestAnimationFrame(tick);
+    }, []);
+
+    useEffect(() => {
+        if (playRef) playRef.current = playFlip;
+    }, [playFlip, playRef]);
+
+    useEffect(
+        () => () => {
+            if (rafRef.current != null) cancelAnimationFrame(rafRef.current);
+        },
+        [],
+    );
+
+    return (
+        <svg
+            aria-hidden
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth={2}
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            className="size-4 shrink-0"
+        >
+            <path ref={lensRef} d={lensD(LENS_R)} />
+            <path d="M21 21l-6 -6" />
+        </svg>
     );
 });
 
@@ -392,7 +466,7 @@ const MetaGroupTrigger = memo(function MetaGroupTrigger({
             onClick={onClick}
             aria-expanded={!collapsed}
             aria-label={`${label}, ${count} session${count === 1 ? "" : "s"}`}
-            className="flex h-8 w-full items-center gap-2 rounded-lg px-2.5 text-left text-[13px] font-medium text-phi-text-tertiary hover:bg-phi-overlay-hover hover:text-phi-text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-phi-accent/40"
+            className="group flex h-8 w-full items-center gap-2 rounded-lg px-2.5 text-left text-[13px] font-medium text-phi-text-tertiary hover:bg-phi-overlay-hover hover:text-phi-text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-phi-accent/40"
         >
             {icon}
             <span className="min-w-0 flex-1 truncate text-current">
@@ -403,6 +477,39 @@ const MetaGroupTrigger = memo(function MetaGroupTrigger({
                 className={`size-3.5 shrink-0 transition-transform duration-200 ${collapsed ? "-rotate-90" : ""}`}
             />
         </button>
+    );
+});
+
+// Test: archive bin whose lid lifts + tilts when the Archived row is hovered.
+// Vendored from Tabler's filled archive so the lid (first path) is directly
+// addressable and the icon keeps its filled look.
+const ArchiveBinIcon = memo(function ArchiveBinIcon({
+    className = "size-4 shrink-0 text-current",
+    hoverOn = "group",
+}: {
+    className?: string;
+    /** Which hover group opens the lid: the row (`group`) or the button itself (`group/archive`). */
+    hoverOn?: "group" | "archive";
+}) {
+    // Both variants must appear literally so Tailwind generates them.
+    const lidHover =
+        hoverOn === "archive"
+            ? "group-hover/archive:-translate-y-[2px] group-hover/archive:-rotate-[10deg]"
+            : "group-hover:-translate-y-[2px] group-hover:-rotate-[10deg]";
+    return (
+        <svg
+            aria-hidden
+            viewBox="0 0 24 24"
+            fill="currentColor"
+            stroke="none"
+            className={className}
+        >
+            <path
+                d="M2 5a2 2 0 0 1 2 -2h16a2 2 0 0 1 2 2a2 2 0 0 1 -2 2h-16a2 2 0 0 1 -2 -2z"
+                className={`origin-center transition-transform duration-300 ease-out [transform-box:fill-box] motion-reduce:transition-none ${lidHover}`}
+            />
+            <path d="M19 9c.513 0 .936 .463 .993 1.06l.007 .14v7.2c0 1.917 -1.249 3.484 -2.824 3.594l-.176 .006h-10c-1.598 0 -2.904 -1.499 -2.995 -3.388l-.005 -.212v-7.2c0 -.663 .448 -1.2 1 -1.2h14zm-5 2h-4l-.117 .007a1 1 0 0 0 0 1.986l.117 .007h4l.117 -.007a1 1 0 0 0 0 -1.986l-.117 -.007z" />
+        </svg>
     );
 });
 
@@ -794,12 +901,12 @@ const SessionRow = memo(function SessionRow({
                     onClick={onToggleArchive}
                     title={archived ? "Unarchive session" : "Archive session"}
                     aria-label={archived ? "Unarchive session" : "Archive session"}
-                    className="absolute left-1 top-1/2 grid size-6 -translate-y-1/2 place-items-center rounded text-phi-text-faint opacity-0 transition-colors hover:bg-phi-overlay-strong hover:text-phi-text-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-phi-accent/40 focus-visible:opacity-100 group-hover:opacity-100 group-focus-within:opacity-100"
+                    className="absolute left-1 top-1/2 grid size-6 -translate-y-1/2 place-items-center rounded text-phi-text-faint opacity-0 transition-colors hover:bg-phi-overlay-strong hover:text-phi-text-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-phi-accent/40 focus-visible:opacity-100 group-hover:opacity-100 group-focus-within:opacity-100 group/archive"
                 >
                     {archived ? (
                         <IconArchiveOff className="size-[15px]" />
                     ) : (
-                        <IconArchive className="size-[15px]" />
+                        <ArchiveBinIcon className="size-[15px] shrink-0 text-current" hoverOn="archive" />
                     )}
                 </button>
             )}
