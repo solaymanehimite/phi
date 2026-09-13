@@ -1,16 +1,39 @@
 import type { ModelInfo, SessionInfo, SessionMessagesResponse, ThinkingLevel } from "../types/session";
+import { LOCAL_HOST_ID, getStoredActiveHost } from "../hooks/useHosts";
 
 // --- Sidecar discovery ---
 // Packaged app: Electron main picks a free port at launch, renderer learns it
 // via window.phi.getServerPort() (preload IPC).
 // Dev (`bun run electron:dev`): external server on 3001, reached via Vite proxy.
+// Remote host: the active host's stored url + token (see useHosts).
 let cachedBase: string | null = null;
 
 export async function getApiBase(): Promise<string> {
   return getBase();
 }
 
+/** Bearer token for the active host, or null for the local host / no token. */
+async function getAuthToken(): Promise<string | null> {
+  const host = getStoredActiveHost();
+  if (host.id === LOCAL_HOST_ID) return null;
+  return host.token ? host.token : null;
+}
+
+function authHeaders(token: string | null): Record<string, string> {
+  return token ? { Authorization: `Bearer ${token}` } : {};
+}
+
+function unauthorizedMessage(res: Response, data: unknown): string | null {
+  if (res.status !== 401) return null;
+  void data;
+  return "unauthorized — check host token";
+}
+
 async function getBase(): Promise<string> {
+  const host = getStoredActiveHost();
+  if (host.id !== LOCAL_HOST_ID) {
+    return `${host.url.replace(/\/+$/, "")}/api`;
+  }
   if (cachedBase) return cachedBase;
   if (typeof window === "undefined") return "/api";
   try {
@@ -29,12 +52,17 @@ async function getBase(): Promise<string> {
 
 async function apiFetch(path: string, init?: RequestInit): Promise<Response> {
   const base = await getBase();
-  return fetch(`${base}${path}`, init);
+  const token = await getAuthToken();
+  const headers = new Headers(init?.headers);
+  if (token && !headers.has("Authorization")) headers.set("Authorization", `Bearer ${token}`);
+  return fetch(`${base}${path}`, { ...init, headers });
 }
 
 async function jsonOrThrow(res: Response) {
   const data = await res.json().catch(() => ({}));
   if (!res.ok) {
+    const authMsg = unauthorizedMessage(res, data);
+    if (authMsg) throw new Error(authMsg);
     const msg = (data as { error?: string }).error || `HTTP ${res.status}`;
     throw new Error(msg);
   }
@@ -144,12 +172,13 @@ export async function streamCompact(
   const base = await getBase();
   const res = await fetch(`${base}/compact`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", ...authHeaders(await getAuthToken()) },
     body: JSON.stringify(opts),
     signal,
   });
   if (!res.ok || !res.body) {
     const text = await res.text().catch(() => "");
+    if (res.status === 401) throw new Error("unauthorized — check host token");
     let msg = `HTTP ${res.status}`;
     try { const j = JSON.parse(text); if (j.error) msg = j.error; } catch {}
     throw new Error(msg);
@@ -267,12 +296,13 @@ export async function streamContinue(
   const base = await getBase();
   const res = await fetch(`${base}/continue`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", ...authHeaders(await getAuthToken()) },
     body: JSON.stringify(body),
     signal,
   });
   if (!res.ok || !res.body) {
     const text = await res.text().catch(() => "");
+    if (res.status === 401) throw new Error("unauthorized — check host token");
     let msg = `HTTP ${res.status}`;
     try { const j = JSON.parse(text); if (j.error) msg = j.error; } catch {}
     throw new Error(msg);

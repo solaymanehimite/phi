@@ -3,7 +3,7 @@ import { useTheme, useEffectiveTheme, type Theme } from "../hooks/useTheme";
 import { useCustomThemes, setActiveCustomThemeId, clearActiveCustomTheme } from "../hooks/useCustomThemes";
 import { formatThemeForAppCss } from "../lib/custom-themes";
 import type { CustomTheme } from "../lib/custom-themes";
-import { IconCheckFilled, IconChevronDownFilled, IconCode, IconKeyFilled, IconPaletteFilled, IconPencil, IconTrash } from "@tabler/icons-react";
+import { IconCheckFilled, IconChevronDownFilled, IconCode, IconKeyFilled, IconPaletteFilled, IconPencil, IconServer, IconTrash } from "@tabler/icons-react";
 import { useClose } from "@headlessui/react";
 import { Alert } from "./ui/alert";
 import { Button, buttonClass } from "./ui/button";
@@ -16,13 +16,15 @@ import { Highlight, type PrismTheme } from "prism-react-renderer";
 import { CODE_THEMES, setCodeTheme, useCodeTheme, type CodeThemeId } from "./code-theme";
 import { ThemeEditorToggle } from "./dev/ThemeEditor";
 import { listProviders, upsertProvider, deleteProvider, testProvider, type ProviderRow } from "../lib/api";
+import { LOCAL_HOST_ID, useHosts, type NewHostInput } from "../hooks/useHosts";
 
 
-export type SettingsSection = "appearance" | "providers";
+export type SettingsSection = "appearance" | "providers" | "hosts";
 
 const sections: { id: SettingsSection; label: string; description: string; icon: ComponentType<{ className?: string }> }[] = [
     { id: "appearance", label: "Appearance", description: "Theme and colors", icon: IconPaletteFilled },
     { id: "providers", label: "Auth", description: "Models and API keys", icon: IconKeyFilled },
+    { id: "hosts", label: "Hosts", description: "Local and remote sidecars", icon: IconServer },
 ];
 
 export function SettingsPanel({
@@ -66,7 +68,7 @@ export function SettingsPanel({
                 </header>
                 <div className="min-h-0 flex-1 overflow-y-auto p-6 pt-1">
                     <div className="mx-auto w-full max-w-3xl">
-                        {section === "appearance" ? <AppearanceTab /> : <ProvidersTab onChanged={onProvidersChanged} />}
+                        {section === "appearance" ? <AppearanceTab /> : section === "hosts" ? <HostsTab /> : <ProvidersTab onChanged={onProvidersChanged} />}
                     </div>
                 </div>
             </div>
@@ -411,6 +413,109 @@ function AppearanceTab() {
     );
 }
 
+
+function HostsTab() {
+    const { hosts, activeHostId, setActiveHostId, addHost, updateHost, removeHost } = useHosts();
+    const [error, setError] = useState<string | null>(null);
+    const [editingId, setEditingId] = useState<string | null>(null);
+    const [form, setForm] = useState<NewHostInput>({ name: "", url: "", token: "" });
+    const [showForm, setShowForm] = useState(false);
+
+    const startAdd = useCallback(() => {
+        setError(null);
+        setEditingId(null);
+        setForm({ name: "", url: "", token: "" });
+        setShowForm(true);
+    }, []);
+
+    const startEdit = useCallback((id: string, current: { name: string; url: string; token: string }) => {
+        setError(null);
+        setEditingId(id);
+        setForm({ ...current });
+        setShowForm(true);
+    }, []);
+
+    const handleSave = useCallback(() => {
+        if (!form.name.trim() || !form.url.trim()) {
+            setError("Name and URL are required");
+            return;
+        }
+        try {
+            if (editingId) updateHost(editingId, form);
+            else addHost(form);
+            setError(null);
+            setShowForm(false);
+            setEditingId(null);
+            setForm({ name: "", url: "", token: "" });
+        } catch (e) {
+            setError(e instanceof Error ? e.message : String(e));
+        }
+    }, [addHost, editingId, form, updateHost]);
+
+    const handleDelete = useCallback((id: string, name: string) => {
+        if (!confirm(`Remove host "${name}"?`)) return;
+        removeHost(id);
+    }, [removeHost]);
+
+    const canSubmit = form.name.trim().length > 0 && form.url.trim().length > 0;
+
+    return (
+        <div className="space-y-4">
+            {error && <Alert variant="error">{error}</Alert>}
+
+            <div className="space-y-2">
+                <h4 className="text-[12px] font-semibold text-phi-text-primary">Hosts</h4>
+                <div className="space-y-2">
+                    <div className="flex flex-wrap items-center gap-2 rounded-lg border border-phi-border bg-phi-bg-surface px-3 py-2">
+                        <div className="min-w-0 flex-1">
+                            <div className="truncate text-[13px] font-medium text-phi-text-primary">Local</div>
+                            <div className="truncate font-mono text-[11px] text-phi-text-muted">This machine</div>
+                        </div>
+                        {activeHostId === LOCAL_HOST_ID ? (
+                            <span className="inline-flex items-center gap-1 text-[11px] font-medium text-phi-thinking-low"><IconCheckFilled className="size-3.5" />Current</span>
+                        ) : (
+                            <Button onClick={() => setActiveHostId(LOCAL_HOST_ID)} variant="secondary" size="xs" className="!text-[11px]">Use</Button>
+                        )}
+                    </div>
+                    {hosts.map((host) => (
+                        <div key={host.id} className="flex flex-wrap items-center gap-2 rounded-lg border border-phi-border bg-phi-bg-surface px-3 py-2">
+                            <div className="min-w-0 flex-1">
+                                <div className="truncate text-[13px] font-medium text-phi-text-primary">{host.name}</div>
+                                <div className="truncate font-mono text-[11px] text-phi-text-muted">{host.url}</div>
+                                <div className="text-[11px] text-phi-text-muted">{host.token ? "Token saved" : "No token"}</div>
+                            </div>
+                            <div className="flex items-center gap-1">
+                                {activeHostId === host.id ? (
+                                    <span className="inline-flex items-center gap-1 text-[11px] font-medium text-phi-thinking-low"><IconCheckFilled className="size-3.5" />Current</span>
+                                ) : (
+                                    <Button onClick={() => setActiveHostId(host.id)} variant="secondary" size="xs" className="!text-[11px]">Use</Button>
+                                )}
+                                <Button onClick={() => startEdit(host.id, { name: host.name, url: host.url, token: host.token })} variant="secondary" size="xs" className="!text-[11px]">Edit</Button>
+                                <Button onClick={() => handleDelete(host.id, host.name)} variant="secondary" size="xs" className="!border-phi-error-border !bg-phi-error-bg !text-[11px] !text-phi-error-text hover:!bg-phi-error-bg">Delete</Button>
+                            </div>
+                        </div>
+                    ))}
+                    {!showForm && (
+                        <button onClick={startAdd} className="w-full rounded-lg border border-dashed border-phi-border px-3 py-3 text-left text-[12px] font-medium text-phi-text-muted hover:border-phi-input-border-focus hover:text-phi-text-primary">+ Add host</button>
+                    )}
+                </div>
+            </div>
+
+            {showForm && (
+                <div className="space-y-2 rounded-lg border border-phi-border bg-phi-bg-surface p-3">
+                    <h4 className="text-[12px] font-semibold text-phi-text-primary">{editingId ? "Edit host" : "New host"}</h4>
+                    <Input autoFocus placeholder="Name" aria-label="Host name" value={form.name} onChange={(e) => setForm((p) => ({ ...p, name: e.target.value }))} variant="default" />
+                    <Input placeholder="URL http://host:port" aria-label="Host URL" value={form.url} onChange={(e) => setForm((p) => ({ ...p, url: e.target.value }))} variant="default" />
+                    <Input placeholder="Token (optional)" aria-label="Host token" type="password" value={form.token ?? ""} onChange={(e) => setForm((p) => ({ ...p, token: e.target.value }))} variant="default" />
+                    <div className="flex items-center justify-end gap-1.5 pt-1">
+                        <Button onClick={() => { setShowForm(false); setEditingId(null); setError(null); }} variant="ghost" size="xs" className="!text-[12px]">Cancel</Button>
+                        <Button onClick={handleSave} disabled={!canSubmit} variant="primary" size="xs" className="!text-[12px]">{editingId ? "Save changes" : "Add host"}</Button>
+                    </div>
+                </div>
+            )}
+        </div>
+    );
+}
 
 function ProvidersTab({ onChanged }: { onChanged?: () => void }) {
     const [providers, setProviders] = useState<ProviderRow[]>([]);

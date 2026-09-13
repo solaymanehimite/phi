@@ -13,6 +13,7 @@ import {
 } from "@tabler/icons-react";
 import { memo, useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { Button } from "./ui/button";
+import { HostPicker } from "./host-picker";
 import { Input } from "./ui/input";
 import { Alert } from "./ui/alert";
 import { EmptyState } from "./ui/empty-state";
@@ -181,6 +182,9 @@ export const Sidebar = memo(function Sidebar({
             </div>
 
             <div className="shrink-0 space-y-0.5 px-2 pt-2">
+                <div className="flex min-w-0 items-center px-1.5 py-0.5">
+                    <HostPicker />
+                </div>
                 <Button className="w-full justify-start" onClick={onNewChat}>
                     <IconPlusFilled className="size-4" />
                     New chat

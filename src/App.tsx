@@ -28,6 +28,7 @@ import { InlineCode } from "./components/ui/code";
 import { useSessions } from "./hooks/useSessions";
 import { useSessionFlags } from "./hooks/useSessionFlags";
 import { useProjects, type NewProjectInput } from "./hooks/useProjects";
+import { useHosts } from "./hooks/useHosts";
 import { normalizeProjectPath, resolveProjectOptions, sessionsForProject, type Project } from "./lib/projects";
 import { useChat } from "./hooks/useChat";
 import { useCompaction } from "./hooks/useCompaction";
@@ -473,6 +474,16 @@ export default function App() {
         const paths = new Set(projectOptions.map((p) => p.path));
         return sessions.sessions.filter((s) => !paths.has(s.cwd) && !sessionFlags.pinned.has(s.path) && !sessionFlags.archived.has(s.path)).length;
     }, [projectOptions, sessions.sessions, sessionFlags.pinned, sessionFlags.archived]);
+
+    // Switching hosts swaps the sidebar contents: the new host's sessions,
+    // models, and reachability are fetched immediately (health also polls).
+    const { activeHostId } = useHosts();
+    useEffect(() => {
+        void sessions.refresh();
+        void models.refresh({ silent: true });
+        void healthHook.check(false);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [activeHostId]);
 
     const activeTitle = useMemo(() => chat.data?.sessionName || chat.data?.header?.id || chat.activeFile?.split("/").pop() || "New chat", [chat.data?.sessionName, chat.data?.header?.id, chat.activeFile]);
     const activeCwd = chat.data?.cwd || chat.data?.header?.cwd;

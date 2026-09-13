@@ -1,4 +1,5 @@
 import { getApiBase } from "./api";
+import { LOCAL_HOST_ID, getStoredActiveHost } from "../hooks/useHosts";
 
 export type SseEvent = Record<string, unknown>;
 
@@ -8,15 +9,21 @@ export async function streamPrompt(
   signal?: AbortSignal,
 ): Promise<void> {
   const base = await getApiBase();
+  const host = getStoredActiveHost();
+  const token = host.id !== LOCAL_HOST_ID && host.token ? host.token : null;
   const res = await fetch(`${base}/prompt`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: {
+      "Content-Type": "application/json",
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
     body: JSON.stringify(body),
     signal,
   });
 
   if (!res.ok || !res.body) {
     const text = await res.text().catch(() => "");
+    if (res.status === 401) throw new Error("unauthorized — check host token");
     let msg = `HTTP ${res.status}`;
     try {
       const j = JSON.parse(text);
