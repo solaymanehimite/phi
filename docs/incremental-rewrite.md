@@ -113,7 +113,9 @@ These are cheap and show why tests matter. Each is independent.
 10. Dialog overlay role in `src/components/settings.tsx:608`.
     `DialogOverlay role="presentation"` overrides the modal semantics from `src/components/ui/dialog.tsx`. Remove the override or make the dialog component own dismissal.
 
-## 3. Consolidate SSE transport
+## 3. Consolidate SSE transport — DONE 2026-09-13
+
+Landed, behavior-preserving. `postSse(path, body, onEvent, signal)` in `src/lib/api.ts` is now the single owner for all three streams (base URL resolution, auth headers, non-OK parsing with the 401 host-token message, `\n\n` frame splitting, ping/blank-line skipping, malformed JSON tolerance, trailing flush). `streamPrompt` (`src/lib/sse.ts`), `streamContinue` and `streamCompact` (`src/lib/api.ts`) are thin wrappers supplying only path, body, and callback — no call-site changes. `SseEvent` moved to `src/types/sse.ts` (`lib/sse.ts` re-exports it and `postSse` for back-compat; dependency direction stays `sse -> api`, no cycle). Gates green: `bun run test` (82 pass, +14 new in `src/lib/__tests__/sse.test.ts`), `bun run typecheck`, `bun run lint` (only pre-existing warnings), `bun run build` green.
 
 Same logic exists three times:
 

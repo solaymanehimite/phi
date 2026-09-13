@@ -1,4 +1,5 @@
 import type { ModelInfo, SessionInfo, SessionMessagesResponse, ThinkingLevel } from "../types/session";
+import type { SseEvent } from "../types/sse";
 import { LOCAL_HOST_ID, getStoredActiveHost } from "../hooks/useHosts";
 
 // --- Sidecar discovery ---
@@ -164,23 +165,33 @@ export async function setThinkingLevel(sessionFile: string, thinkingLevel: Think
   return jsonOrThrow(res);
 }
 
-export async function streamCompact(
-  opts: { sessionFile: string; customInstructions?: string; cwd?: string },
-  onEvent: (ev: Record<string, unknown>) => void,
+/**
+ * Single owner for all SSE POST streams (prompt, continue, compact).
+ * Owns base URL resolution, auth headers, non-OK response parsing, frame
+ * splitting on `\n\n`, ping/blank-line skipping, malformed JSON tolerance,
+ * and the trailing buffer flush. Callers only supply path, body, and callback.
+ */
+export async function postSse(
+  path: string,
+  body: unknown,
+  onEvent: (ev: SseEvent) => void,
   signal?: AbortSignal,
 ): Promise<void> {
   const base = await getBase();
-  const res = await fetch(`${base}/compact`, {
+  const res = await fetch(`${base}${path}`, {
     method: "POST",
     headers: { "Content-Type": "application/json", ...authHeaders(await getAuthToken()) },
-    body: JSON.stringify(opts),
+    body: JSON.stringify(body),
     signal,
   });
   if (!res.ok || !res.body) {
     const text = await res.text().catch(() => "");
     if (res.status === 401) throw new Error("unauthorized — check host token");
     let msg = `HTTP ${res.status}`;
-    try { const j = JSON.parse(text); if (j.error) msg = j.error; } catch {}
+    try {
+      const j = JSON.parse(text);
+      if (j.error) msg = j.error;
+    } catch {}
     throw new Error(msg);
   }
   const reader = res.body.getReader();
@@ -190,6 +201,7 @@ export async function streamCompact(
     const { value, done } = await reader.read();
     if (done) break;
     buffer += decoder.decode(value, { stream: true });
+    // SSE frames are separated by \n\n
     let idx: number;
     while ((idx = buffer.indexOf("\n\n")) !== -1) {
       const frame = buffer.slice(0, idx);
@@ -197,14 +209,33 @@ export async function streamCompact(
       for (const line of frame.split("\n")) {
         if (line.startsWith(": ping") || line.startsWith(":") || line.trim() === "") continue;
         if (line.startsWith("data: ")) {
-          try { onEvent(JSON.parse(line.slice(6))); } catch {}
+          try {
+            onEvent(JSON.parse(line.slice(6)) as SseEvent);
+          } catch {
+            // ignore malformed
+          }
         }
       }
     }
   }
+  // flush remaining
   if (buffer.trim()) {
-    for (const line of buffer.split("\n")) if (line.startsWith("data: ")) try { onEvent(JSON.parse(line.slice(6))); } catch {}
+    for (const line of buffer.split("\n")) {
+      if (line.startsWith("data: ")) {
+        try {
+          onEvent(JSON.parse(line.slice(6)) as SseEvent);
+        } catch {}
+      }
+    }
   }
+}
+
+export async function streamCompact(
+  opts: { sessionFile: string; customInstructions?: string; cwd?: string },
+  onEvent: (ev: SseEvent) => void,
+  signal?: AbortSignal,
+): Promise<void> {
+  return postSse(`/compact`, opts, onEvent, signal);
 }
 
 export async function abortCompaction(sessionFile: string, cwd?: string): Promise<{ ok: boolean; active: boolean }> {
@@ -290,46 +321,10 @@ export async function abortPrompt(sessionFile: string): Promise<{ ok: boolean; a
 
 export async function streamContinue(
   body: { sessionFile: string; cwd?: string },
-  onEvent: (ev: Record<string, unknown>) => void,
+  onEvent: (ev: SseEvent) => void,
   signal?: AbortSignal,
 ): Promise<void> {
-  const base = await getBase();
-  const res = await fetch(`${base}/continue`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json", ...authHeaders(await getAuthToken()) },
-    body: JSON.stringify(body),
-    signal,
-  });
-  if (!res.ok || !res.body) {
-    const text = await res.text().catch(() => "");
-    if (res.status === 401) throw new Error("unauthorized — check host token");
-    let msg = `HTTP ${res.status}`;
-    try { const j = JSON.parse(text); if (j.error) msg = j.error; } catch {}
-    throw new Error(msg);
-  }
-  const reader = res.body.getReader();
-  const decoder = new TextDecoder();
-  let buffer = "";
-  while (true) {
-    const { value, done } = await reader.read();
-    if (done) break;
-    buffer += decoder.decode(value, { stream: true });
-    let idx: number;
-    while ((idx = buffer.indexOf("\n\n")) !== -1) {
-      const frame = buffer.slice(0, idx);
-      buffer = buffer.slice(idx + 2);
-      const lines = frame.split("\n");
-      for (const line of lines) {
-        if (line.startsWith(": ping") || line.startsWith(":") || line.trim() === "") continue;
-        if (line.startsWith("data: ")) {
-          try { onEvent(JSON.parse(line.slice(6))); } catch {}
-        }
-      }
-    }
-  }
-  if (buffer.trim()) {
-    for (const line of buffer.split("\n")) if (line.startsWith("data: ")) try { onEvent(JSON.parse(line.slice(6))); } catch {}
-  }
+  return postSse(`/continue`, body, onEvent, signal);
 }
 
 export type ProviderRow = { id: string; label: string; baseUrl: string; hasKey: boolean; maskedKey: string };
