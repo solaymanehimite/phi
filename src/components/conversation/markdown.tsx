@@ -5,6 +5,7 @@ import { IconCheckFilled, IconCopyFilled } from "@tabler/icons-react";
 import { LazyHighlightedCode } from "../code-theme";
 import { Button } from "../ui/button";
 import { InlineCode } from "../ui/code";
+import { FileChip, parseInlineFilePath } from "../ui/file-chip";
 
 // Single shared instance so remarkGfm isn't recreated per render
 const remarkPlugins = [remarkGfm] as const;
@@ -98,6 +99,11 @@ const mdComponents = {
                 !String(children).includes("\n"));
         // ReactMarkdown v10 uses `inline` boolean correctly; fallback heuristic for edge cases
         if (isInline && !String(className ?? "").includes("language-")) {
+            const text = String(children);
+            // Backticked file paths become chips (icon + basename, click adds to composer).
+            if (parseInlineFilePath(text)) {
+                return <FileChip path={text} />;
+            }
             return <InlineCode {...props}>{children}</InlineCode>;
         }
         const code = String(children).replace(/\n$/, "");

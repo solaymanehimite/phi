@@ -10,6 +10,7 @@ export { Alert } from "./alert";
 export { DialogOverlay, DialogPanel, DialogTitle } from "./dialog";
 export { Hint } from "./hint";
 export { InlineCode } from "./code";
+export { FileChip, parseInlineFilePath, addPathToComposer } from "./file-chip";
 export { EmptyState } from "./empty-state";
 export { Select } from "./select";
 export { Switch } from "./switch";

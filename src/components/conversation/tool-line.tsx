@@ -5,6 +5,7 @@ import { Well } from "../ui/surface";
 import { Highlight, type PrismTheme, type Token, type TokenInputProps, type TokenOutputProps } from "prism-react-renderer";
 import type { WorkItem } from "../../types/work";
 import { InlineShell, LazyHighlightedCode, detectLanguage, grammarFor, useCodeTheme } from "../code-theme";
+import { FileChip, addPathToComposer } from "../ui/file-chip";
 import { useInView } from "../../hooks/useInView";
 
 type ToolLineProps = {
@@ -27,7 +28,7 @@ function toolMeta(name: string, args: Record<string, unknown>) {
 }
 
 function addPath(path: string) {
-    window.dispatchEvent(new CustomEvent("phi:add-to-composer", { detail: { path } }));
+    addPathToComposer(path);
 }
 
 type DiffEntry = { kind: "add" | "remove" | "context"; number?: string; text: string };
@@ -169,6 +170,10 @@ export function ToolLine({ item }: ToolLineProps) {
     const isError = result?.isError ?? false;
     const { label, detail } = toolMeta(item.name, item.args);
     const filePath = typeof item.args.path === "string" ? item.args.path : undefined;
+    const isFileTool =
+        (item.name === "read" || item.name === "write" || item.name === "edit") &&
+        typeof filePath === "string" &&
+        filePath.trim().length > 0;
     // File-content outputs (read/write/edit) highlight by file extension.
     // Error output stays plain so the error color survives.
     const outputLanguage =
@@ -198,10 +203,14 @@ export function ToolLine({ item }: ToolLineProps) {
                     {finished && <StatusIcon className="size-2.5" aria-hidden="true" />}
                 </span>
                 <span className={`shrink-0 font-medium ${isError ? "text-phi-error" : "text-phi-text-secondary"}`}>{label}</span>
-                {detail && (
+                {isFileTool && typeof item.args.path === "string" ? (
+                    <span className="min-w-0 max-w-[58%] shrink-0" onClick={(event) => event.stopPropagation()}>
+                        <FileChip path={String(item.args.path)} />
+                    </span>
+                ) : detail && (
                     <span className="group/path relative min-w-0 max-w-[58%]">
                         <code className={`block truncate rounded bg-phi-overlay-code px-1.5 py-0.5 pr-7 font-mono text-[11px] ${item.name === "bash" ? "text-phi-text-primary" : "text-phi-text-tertiary"}`}>{item.name === "bash" && detail ? <InlineShell code={detail} /> : detail}</code>
-                        {["read", "write", "edit", "ls"].includes(item.name) && typeof item.args.path === "string" && (
+                        {["ls"].includes(item.name) && typeof item.args.path === "string" && (
                             <button type="button" aria-label="Copy path to prompt" title="Copy to prompt" onClick={(event) => { event.stopPropagation(); addPath(String(item.args.path)); }} className="absolute right-0.5 top-1/2 grid size-5 -translate-y-1/2 place-items-center text-phi-text-muted opacity-0 transition-opacity hover:text-phi-text-primary group-hover/path:opacity-100 group-focus-within/path:opacity-100 focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-phi-accent/60">
                                 <IconCopyFilled className="size-3" aria-hidden="true" />
                             </button>
