@@ -12,8 +12,8 @@
 <p align="center">
   <img alt="image" src="public/mockup.jpg" />
 </p>
-Phi is a desktop app for Pi, the coding agent that runs in the terminal. 
-It shows the same sessions in a window, grouped by project.
+Phi is a desktop coding agent powered by the Pi SDK.
+Prompt models, run tools in your workspace, and shape the app to fit how you work.
 <br/>
 <br/>
 
@@ -30,8 +30,4 @@ bun install
 
 # renderer (5173) + sidecar server (127.0.0.1:3001) + Electron, all at once
 bun run electron:dev
-```
-The renderer talks to the sidecar through Vite's /api proxy. To use a different sidecar port:
-```bash
-PHI_SERVER_PORT=3002 bun run electron:dev
 ```
