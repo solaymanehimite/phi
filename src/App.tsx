@@ -1,4 +1,4 @@
-import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState, lazy, Suspense } from "react";
 import { StickToBottom, useStickToBottomContext } from "use-stick-to-bottom";
 import { Composer } from "./components/composer";
 import { DirectoryPicker } from "./components/directory-picker";
@@ -19,6 +19,7 @@ import {
     IconMessageCircleFilled,
     IconMoonFilled,
     IconPlusFilled,
+    IconKeyFilled,
     IconSettingsFilled,
     IconSunFilled,
 } from "@tabler/icons-react";
@@ -45,6 +46,9 @@ import { brandingUrl } from "./lib/themed-assets";
 import { useHealth } from "./hooks/useHealth";
 import { FatalState } from "./components/fatal";
 import { SettingsPanel, type SettingsSection } from "./components/settings";
+const ProviderMenuDialog = lazy(() =>
+    import("./components/provider-menu").then((m) => ({ default: m.ProviderMenuDialog })),
+);
 import { UiDemoPanel } from "./components/ui-demo";
 import { ThemeEditor, useThemeEditorEnabled } from "./components/dev/ThemeEditor";
 import { useShortcuts } from "./hooks/useShortcuts";
@@ -690,6 +694,20 @@ export default function App() {
         setTheme(effectiveTheme === "dark" ? "light" : "dark");
     }, [effectiveTheme, setTheme]);
 
+    // Provider menu (shared by Settings and the Cmd+K palette). The dialog
+    // chunk loads on first open, never on startup.
+    const [providerMenuOpen, setProviderMenuOpen] = useState(false);
+    const [providerMenuSeen, setProviderMenuSeen] = useState(false);
+    const openProviderMenu = useCallback(() => {
+        setProviderMenuSeen(true);
+        setProviderMenuOpen(true);
+    }, []);
+    const [providersVersion, setProvidersVersion] = useState(0);
+    const handleProvidersSaved = useCallback(() => {
+        models.refresh({ silent: true });
+        setProvidersVersion((v) => v + 1);
+    }, [models]);
+
     // Global actions for the Cmd+K palette — always rendered above sessions.
     const commandActions: CommandAction[] = useMemo(() => {
         const iconClass = "size-5 shrink-0 text-current";
@@ -715,6 +733,12 @@ export default function App() {
             hint: "⌘,",
             keywords: ["settings", "preferences", "config", "appearance", "models", "providers"],
             icon: <IconSettingsFilled className={iconClass} />,
+        });
+        list.push({
+            id: "manage-providers",
+            label: "Providers",
+            keywords: ["providers", "auth", "api key", "api keys", "add provider", "models"],
+            icon: <IconKeyFilled className={iconClass} />,
         });
         list.push({
             id: "open-ui-demo",
@@ -748,6 +772,9 @@ export default function App() {
                 break;
             case "open-settings":
                 openSettingsTab();
+                break;
+            case "manage-providers":
+                openProviderMenu();
                 break;
             case "open-ui-demo":
                 openUiDemoTab();
@@ -1263,7 +1290,7 @@ export default function App() {
                             <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border border-phi-border-subtle bg-phi-bg-main shadow-[0_8px_30px_var(--color-phi-shadow)]">
                                 {settingsActive ? (
                                     <section className="flex min-h-0 flex-1" aria-label="Settings">
-                                        <SettingsPanel section={settingsSection} onSectionChange={setSettingsSection} onProvidersChanged={() => models.refresh({ silent: true })} />
+                                        <SettingsPanel section={settingsSection} onSectionChange={setSettingsSection} onProvidersChanged={() => models.refresh({ silent: true })} onAddProvider={openProviderMenu} providersVersion={providersVersion} />
                                     </section>
                                 ) : uiDemoActive ? (
                                     <section className="flex min-h-0 flex-1" aria-label="UI demo">
@@ -1392,6 +1419,11 @@ export default function App() {
                                 if (item.sessionFile) void handleSelect(item.sessionFile);
                             }}
                         />
+                        {providerMenuSeen && (
+                            <Suspense fallback={null}>
+                                <ProviderMenuDialog open={providerMenuOpen} onOpenChange={setProviderMenuOpen} onSaved={handleProvidersSaved} />
+                            </Suspense>
+                        )}
                     </div>
                 );
             }}

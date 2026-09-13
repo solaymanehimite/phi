@@ -1145,6 +1145,183 @@ async function syncProvidersToRuntime() {
 // initial sync (best effort)
 void syncProvidersToRuntime();
 
+app.get("/api/auth/pi", async (_req, res) => {
+  try {
+    const mr = await getModelRuntime();
+    const creds = await (mr as any).listCredentials?.() ?? [];
+    const providers = await Promise.all(
+      (creds as Array<{ providerId: string; type: string }>).map(async (c) => {
+        let source: string | undefined;
+        try {
+          const check = await (mr as any).checkAuth?.(c.providerId);
+          if (check?.source) source = check.source;
+        } catch {}
+        const name = (mr as any).getProvider?.(c.providerId)?.name ?? c.providerId;
+        return { id: c.providerId, name, type: c.type, source: source ?? null };
+      }),
+    );
+    providers.sort((a, b) => a.name.localeCompare(b.name));
+    res.json({ providers });
+  } catch (error) { res.status(errorStatus(error)).json({ error: errorMessage(error) }); }
+});
+
+app.get("/api/auth/presets", async (_req, res) => {
+  try {
+    const mr = await getModelRuntime();
+    let registered = new Set<string>();
+    try {
+      registered = new Set<string>((mr as any).getRegisteredProviderIds?.() ?? []);
+    } catch {}
+    // Pi's builtin catalog (minus Phi's own custom registrations):
+    // display names, ids for logos, default base URLs, and which auth
+    // methods each provider supports (oauth-only providers like
+    // openai-codex must never see the API-key form).
+    const presets = (((mr as any).getProviders?.() ?? []) as Array<{ id?: string; name?: string; baseUrl?: string; auth?: { oauth?: { loginLabel?: string }; apiKey?: unknown } }>)
+      .filter((p) => p?.id && p?.baseUrl && !registered.has(p.id))
+      .map((p) => ({
+        id: p.id as string,
+        name: p.name ?? (p.id as string),
+        baseUrl: p.baseUrl as string,
+        oauth: Boolean(p.auth?.oauth),
+        apiKey: Boolean(p.auth?.apiKey),
+        loginLabel: p.auth?.oauth?.loginLabel ?? null,
+      }));
+    presets.sort((a, b) => a.name.localeCompare(b.name));
+    res.json({ presets });
+  } catch (error) { res.status(errorStatus(error)).json({ error: errorMessage(error) }); }
+});
+
+// ---- OAuth login sessions ----
+// Drives ModelRuntime.login() for oauth-capable providers. The login runs in
+// the background: notify() events queue up for polling, prompt() parks until
+// the renderer answers. Tokens land in Pi's own auth store; the UI only ever
+// sees instructions, codes, and URLs — never secrets.
+type OAuthLoginState = {
+  id: string;
+  providerId: string;
+  status: "running" | "done" | "error" | "cancelled";
+  events: Array<{ type: string; message?: string; url?: string; instructions?: string; userCode?: string; verificationUri?: string }>;
+  prompt: { message: string; placeholder?: string; secret: boolean } | null;
+  resolvePrompt: ((value: string) => void) | null;
+  rejectPrompt: ((err: Error) => void) | null;
+  abort: () => void;
+  error: string | null;
+  finishedAt: number | null;
+};
+const oauthLogins = new Map<string, OAuthLoginState>();
+const OAUTH_LOGIN_TTL_MS = 5 * 60_000;
+
+function pruneOAuthLogins() {
+  const now = Date.now();
+  for (const [id, state] of oauthLogins) {
+    if (state.finishedAt && now - state.finishedAt > OAUTH_LOGIN_TTL_MS) oauthLogins.delete(id);
+  }
+  while (oauthLogins.size > 20) {
+    const oldest = oauthLogins.keys().next().value as string | undefined;
+    if (oldest === undefined) break;
+    oauthLogins.delete(oldest);
+  }
+}
+
+app.post("/api/auth/login", async (req, res) => {
+  try {
+    const { providerId } = req.body as { providerId?: string };
+    if (!providerId) throw new ApiError("missing providerId");
+    pruneOAuthLogins();
+    for (const existing of oauthLogins.values()) {
+      if (existing.providerId === providerId && existing.status === "running") {
+        throw new ApiError("a sign-in is already in progress for this provider", 409);
+      }
+    }
+    const mr = await getModelRuntime();
+    const provider = (mr as any).getProvider?.(providerId);
+    if (!provider) throw new ApiError(`unknown provider ${providerId}`, 404);
+    if (!provider.auth?.oauth) throw new ApiError(`${providerId} does not support OAuth sign-in`, 400);
+
+    const id = `login_${Date.now().toString(36)}${Math.floor(Math.random() * 0xffffff).toString(36)}`;
+    const controller = new AbortController();
+    const state: OAuthLoginState = {
+      id, providerId, status: "running", events: [], prompt: null,
+      resolvePrompt: null, rejectPrompt: null,
+      abort: () => controller.abort(), error: null, finishedAt: null,
+    };
+    oauthLogins.set(id, state);
+
+    const interaction = {
+      signal: controller.signal,
+      notify: (event: any) => {
+        if (!event || state.status !== "running") return;
+        if (event.type === "auth_url" && event.url) {
+          state.events.push({ type: "auth_url", url: event.url, instructions: event.instructions });
+        } else if (event.type === "device_code" && event.userCode) {
+          state.events.push({ type: "device_code", userCode: event.userCode, verificationUri: event.verificationUri });
+        } else if ((event.type === "info" || event.type === "progress") && event.message) {
+          state.events.push({ type: event.type, message: event.message });
+        }
+      },
+      prompt: (p: any) =>
+        new Promise<string>((resolve, reject) => {
+          if (controller.signal.aborted || state.status !== "running") {
+            return reject(new Error("sign-in cancelled"));
+          }
+          // A raced prompt supersedes the parked one (e.g. manual_code
+          // losing to a callback server).
+          state.rejectPrompt?.(new Error("superseded"));
+          state.prompt = { message: p?.message ?? "Enter the code", placeholder: p?.placeholder, secret: p?.type === "secret" };
+          state.resolvePrompt = (value: string) => {
+            state.prompt = null; state.resolvePrompt = null; state.rejectPrompt = null;
+            resolve(value);
+          };
+          state.rejectPrompt = (err: Error) => {
+            state.prompt = null; state.resolvePrompt = null; state.rejectPrompt = null;
+            reject(err);
+          };
+        }),
+    };
+
+    void (async () => {
+      try {
+        await (mr as any).login(providerId, "oauth", interaction);
+        state.status = "done";
+      } catch (e) {
+        const msg = errorMessage(e);
+        state.status = controller.signal.aborted || /cancel|abort|superseded/i.test(msg) ? "cancelled" : "error";
+        state.error = msg;
+      } finally {
+        state.prompt = null; state.resolvePrompt = null; state.rejectPrompt = null;
+        state.finishedAt = Date.now();
+        invalidateModelsCache();
+      }
+    })();
+
+    res.json({ loginId: id });
+  } catch (error) { res.status(errorStatus(error)).json({ error: errorMessage(error) }); }
+});
+
+app.get("/api/auth/login/:id", (req, res) => {
+  const state = oauthLogins.get(req.params.id);
+  if (!state) return res.status(404).json({ error: "sign-in not found" });
+  const events = state.events;
+  state.events = [];
+  res.json({ status: state.status, events, prompt: state.prompt, error: state.error });
+});
+
+app.post("/api/auth/login/:id/answer", (req, res) => {
+  const state = oauthLogins.get(req.params.id);
+  if (!state) return res.status(404).json({ error: "sign-in not found" });
+  const { value, cancel } = req.body as { value?: string; cancel?: boolean };
+  if (cancel) {
+    state.rejectPrompt?.(new Error("sign-in cancelled"));
+    state.abort();
+    return res.json({ ok: true });
+  }
+  if (typeof value !== "string" || !state.resolvePrompt) {
+    return res.status(409).json({ error: "no prompt awaiting an answer" });
+  }
+  state.resolvePrompt(value);
+  res.json({ ok: true });
+});
+
 app.get("/api/auth/providers", async (_req, res) => {
   try {
     const providers = await loadStoredProviders();

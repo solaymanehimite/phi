@@ -329,6 +329,55 @@ export async function streamContinue(
 
 export type ProviderRow = { id: string; label: string; baseUrl: string; hasKey: boolean; maskedKey: string };
 
+export type PiAuthRow = { id: string; name: string; type: "api_key" | "oauth" | string; source: string | null };
+
+export async function listPiAuth(): Promise<{ providers: PiAuthRow[] }> {
+  const res = await apiFetch(`/auth/pi`);
+  return jsonOrThrow(res);
+}
+
+export type ProviderPreset = { id: string; name: string; baseUrl: string; oauth: boolean; apiKey: boolean; loginLabel: string | null };
+
+export async function listProviderPresets(): Promise<{ presets: ProviderPreset[] }> {
+  const res = await apiFetch(`/auth/presets`);
+  return jsonOrThrow(res);
+}
+
+export type OAuthLoginEvent =
+  | { type: "auth_url"; url: string; instructions?: string }
+  | { type: "device_code"; userCode: string; verificationUri?: string }
+  | { type: "info" | "progress"; message: string };
+
+export type OAuthLoginStatus = {
+  status: "running" | "done" | "error" | "cancelled";
+  events: OAuthLoginEvent[];
+  prompt: { message: string; placeholder?: string; secret: boolean } | null;
+  error: string | null;
+};
+
+export async function startOAuthLogin(providerId: string): Promise<{ loginId: string }> {
+  const res = await apiFetch(`/auth/login`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ providerId }),
+  });
+  return jsonOrThrow(res);
+}
+
+export async function getOAuthLogin(loginId: string): Promise<OAuthLoginStatus> {
+  const res = await apiFetch(`/auth/login/${encodeURIComponent(loginId)}`);
+  return jsonOrThrow(res);
+}
+
+export async function answerOAuthLogin(loginId: string, body: { value?: string; cancel?: boolean }): Promise<{ ok: boolean }> {
+  const res = await apiFetch(`/auth/login/${encodeURIComponent(loginId)}/answer`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  return jsonOrThrow(res);
+}
+
 export async function listProviders(): Promise<{ providers: ProviderRow[] }> {
   const res = await apiFetch(`/auth/providers`);
   return jsonOrThrow(res);

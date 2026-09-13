@@ -7,7 +7,6 @@ import { IconCheckFilled, IconChevronDownFilled, IconCode, IconDotsFilled, IconK
 import { useClose } from "@headlessui/react";
 import { Alert } from "./ui/alert";
 import { Button, buttonClass } from "./ui/button";
-import { DialogOverlay, DialogPanel, DialogTitle } from "./ui/dialog";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "./ui/dropdown-menu";
 import { Input } from "./ui/input";
 import { MenuItem } from "./ui/menu";
@@ -16,7 +15,8 @@ import { Popover, PopoverContent, PopoverTrigger } from "./ui/popover";
 import { Highlight, type PrismTheme } from "prism-react-renderer";
 import { CODE_THEMES, setCodeTheme, useCodeTheme, type CodeThemeId } from "./code-theme";
 import { ThemeEditorToggle } from "./dev/ThemeEditor";
-import { listProviders, upsertProvider, deleteProvider, testProvider, type ProviderRow } from "../lib/api";
+import { ProviderLogo } from "./provider-logo";
+import { listProviders, deleteProvider, testProvider, listPiAuth, type ProviderRow, type PiAuthRow } from "../lib/api";
 import { LOCAL_HOST_ID, useHosts, type NewHostInput } from "../hooks/useHosts";
 
 
@@ -30,10 +30,14 @@ const sections: { id: SettingsSection; label: string; description: string; icon:
 
 export function SettingsPanel({
     onProvidersChanged,
+    onAddProvider,
+    providersVersion,
     section: controlledSection,
     onSectionChange,
 }: {
     onProvidersChanged?: () => void;
+    onAddProvider: () => void;
+    providersVersion: number;
     section?: SettingsSection;
     onSectionChange?: (section: SettingsSection) => void;
 }) {
@@ -69,7 +73,7 @@ export function SettingsPanel({
                 </header>
                 <div className="min-h-0 flex-1 overflow-y-auto p-6 pt-1">
                     <div className="mx-auto w-full max-w-3xl">
-                        {section === "appearance" ? <AppearanceTab /> : section === "hosts" ? <HostsTab /> : <ProvidersTab onChanged={onProvidersChanged} />}
+                        {section === "appearance" ? <AppearanceTab /> : section === "hosts" ? <HostsTab /> : <ProvidersTab onChanged={onProvidersChanged} onAddProvider={onAddProvider} providersVersion={providersVersion} />}
                     </div>
                 </div>
             </div>
@@ -554,40 +558,23 @@ function HostsTab() {
     );
 }
 
-function ProvidersTab({ onChanged }: { onChanged?: () => void }) {
+function ProvidersTab({ onChanged, onAddProvider, providersVersion }: { onChanged?: () => void; onAddProvider: () => void; providersVersion: number }) {
     const [providers, setProviders] = useState<ProviderRow[]>([]);
+    const [piProviders, setPiProviders] = useState<PiAuthRow[]>([]);
     const [loading, setLoading] = useState(true);
+    const [piLoading, setPiLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
-    const [form, setForm] = useState({ label: "", baseUrl: "", apiKey: "" });
-    const [dialogOpen, setDialogOpen] = useState(false);
     const [testing, setTesting] = useState<string | null>(null);
     const [testResult, setTestResult] = useState<Record<string, string>>({});
-    const [saving, setSaving] = useState(false);
 
     const refresh = useCallback(async () => {
         setLoading(true);
+        setPiLoading(true);
         try { const r = await listProviders(); setProviders(r.providers); setError(null); } catch (e) { setError(e instanceof Error ? e.message : String(e)); } finally { setLoading(false); }
+        try { const r = await listPiAuth(); setPiProviders(r.providers); } catch { setPiProviders([]); } finally { setPiLoading(false); }
     }, []);
-    useEffect(() => { void refresh(); }, [refresh]);
-
-    const handleSave = useCallback(async () => {
-        if (!form.label || !form.baseUrl || !form.apiKey) { setError("label, baseUrl and apiKey required"); return; }
-        const baseId = form.label.toLowerCase().trim().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "provider";
-        let id = baseId;
-        let suffix = 2;
-        while (providers.some((provider) => provider.id === id)) id = `${baseId}-${suffix++}`;
-        const provider = { id, ...form };
-        setSaving(true);
-        setError(null);
-        try {
-            await testProvider(id, { baseUrl: form.baseUrl, apiKey: form.apiKey });
-            await upsertProvider(provider);
-            await refresh();
-            onChanged?.();
-            setForm({ label: "", baseUrl: "", apiKey: "" });
-            setDialogOpen(false);
-        } catch (e) { setError(e instanceof Error ? e.message : String(e)); } finally { setSaving(false); }
-    }, [form, providers, refresh, onChanged]);
+    // Refresh on mount and whenever a provider is saved via the shared menu.
+    useEffect(() => { void refresh(); }, [refresh, providersVersion]);
 
     const handleTest = useCallback(async (id: string) => {
         setTesting(id); setTestResult((p) => ({ ...p, [id]: "" }));
@@ -603,25 +590,24 @@ function ProvidersTab({ onChanged }: { onChanged?: () => void }) {
         <div className="space-y-4">
             {error && <Alert variant="error">{error}</Alert>}
 
-            {dialogOpen && (
-                <DialogOverlay onMouseDown={(e) => { if (e.target === e.currentTarget) setDialogOpen(false); }}>
-                    <DialogPanel aria-labelledby="add-provider-title">
-                        <div className="flex items-center justify-between">
-                            <DialogTitle id="add-provider-title">Add provider</DialogTitle>
-                            <Button variant="ghost" size="xs" onClick={() => setDialogOpen(false)} className="!text-[12px]">Cancel</Button>
-                        </div>
-                        <div className="mt-4 grid grid-cols-1 gap-2">
-                            <Input autoFocus placeholder="Label (e.g. OpenAI)" value={form.label} onChange={(e) => setForm((p) => ({ ...p, label: e.target.value }))} variant="default" />
-                            <Input placeholder="Base URL https://api.openai.com/v1" value={form.baseUrl} onChange={(e) => setForm((p) => ({ ...p, baseUrl: e.target.value }))} variant="default" />
-                            <Input placeholder="API key" type="password" value={form.apiKey} onChange={(e) => setForm((p) => ({ ...p, apiKey: e.target.value }))} variant="default" />
-                        </div>
-                        <Button onClick={() => void handleSave()} disabled={saving} variant="primary" size="sm" className="mt-4 !w-auto">{saving ? "Saving…" : "Save (tests connection)"}</Button>
-                    </DialogPanel>
-                </DialogOverlay>
-            )}
+            <div className="space-y-2">
+                <h4 className="text-[12px] font-semibold text-phi-text-primary">Pi CLI</h4>
+                {piLoading ? <p className="text-[12px] text-phi-text-muted">Loading…</p> : piProviders.length === 0 ? (
+                    <p className="rounded-lg border border-dashed border-phi-border px-3 py-3 text-[12px] text-phi-text-muted">No Pi CLI logins yet — run <span className="font-mono">pi login</span> in the terminal.</p>
+                ) : (
+                    <div className="space-y-2">
+                        {piProviders.map((p) => (
+                            <div key={p.id} className="flex items-center gap-3 rounded-xl border border-phi-border bg-phi-bg-surface px-3 py-2.5">
+                                <ProviderLogo id={p.id} name={p.name} />
+                                <div className="min-w-0 flex-1 truncate text-[13px] font-medium text-phi-text-primary">{p.name}</div>
+                            </div>
+                        ))}
+                    </div>
+                )}
+            </div>
 
             <div className="space-y-2">
-                <h4 className="text-[12px] font-semibold text-phi-text-primary">Providers</h4>
+                <h4 className="text-[12px] font-semibold text-phi-text-primary">Custom providers</h4>
                 {loading ? <p className="text-[12px] text-phi-text-muted">Loading…</p> : (
                     <div className="space-y-2">
                         {providers.map((p) => (
@@ -640,7 +626,7 @@ function ProvidersTab({ onChanged }: { onChanged?: () => void }) {
                                 </div>
                             </div>
                         ))}
-                        <button onClick={() => { setError(null); setForm({ label: "", baseUrl: "", apiKey: "" }); setDialogOpen(true); }} className="w-full rounded-lg border border-dashed border-phi-border px-3 py-3 text-left text-[12px] font-medium text-phi-text-muted hover:border-phi-input-border-focus hover:text-phi-text-primary">+ Add provider</button>
+                        <button onClick={onAddProvider} className="w-full rounded-lg border border-dashed border-phi-border px-4 py-3 text-left text-[12px] font-medium text-phi-text-muted hover:border-phi-input-border-focus hover:text-phi-text-primary">+ Add provider</button>
                     </div>
                 )}
             </div>
