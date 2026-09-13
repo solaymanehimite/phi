@@ -10,7 +10,7 @@
 </p>
 
 <p align="center">
-  <img alt="image" src="public/mockup.jpg" />
+  <img alt="image" src="public/mockup.png" />
 </p>
 Phi is a desktop coding agent powered by the Pi SDK.
 Prompt models, run tools in your workspace, and shape the app to fit how you work.
