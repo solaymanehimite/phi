@@ -3,34 +3,16 @@ import { useLocalStorage } from "./useLocalStorage";
 import {
     createProjectId,
     normalizeProjectPath,
+    sanitizeProjects,
     type Project,
 } from "../lib/projects";
 
 export type NewProjectInput = {
     name: string;
     path: string;
+    /** Run target the path lives on. Defaults to the local host. */
+    hostId?: string;
 };
-
-function sanitizeProjects(value: unknown): Project[] {
-    if (!Array.isArray(value)) return [];
-    const out: Project[] = [];
-    const seenPaths = new Set<string>();
-    for (const item of value) {
-        if (!item || typeof item !== "object") continue;
-        const p = item as Partial<Project>;
-        if (typeof p.path !== "string" || !p.path.trim()) continue;
-        const path = p.path.trim();
-        if (seenPaths.has(path)) continue;
-        seenPaths.add(path);
-        out.push({
-            id: typeof p.id === "string" && p.id ? p.id : createProjectId(),
-            name: typeof p.name === "string" && p.name.trim() ? p.name.trim() : path,
-            path,
-            createdAt: typeof p.createdAt === "number" ? p.createdAt : Date.now(),
-        });
-    }
-    return out;
-}
 
 export function useProjects() {
     const [stored, setStored] = useLocalStorage<Project[]>("phi:projects", [], {
@@ -46,63 +28,87 @@ export function useProjects() {
 
     const projects = useMemo(() => sanitizeProjects(stored), [stored]);
 
+    const persist = useCallback(
+        (updater: (list: Project[]) => Project[]) => {
+            setStored((prev) => updater(sanitizeProjects(prev)));
+        },
+        [setStored],
+    );
+
     const addProject = useCallback(
         (input: NewProjectInput, homeCwd?: string): Project => {
             const path = normalizeProjectPath(input.path, homeCwd);
             if (!path) throw new Error("Project path is required");
+            const hostId = input.hostId || "local";
             const name = input.name.trim() || path;
-            // Compute the result from current state first, then store it.
-            // The old code read the id back out of the state updater, which
-            // React is free to run later, so the fallback could return an id
-            // that was never stored.
-            const existing = projects.find((p) => p.path === path);
+            const existing = projects.find((p) => p.targets[hostId] === path);
             const result: Project = existing
-                ? { ...existing, name }
-                : { id: createProjectId(), name, path, createdAt: Date.now() };
-            setStored((prev) => {
-                const list = sanitizeProjects(prev);
-                if (list.some((p) => p.path === path)) {
-                    return list.map((p) => (p.path === path ? { ...p, name } : p));
+                ? { ...existing, name, targets: { ...existing.targets } }
+                : { id: createProjectId(), name, targets: { [hostId]: path }, createdAt: Date.now() };
+            persist((list) => {
+                if (list.some((p) => p.targets[hostId] === path)) {
+                    return list.map((p) => (p.targets[hostId] === path ? { ...p, name } : p));
                 }
                 return [...list, result];
             });
             return result;
         },
-        [projects, setStored],
+        [projects, persist],
     );
 
     const removeProject = useCallback(
         (id: string) => {
-            setStored((prev) => sanitizeProjects(prev).filter((p) => p.id !== id));
+            persist((list) => list.filter((p) => p.id !== id));
         },
-        [setStored],
+        [persist],
     );
 
-    const updateProject = useCallback(
-        (id: string, patch: Partial<Pick<Project, "name" | "path">>, homeCwd?: string) => {
-            setStored((prev) =>
-                sanitizeProjects(prev).map((p) => {
-                    if (p.id !== id) return p;
-                    const nextPath =
-                        patch.path !== undefined ? normalizeProjectPath(patch.path, homeCwd) || p.path : p.path;
-                    return {
-                        ...p,
-                        name: patch.name !== undefined ? patch.name.trim() || p.name : p.name,
-                        path: nextPath,
-                    };
-                }),
+    const renameProject = useCallback(
+        (id: string, name: string) => {
+            const trimmed = name.trim();
+            if (!trimmed) return;
+            persist((list) => list.map((p) => (p.id !== id ? p : { ...p, name: trimmed })));
+        },
+        [persist],
+    );
+
+    /** Bind a host's workspace path as an additional run target. */
+    const setProjectTarget = useCallback(
+        (id: string, hostId: string, path: string, homeCwd?: string) => {
+            const normalized = normalizeProjectPath(path, homeCwd);
+            if (!normalized) throw new Error("Project path is required");
+            persist((list) =>
+                list.map((p) =>
+                    p.id !== id ? p : { ...p, targets: { ...p.targets, [hostId]: normalized } },
+                ),
             );
         },
-        [setStored],
+        [persist],
     );
 
-    const findByPath = useCallback(
-        (path: string | null | undefined): Project | undefined => {
+    const removeProjectTarget = useCallback(
+        (id: string, hostId: string) => {
+            persist((list) =>
+                list
+                    .map((p) => {
+                        if (p.id !== id) return p;
+                        const { [hostId]: _, ...rest } = p.targets;
+                        return { ...p, targets: rest };
+                    })
+                    // A project with no targets left is gone.
+                    .filter((p) => Object.keys(p.targets).length > 0),
+            );
+        },
+        [persist],
+    );
+
+    const findByTarget = useCallback(
+        (hostId: string, path: string | null | undefined): Project | undefined => {
             if (!path) return undefined;
-            return projects.find((p) => p.path === path);
+            return projects.find((p) => p.targets[hostId] === path);
         },
         [projects],
     );
 
-    return { projects, addProject, removeProject, updateProject, findByPath };
+    return { projects, addProject, removeProject, renameProject, setProjectTarget, removeProjectTarget, findByTarget };
 }

@@ -101,16 +101,24 @@ Plain HTTP + token stops casual snooping, nothing more. Pick one:
    behind a proxy). Token: the `PHI_TOKEN` value.
 3. Select the host. Green dot means `/api/health` answered.
 
-## 7. Projects on a remote host
+## 7. Projects across run targets
 
-Projects match sessions by exact `cwd`, and your laptop paths and VPS
-paths differ. Until the project-with-targets model lands, either:
+A project holds one workspace path per run target. The sidebar aggregates
+sessions from every reachable host, grouped by project, each row badged
+with its run target. Unreachable hosts degrade to empty lists; the host
+picker dots show their status.
 
-- Create project entries using VPS-side absolute paths, or
-- Work from the implicit projects Phi derives from session directories.
-
-Sessions from other hosts are untouched. Switching hosts swaps the
-visible world, nothing syncs between machines. `git` is the sync.
+- New chat picks a project in the directory picker, then a run target next
+  to it. The target lists every host; unbound ones offer inline setup
+  (type the absolute path on that host).
+- Picking a project keeps the current target when bound, otherwise jumps to
+  its first bound target. Opening any session points execution at the
+  target it lives on.
+- Sending on an unbound (project, target) pair is blocked with a hint.
+  Continuing a session always runs on its original target.
+- Project settings (rename, per-target paths) live in the directory
+  picker's edit view. `git` is the sync between targets; sessions never
+  move.
 
 ## Troubleshooting
 

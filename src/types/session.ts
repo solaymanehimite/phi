@@ -5,6 +5,8 @@ export type SessionInfo = {
   path: string;
   id: string;
   cwd: string;
+  /** Which run target produced this session. Absent means the local host. */
+  hostId?: string;
   name?: string;
   parentSessionPath?: string;
   created: string; // ISO — server serializes Date as string

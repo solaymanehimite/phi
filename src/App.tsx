@@ -2,6 +2,7 @@ import { memo, useCallback, useEffect, useMemo, useRef, useState, lazy, Suspense
 import { StickToBottom, useStickToBottomContext } from "use-stick-to-bottom";
 import { Composer } from "./components/composer";
 import { DirectoryPicker } from "./components/directory-picker";
+import { TargetPicker } from "./components/target-picker";
 import { ModelSelector } from "./components/model-selector";
 import { ThinkingEffortSelector } from "./components/thinking-effort";
 import { ContextIndicator } from "./components/context-indicator";
@@ -30,8 +31,9 @@ import { InlineCode } from "./components/ui/code";
 import { useSessions } from "./hooks/useSessions";
 import { useSessionFlags } from "./hooks/useSessionFlags";
 import { useProjects, type NewProjectInput } from "./hooks/useProjects";
-import { useHosts } from "./hooks/useHosts";
-import { normalizeProjectPath, resolveProjectOptions, sessionsForProject, type Project } from "./lib/projects";
+import { LOCAL_HOST_ID, useHosts } from "./hooks/useHosts";
+import { allHosts, hostOfSession } from "./lib/hosts";
+import { boundHostIds, resolveProjectOptions, sessionsForProject, type Project, type ProjectOption } from "./lib/projects";
 import { useChat } from "./hooks/useChat";
 import { useCompaction } from "./hooks/useCompaction";
 import { clearQueueFor, useMessageQueue } from "./hooks/useMessageQueue";
@@ -196,7 +198,7 @@ export default function App() {
     const [sidebarOpen, setSidebarOpen] = useState(true);
     const sessions = useSessions();
     const sessionFlags = useSessionFlags();
-    const chat = useChat();
+    const chat = useChat(useMemo(() => ({ getHostId: (file: string) => sessions.hostOf(file) }), [sessions.hostOf]));
     const compaction = useCompaction(useMemo(() => ({ revalidate: chat.revalidate }), [chat.revalidate]));
     const queue = useMessageQueue(chat.activeFile);
     const lastCompactInstructionsRef = useRef<Record<string, string | undefined>>({});
@@ -217,15 +219,35 @@ export default function App() {
     const [draftModelKey, setDraftModelKey] = useState<string | undefined>(undefined);
     const [draftThinking, setDraftThinking] = useState<import("./types/session").ThinkingLevel | undefined>(undefined);
     const [homeCwd, setHomeCwd] = useState("");
-    const [newChatCwd, setNewChatCwd] = useState<string | null>(null);
-    const { projects, addProject, updateProject, removeProject } = useProjects();
+    // New-chat run selection: which project and which run target its first
+    // message starts on. Both mirror the active draft tab (see newTabTargets).
+    const [newChatProjectId, setNewChatProjectId] = useState<string | null>(null);
+    const [newChatHostId, setNewChatHostId] = useState<string>(LOCAL_HOST_ID);
+    const { projects, addProject, renameProject, removeProject, setProjectTarget, removeProjectTarget } = useProjects();
+    const { hosts, activeHostId, setActiveHostId } = useHosts();
+    const activeHostIdRef = useRef(activeHostId);
+    activeHostIdRef.current = activeHostId;
+    const newChatProjectIdRef = useRef<string | null>(newChatProjectId);
+    newChatProjectIdRef.current = newChatProjectId;
+    const newChatHostIdRef = useRef<string>(newChatHostId);
+    newChatHostIdRef.current = newChatHostId;
+    // Sidebar + palette run-target badges. Hidden until a remote host exists.
+    const hostNameById = useMemo(() => {
+        const map: Record<string, string> = { [LOCAL_HOST_ID]: "Local" };
+        for (const h of allHosts()) map[h.id] = h.name;
+        return map;
+    }, [hosts]);
+    const showHostBadges = hosts.length > 0;
     const newTabCounterRef = useRef(2);
     const [openTabIds, setOpenTabIds] = useState<string[]>(([`${NEW_TAB_PREFIX}1`]));
     const openTabIdsRef = useRef<string[]>(openTabIds);
     const [activeNewTabId, setActiveNewTabId] = useState<string | null>(`${NEW_TAB_PREFIX}1`);
-    // Per-draft-tab project picker cwd. newChatCwd mirrors the active new tab;
-    // entries are created with the tab, restored on switch, dropped on promote/close.
-    const [newTabCwds, setNewTabCwds] = useState<Record<string, string | null>>({});
+    const activeNewTabIdRef = useRef<string | null>(activeNewTabId);
+    activeNewTabIdRef.current = activeNewTabId;
+    // Per-draft-tab project + run target. The newChat* mirrors track the
+    // active draft; entries are created with the tab, restored on switch,
+    // dropped on promote/close.
+    const [newTabTargets, setNewTabTargets] = useState<Record<string, { projectId: string | null; hostId: string }>>({});
     // single inline notice per session — interrupts clear on next send, never stack
     const [inlineErrors, setInlineErrors] = useState<Record<string, InlineError>>({});
     const streamSonners = useSonners();
@@ -336,22 +358,22 @@ export default function App() {
     }, []);
 
     // Always creates a fresh new-chat draft tab and activates it. Draft tabs are
-    // cheap and independent (own composer draft + project cwd); the only
+    // cheap and independent (own composer draft + project/target); the only
     // invariant is that at least one chat tab always exists.
-    const createNewChatTab = useCallback((cwd?: string | null) => {
+    const createNewChatTab = useCallback((sel?: { projectId: string | null; hostId: string } | null) => {
         const id = `${NEW_TAB_PREFIX}${newTabCounterRef.current++}`;
-        const initialCwd = cwd !== undefined ? cwd : newChatCwd;
-        setNewTabCwds((prev) => ({ ...prev, [id]: initialCwd }));
+        const initial = sel ?? { projectId: newChatProjectIdRef.current, hostId: newChatHostIdRef.current };
+        setNewTabTargets((prev) => ({ ...prev, [id]: initial }));
         const next = [...openTabIdsRef.current, id];
         openTabIdsRef.current = next;
         setOpenTabIds(next);
         setActiveNewTabId(id);
         return id;
-    }, [newChatCwd]);
+    }, []);
 
     const dropNewTabState = useCallback((id: string) => {
         clearDraftFor(id);
-        setNewTabCwds((prev) => {
+        setNewTabTargets((prev) => {
             if (!(id in prev)) return prev;
             const { [id]: _, ...rest } = prev;
             return rest;
@@ -403,43 +425,125 @@ export default function App() {
         return () => { cancelled = true; };
     }, []);
 
-    // Every session directory is a project: explicit entries first, then
-    // implicit ones (folder name, no icon) for directories without an entry.
+    // Every (host, session directory) pair is a project: explicit entries
+    // first, then implicit ones for pairs with no binding.
     const projectOptions = useMemo(
-        () => resolveProjectOptions(projects, sessions.groups.map((g) => g.cwd), homeCwd || undefined),
+        () => resolveProjectOptions(projects, sessions.groups.map((g) => ({ hostId: g.hostId, cwd: g.cwd })), homeCwd || undefined),
         [projects, sessions.groups, homeCwd],
     );
 
     // Default the new-chat picker to the first project once any exist.
-    // Home stays a silent send fallback — it is never listed as a project.
     useEffect(() => {
-        if (newChatCwd !== null) return;
+        if (newChatProjectIdRef.current !== null) return;
         if (projectOptions.length === 0) return;
-        setNewChatCwd(projectOptions[0].path);
-    }, [newChatCwd, projectOptions]);
+        const first = projectOptions[0];
+        setNewChatProjectId(first.id);
+        if (first.implicit) {
+            setNewChatHostId(first.hostId);
+        } else {
+            const bound = Object.keys(first.targets);
+            if (!bound.includes(newChatHostIdRef.current) && bound[0]) {
+                setNewChatHostId(bound[0]);
+                setActiveHostId(bound[0]);
+            }
+        }
+    }, [projectOptions, setActiveHostId]);
+
+    // The selected project vanished (e.g. its last target was removed).
+    // Fall back to the first remaining project.
+    useEffect(() => {
+        if (newChatProjectId === null) return;
+        if (projectOptions.some((p) => p.id === newChatProjectId)) return;
+        const first = projectOptions[0];
+        setNewChatProjectId(first?.id ?? null);
+        if (first && !first.implicit) {
+            const host = Object.keys(first.targets)[0];
+            if (host) setNewChatHostId(host);
+        } else if (first && first.implicit) {
+            setNewChatHostId(first.hostId);
+        }
+    }, [newChatProjectId, projectOptions]);
+
+    // Effective workspace for the new-chat draft. Null when the project
+    // isn't set up on the selected target — sending stays blocked until
+    // it is (bind it from the run-target menu).
+    const newChatCwd = useMemo(() => {
+        if (!newChatProjectId) return null;
+        const opt = projectOptions.find((p) => p.id === newChatProjectId);
+        if (!opt) return null;
+        if (opt.implicit) return opt.path;
+        return opt.targets[newChatHostId] ?? null;
+    }, [newChatProjectId, newChatHostId, projectOptions]);
+
+    const selectedProject: ProjectOption | null = useMemo(
+        () => projectOptions.find((p) => p.id === newChatProjectId) ?? null,
+        [projectOptions, newChatProjectId],
+    );
+
+    const persistDraftTarget = useCallback((projectId: string | null, hostId: string) => {
+        const tabId = activeNewTabIdRef.current;
+        if (!tabId) return;
+        setNewTabTargets((prev) => ({ ...prev, [tabId]: { projectId, hostId } }));
+    }, []);
 
     const handleCreateProject = useCallback((input: NewProjectInput): Project => {
-        const project = addProject(input, homeCwd || undefined);
-        setNewChatCwd(project.path);
+        const project = addProject({ ...input, hostId: newChatHostIdRef.current }, homeCwd || undefined);
+        setNewChatProjectId(project.id);
+        persistDraftTarget(project.id, newChatHostIdRef.current);
         return project;
-    }, [addProject, homeCwd]);
+    }, [addProject, homeCwd, persistDraftTarget]);
 
-    const handleUpdateProject = useCallback((id: string, input: NewProjectInput) => {
-        const prev = projects.find((p) => p.id === id);
-        updateProject(id, input, homeCwd || undefined);
-        if (prev && newChatCwd === prev.path) {
-            setNewChatCwd(normalizeProjectPath(input.path, homeCwd || undefined) || prev.path);
-        }
-    }, [newChatCwd, projects, updateProject, homeCwd]);
+    const handleRenameProject = useCallback((id: string, name: string) => {
+        renameProject(id, name);
+    }, [renameProject]);
 
     const handleRemoveProject = useCallback((id: string) => {
-        const removed = projects.find((p) => p.id === id);
         removeProject(id);
-        if (removed && newChatCwd === removed.path) {
-            const remaining = projects.filter((p) => p.id !== id);
-            setNewChatCwd(remaining[0]?.path ?? null);
+        if (newChatProjectIdRef.current === id) {
+            // The fallback effect below picks the next project.
+            setNewChatProjectId(null);
         }
-    }, [newChatCwd, projects, removeProject]);
+    }, [removeProject]);
+
+    const handleSetProjectTarget = useCallback((id: string, hostId: string, path: string) => {
+        setProjectTarget(id, hostId, path, homeCwd || undefined);
+    }, [setProjectTarget, homeCwd]);
+
+    /** Project picker: choose the project, keep the target when bound. */
+    const handleSelectProject = useCallback((id: string) => {
+        const opt = projectOptions.find((p) => p.id === id);
+        setNewChatProjectId(id);
+        if (!opt) return;
+        if (opt.implicit) {
+            setNewChatHostId(opt.hostId);
+            setActiveHostId(opt.hostId);
+            persistDraftTarget(id, opt.hostId);
+            return;
+        }
+        const bound = Object.keys(opt.targets);
+        if (bound.includes(newChatHostIdRef.current)) {
+            persistDraftTarget(id, newChatHostIdRef.current);
+        } else if (bound[0]) {
+            setNewChatHostId(bound[0]);
+            setActiveHostId(bound[0]);
+            persistDraftTarget(id, bound[0]);
+        }
+    }, [projectOptions, setActiveHostId, persistDraftTarget]);
+
+    /** Run-target picker: choose where the project runs. */
+    const handleTargetChange = useCallback((hostId: string) => {
+        setNewChatHostId(hostId);
+        setActiveHostId(hostId);
+        persistDraftTarget(newChatProjectIdRef.current, hostId);
+    }, [setActiveHostId, persistDraftTarget]);
+
+    /** Bind the selected project to a new target, then run there. */
+    const handleBindTarget = useCallback((projectId: string, hostId: string, path: string) => {
+        setProjectTarget(projectId, hostId, path, homeCwd || undefined);
+        setNewChatHostId(hostId);
+        setActiveHostId(hostId);
+        persistDraftTarget(projectId, hostId);
+    }, [setProjectTarget, homeCwd, setActiveHostId, persistDraftTarget]);
 
     // Pinned sessions move out of their project into the Pinned group above
     // Projects; archived sessions move to the footer group. Both stay
@@ -458,24 +562,27 @@ export default function App() {
             .sort(byModifiedDesc),
         [sessions.sessions, sessionFlags.archived],
     );
-    // Sidebar sections: every project (even empty) with its sessions, newest first.
-    // Pinned / archived sessions are excluded — they live in their own groups.
+    // Sidebar sections: every project (even empty) with its sessions across
+    // all run targets, newest first. Pinned / archived sessions are
+    // excluded — they live in their own groups.
     const projectGroups = useMemo(
         () => projectOptions.map((project) => ({
             project,
-            sessions: sessionsForProject(sessions.sessions, project.path)
+            sessions: sessionsForProject(sessions.sessions, project)
                 .filter((s) => !sessionFlags.pinned.has(s.path) && !sessionFlags.archived.has(s.path)),
         })),
         [projectOptions, sessions.sessions, sessionFlags.pinned, sessionFlags.archived],
     );
     const orphanCount = useMemo(() => {
-        const paths = new Set(projectOptions.map((p) => p.path));
-        return sessions.sessions.filter((s) => !paths.has(s.cwd) && !sessionFlags.pinned.has(s.path) && !sessionFlags.archived.has(s.path)).length;
-    }, [projectOptions, sessions.sessions, sessionFlags.pinned, sessionFlags.archived]);
+        const claimed = new Set<string>();
+        for (const group of projectGroups) {
+            for (const s of group.sessions) claimed.add(s.path);
+        }
+        return sessions.sessions.filter((s) => !claimed.has(s.path) && !sessionFlags.pinned.has(s.path) && !sessionFlags.archived.has(s.path)).length;
+    }, [projectGroups, sessions.sessions, sessionFlags.pinned, sessionFlags.archived]);
 
-    // Switching hosts swaps the sidebar contents: the new host's sessions,
-    // models, and reachability are fetched immediately (health also polls).
-    const { activeHostId } = useHosts();
+    // Switching the execution host re-resolves models and reachability.
+    // Sessions always aggregate across hosts (see useSessions).
     useEffect(() => {
         void sessions.refresh();
         void models.refresh({ silent: true });
@@ -486,37 +593,24 @@ export default function App() {
     const activeTitle = useMemo(() => chat.data?.sessionName || chat.data?.header?.id || chat.activeFile?.split("/").pop() || "New chat", [chat.data?.sessionName, chat.data?.header?.id, chat.activeFile]);
     const activeCwd = chat.data?.cwd || chat.data?.header?.cwd;
 
-    // Current project for the command menu — active session cwd wins, then the
-    // new-chat picker cwd, then home. Prefers the project name when known.
-    const currentProjectCwd = activeCwd || newChatCwd || homeCwd || "";
-    const currentProjectDisplay = useMemo(() => {
-        if (!currentProjectCwd) return "";
-        const project = projectOptions.find((p) => p.path === currentProjectCwd);
-        if (project) return project.name;
-        if (homeCwd && (currentProjectCwd === homeCwd || currentProjectCwd.startsWith(`${homeCwd}/`))) {
-            const rest = currentProjectCwd.slice(homeCwd.length).replace(/^\//, "");
-            if (!rest) return "~";
-            return rest.split("/").pop() || `~/${rest}`;
+    // Current project for the command menu — the active session's project
+    // wins, then the new-chat picker. Prefers the project name when known.
+    const currentProjectOption: ProjectOption | null = useMemo(() => {
+        if (activeCwd) {
+            const hostId = chat.activeFile ? sessions.hostOf(chat.activeFile) : activeHostId;
+            const claimed = projectOptions.find((p) => {
+                if (p.implicit) return p.hostId === hostId && p.path === activeCwd;
+                return p.targets[hostId] === activeCwd;
+            });
+            if (claimed) return claimed;
         }
-        const trimmed = currentProjectCwd.endsWith("/") ? currentProjectCwd.slice(0, -1) : currentProjectCwd;
-        return trimmed.split("/").pop() || trimmed;
-    }, [currentProjectCwd, homeCwd, projects]);
+        return selectedProject;
+    }, [activeCwd, chat.activeFile, sessions.hostOf, activeHostId, projectOptions, selectedProject]);
+    const currentProjectDisplay = currentProjectOption?.name ?? "";
 
-    // Display name for the new-chat hero — resolves the picker cwd to its
-    // project name, falling back to a folder-name guess. Empty when no
-    // project is selected yet (hero shows a placeholder instead).
-    const newChatProjectDisplay = useMemo(() => {
-        if (!newChatCwd) return "";
-        const project = projectOptions.find((p) => p.path === newChatCwd);
-        if (project) return project.name;
-        if (homeCwd && (newChatCwd === homeCwd || newChatCwd.startsWith(`${homeCwd}/`))) {
-            const rest = newChatCwd.slice(homeCwd.length).replace(/^\//, "");
-            if (!rest) return "~";
-            return rest.split("/").pop() || `~/${rest}`;
-        }
-        const trimmed = newChatCwd.endsWith("/") ? newChatCwd.slice(0, -1) : newChatCwd;
-        return trimmed.split("/").pop() || trimmed;
-    }, [newChatCwd, homeCwd, projectOptions]);
+    // Display name for the new-chat hero. Empty when no project is selected
+    // yet (hero shows a placeholder instead).
+    const newChatProjectDisplay = selectedProject?.name ?? "";
 
     const ctxModel: any = (chat.data?.context as any)?.model;
     const ctxModelKey = ctxModel ? `${ctxModel.provider}/${ctxModel.modelId ?? ctxModel.id}` : undefined;
@@ -537,7 +631,7 @@ export default function App() {
         const optimistic: any = info ?? { provider, id, modelId: id, name: id };
         chat.patchModel(optimistic, undefined, sessionFile);
         try {
-            const res: any = await models.setModel(sessionFile, provider, id);
+            const res: any = await models.setModel(sessionFile, provider, id, sessions.hostOf(sessionFile));
             if (res?.model) chat.patchModel(res.model, res.thinkingLevel, sessionFile);
         } catch (e) {
             const msg = e instanceof Error ? e.message : String(e);
@@ -548,7 +642,7 @@ export default function App() {
                 setInlineFor(sessionFile, err);
             } else setModelError(msg);
         }
-    }, [chat.activeFile, chat.patchModel, models.models, models.setModel, setInlineFor]);
+    }, [chat.activeFile, chat.patchModel, models.models, models.setModel, sessions.hostOf, setInlineFor]);
 
     const thinkingCommitRef = useRef<number | null>(null);
     const pendingThinkingRef = useRef<import("./types/session").ThinkingLevel | null>(null);
@@ -562,13 +656,13 @@ export default function App() {
         thinkingCommitRef.current = null;
         if (!level || !sessionFile) return;
         try {
-            const res: any = await models.setThinkingLevel(sessionFile, level);
+            const res: any = await models.setThinkingLevel(sessionFile, level, sessions.hostOf(sessionFile));
             if (res?.thinkingLevel) chat.patchModel(null as any, res.thinkingLevel, sessionFile);
         } catch (e) {
             const msg = e instanceof Error ? e.message : String(e);
             setModelError(msg);
         }
-    }, [models.setThinkingLevel, chat.patchModel]);
+    }, [models.setThinkingLevel, chat.patchModel, sessions.hostOf]);
 
     const handleThinkingChange = useCallback((level: import("./types/session").ThinkingLevel) => {
         if (!chat.activeFile) { setDraftThinking(level); return; }
@@ -630,11 +724,15 @@ export default function App() {
         setSettingsActive(false);
         setUiDemoActive(false);
         setActiveNewTabId(id);
-        const stored = newTabCwds[id];
-        if (stored !== undefined) setNewChatCwd(stored);
+        const stored = newTabTargets[id];
+        if (stored !== undefined) {
+            setNewChatProjectId(stored.projectId);
+            setNewChatHostId(stored.hostId);
+            if (stored.hostId !== activeHostIdRef.current) setActiveHostId(stored.hostId);
+        }
         chat.clear();
         focusComposer();
-    }, [chat.clear, focusComposer, newTabCwds]);
+    }, [chat.clear, focusComposer, newTabTargets, setActiveHostId]);
     const focusProjectPicker = useCallback(() => {
         const el = document.querySelector<HTMLElement>('[data-project-picker-trigger]');
         if (!el) return;
@@ -650,44 +748,54 @@ export default function App() {
         });
     }, []);
 
+    // Execution follows selection: opening a session points the active host
+    // at the run target it lives on, so every subsequent call routes there.
+    // The api layer also reads the host fresh per call, so this is belt and
+    // suspenders for anything that only knows the active host.
     const handleSelect = useCallback(async (file: string) => {
         setSettingsActive(false);
         setUiDemoActive(false);
+        const hostId = sessions.hostOf(file);
+        if (hostId !== activeHostIdRef.current) setActiveHostId(hostId);
         openSessionTab(file);
         if (file === chat.activeFile) { focusComposer(); return; }
         if (chat.hasCache(file)) {
             chat.hydrateFromCache(file);
-            sessions.switchTo(file).catch((e) => console.warn("switchSession failed", e));
+            sessions.switchTo(file, undefined, hostId).catch((e) => console.warn("switchSession failed", e));
             chat.revalidate(file);
             focusComposer();
             return;
         }
         chat.prepareSwitch(file);
         try {
-            const res = await sessions.switchTo(file);
+            const res = await sessions.switchTo(file, undefined, hostId);
             if ((res as any)?.context) chat.hydrateFromSwitch(res as any);
             else await chat.openFile(file);
         } catch (e) {
             console.warn("switchSession failed", e);
             await chat.openFile(file).catch(() => {});
         } finally { focusComposer(); }
-    }, [openSessionTab, sessions.switchTo, chat.openFile, chat.hydrateFromSwitch, chat.hydrateFromCache, chat.hasCache, chat.revalidate, chat.activeFile, chat.prepareSwitch, focusComposer]);
+    }, [openSessionTab, sessions.switchTo, sessions.hostOf, sessions.sessions, setActiveHostId, chat.openFile, chat.hydrateFromSwitch, chat.hydrateFromCache, chat.hasCache, chat.revalidate, chat.activeFile, chat.prepareSwitch, focusComposer]);
 
-    const handleNewChat = useCallback(() => { setSettingsActive(false); setUiDemoActive(false); createNewChatTab(); chat.clear(); focusComposer(); }, [chat.clear, createNewChatTab, focusComposer]);
+    const handleNewChat = useCallback(() => { setSettingsActive(false); setUiDemoActive(false); if (newChatHostIdRef.current !== activeHostIdRef.current) setActiveHostId(newChatHostIdRef.current); createNewChatTab(); chat.clear(); focusComposer(); }, [chat.clear, createNewChatTab, focusComposer, setActiveHostId]);
 
-    const handleNewChatInProject = useCallback((cwd: string) => {
+    const handleNewChatInProject = useCallback((projectId: string) => {
         setSettingsActive(false);
         setUiDemoActive(false);
-        if (cwd) setNewChatCwd(cwd);
-        createNewChatTab(cwd || null);
+        const opt = projectOptions.find((p) => p.id === projectId);
+        let hostId = newChatHostIdRef.current;
+        if (opt && !opt.implicit) {
+            if (opt.targets[hostId] === undefined) hostId = Object.keys(opt.targets)[0] ?? hostId;
+        } else if (opt && opt.implicit) {
+            hostId = opt.hostId;
+        }
+        setNewChatProjectId(projectId);
+        setNewChatHostId(hostId);
+        setActiveHostId(hostId);
+        createNewChatTab({ projectId, hostId });
         chat.clear();
         focusComposer();
-    }, [chat.clear, createNewChatTab, focusComposer]);
-
-    const handleNewChatCwdChange = useCallback((cwd: string | null) => {
-        setNewChatCwd(cwd);
-        if (activeNewTabId) setNewTabCwds((prev) => ({ ...prev, [activeNewTabId]: cwd }));
-    }, [activeNewTabId]);
+    }, [chat.clear, createNewChatTab, focusComposer, projectOptions, setActiveHostId]);
 
     const handleToggleTheme = useCallback(() => {
         clearActiveCustomTheme();
@@ -712,12 +820,12 @@ export default function App() {
     const commandActions: CommandAction[] = useMemo(() => {
         const iconClass = "size-5 shrink-0 text-current";
         const list: CommandAction[] = [];
-        if (currentProjectCwd) {
+        if (currentProjectOption) {
             list.push({
                 id: "new-chat-in-project",
-                label: `New chat in ${currentProjectDisplay || currentProjectCwd}`,
+                label: `New chat in ${currentProjectDisplay || currentProjectOption.id}`,
                 hint: "⌘N",
-                keywords: ["new chat", "create", currentProjectCwd, currentProjectDisplay],
+                keywords: ["new chat", "create", currentProjectDisplay],
                 icon: <IconPlusFilled className={iconClass} />,
             });
         }
@@ -759,12 +867,12 @@ export default function App() {
             icon: <IconLayoutSidebarFilled className={iconClass} />,
         });
         return list;
-    }, [currentProjectCwd, currentProjectDisplay, effectiveTheme, sidebarOpen]);
+    }, [currentProjectOption, currentProjectDisplay, effectiveTheme, sidebarOpen]);
 
     const handleCommandAction = useCallback((id: string) => {
         switch (id) {
             case "new-chat-in-project":
-                if (currentProjectCwd) handleNewChatInProject(currentProjectCwd);
+                if (currentProjectOption) handleNewChatInProject(currentProjectOption.id);
                 else handleNewChat();
                 break;
             case "new-chat":
@@ -786,7 +894,7 @@ export default function App() {
                 setSidebarOpen((open) => !open);
                 break;
         }
-    }, [currentProjectCwd, handleNewChat, handleNewChatInProject, handleToggleTheme, openSettingsTab, openUiDemoTab]);
+    }, [currentProjectOption, handleNewChat, handleNewChatInProject, handleToggleTheme, openSettingsTab, openUiDemoTab]);
 
     const handleCloseTab = useCallback((id: string) => {
         const current = openTabIdsRef.current;
@@ -818,7 +926,7 @@ export default function App() {
             makeFreshId: () => {
                 // Last chat tab closed — force a fresh new tab in its place.
                 const fresh = `${NEW_TAB_PREFIX}${newTabCounterRef.current++}`;
-                setNewTabCwds((prev) => ({ ...prev, [fresh]: newChatCwd }));
+                setNewTabTargets((prev) => ({ ...prev, [fresh]: { projectId: newChatProjectIdRef.current, hostId: newChatHostIdRef.current } }));
                 return fresh;
             },
         });
@@ -892,20 +1000,20 @@ export default function App() {
     }, [settingsActive, uiDemoActive, handleCloseTab, chat.activeFile, activeNewTabId]);
 
     const handleRename = useCallback(async (file: string, name: string) => {
-        await sessions.rename(file, name);
+        await sessions.rename(file, name, sessions.hostOf(file));
         chat.invalidateCache(file);
         if (chat.activeFile === file) await chat.refreshSilent();
-    }, [sessions.rename, chat.activeFile, chat.refreshSilent, chat.invalidateCache]);
+    }, [sessions.rename, sessions.hostOf, chat.activeFile, chat.refreshSilent, chat.invalidateCache]);
 
     const handleDelete = useCallback(async (file: string) => {
-        await sessions.remove(file);
+        await sessions.remove(file, sessions.hostOf(file));
         sessionFlags.removeFile(file);
         if (openTabIdsRef.current.includes(file)) handleCloseTab(file);
         chat.invalidateCache(file);
         chat.removeFile(file);
         clearQueueFor(file);
         setInlineFor(file, null);
-    }, [sessions.remove, sessionFlags.removeFile, handleCloseTab, chat.removeFile, chat.invalidateCache, setInlineFor]);
+    }, [sessions.remove, sessions.hostOf, sessionFlags.removeFile, handleCloseTab, chat.removeFile, chat.invalidateCache, setInlineFor]);
 
     const handleDeleteCurrent = useCallback(async () => {
         const f = chat.activeFile;
@@ -925,7 +1033,7 @@ export default function App() {
         const f = chat.activeFile;
         if (!f) return;
         if (compaction.isCompacting(f)) {
-            await compaction.abort(f);
+            await compaction.abort(f, undefined, sessions.hostOf(f));
             focusComposer();
             return;
         }
@@ -972,9 +1080,9 @@ export default function App() {
     const handleAbortCompaction = useCallback(async () => {
         const f = chat.activeFile;
         if (!f) return;
-        await compaction.abort(f);
+        await compaction.abort(f, undefined, sessions.hostOf(f));
         focusComposer();
-    }, [chat.activeFile, compaction, focusComposer]);
+    }, [chat.activeFile, compaction, focusComposer, sessions.hostOf]);
 
     const handleRetryCompaction = useCallback(async () => {
         const f = chat.activeFile;
@@ -982,26 +1090,27 @@ export default function App() {
         const instr = lastCompactInstructionsRef.current[f];
         const cwd = (chat.data as unknown as { cwd?: string })?.cwd || (chat.data as unknown as { header?: { cwd?: string } })?.header?.cwd;
         try {
-            await compaction.retry(f, instr, cwd);
+            await compaction.retry(f, instr, cwd, sessions.hostOf(f));
             sessions.refresh({ silent: true });
         } catch {}
         focusComposer();
-    }, [chat.activeFile, chat.data, compaction, sessions, focusComposer]);
+    }, [chat.activeFile, chat.data, compaction, sessions, sessions.hostOf, focusComposer]);
 
     const handleContinue = useCallback(async () => {
         const f = chat.activeFile;
         if (!f) return;
+        const hostId = sessions.hostOf(f);
         const cwd = activeCwd || newChatCwd || homeCwd;
         // optimistic: clear the notice, Continue will resume
         setInlineFor(f, null);
         try {
             // use sidecar continue streaming via same mechanism as prompt but via streamContinue
             // we replicate chat streaming logic here minimal
-            await (chat as any).continueStreaming?.(f, cwd);
+            await (chat as any).continueStreaming?.(f, cwd, hostId);
         } catch {
             // fallback to direct streamContinue
             try {
-                await streamContinue({ sessionFile: f, cwd }, () => {});
+                await streamContinue({ sessionFile: f, cwd, hostId }, () => {});
                 await chat.revalidate(f);
             } catch (e) {
                 const msg = e instanceof Error ? e.message : String(e);
@@ -1009,7 +1118,7 @@ export default function App() {
                 setInlineFor(f, err);
             }
         }
-    }, [chat, activeCwd, newChatCwd, homeCwd, setInlineFor]);
+    }, [chat, activeCwd, newChatCwd, homeCwd, sessions.hostOf, setInlineFor]);
 
     const handleSend = useCallback(async (content: string, images?: { type: "image"; data: string; mimeType: string }[]) => {
         const trimmed = content.trim();
@@ -1033,8 +1142,9 @@ export default function App() {
             setInlineFor(targetFile, null);
             try {
                 const cwd = activeCwd || undefined;
-                if (isUndo) await undoTurn(targetFile, cwd);
-                else await redoTurn(targetFile, cwd);
+                const hostId = sessions.hostOf(targetFile);
+                if (isUndo) await undoTurn(targetFile, cwd, hostId);
+                else await redoTurn(targetFile, cwd, hostId);
                 await chat.revalidate(targetFile);
                 sessions.refresh({ silent: true });
             } catch (e) {
@@ -1065,7 +1175,7 @@ export default function App() {
                 setInlineFor(targetFile, null);
                 try {
                     const cwd = activeCwd || undefined;
-                    await compaction.compact(targetFile, instructions, cwd);
+                    await compaction.compact(targetFile, instructions, cwd, sessions.hostOf(targetFile));
                     sessions.refresh({ silent: true });
                 } catch {}
                 clearDraftFor(targetFile);
@@ -1077,21 +1187,32 @@ export default function App() {
         if (chat.activeFile) setInlineFor(chat.activeFile, null);
         else if (content.trim() && activeNewTabId) clearDraftFor(activeNewTabId);
         let preparedSessionFile: string | undefined;
+        // New chat starts on the selected run target. Execution follows the
+        // picker: point the active host there first so every call below —
+        // including anything that only knows the active host — routes right.
+        const selectedHostId = !chat.activeFile ? newChatHostIdRef.current : sessions.hostOf(chat.activeFile);
+        if (!chat.activeFile) {
+            if (!newChatCwd) {
+                setModelError(`Set ${selectedProject?.name ?? "the project"} up on ${hostNameById[selectedHostId] ?? selectedHostId} first — pick a run target or add its path.`);
+                return;
+            }
+            setActiveHostId(selectedHostId);
+        }
         const selectedCwd = !chat.activeFile ? (newChatCwd ?? homeCwd) || undefined : undefined;
         if (!chat.activeFile && (draftModelKey || draftThinking)) {
             try {
-                const res = await createSession(selectedCwd);
+                const res = await createSession(selectedCwd, selectedHostId);
                 const file = res.file;
                 preparedSessionFile = file;
                 promoteNewChatTab(file);
-                try { await sessions.switchTo(file, selectedCwd); } catch {}
+                try { await sessions.switchTo(file, selectedCwd, selectedHostId); } catch {}
                 await chat.openFile(file);
-                sessions.addOptimistic(file, selectedCwd || "", content);
+                sessions.addOptimistic(file, selectedCwd || "", content, selectedHostId);
                 const parsed = draftModelKey?.includes("/") ? { provider: draftModelKey.split("/")[0], id: draftModelKey.split("/").slice(1).join("/") } : null;
                 if (parsed) {
-                    try { const res: any = await models.setModel(file, parsed.provider, parsed.id); if (res?.model) chat.patchModel(res.model, res.thinkingLevel, file); } catch (e) { setModelError(e instanceof Error ? e.message : String(e)); }
+                    try { const res: any = await models.setModel(file, parsed.provider, parsed.id, selectedHostId); if (res?.model) chat.patchModel(res.model, res.thinkingLevel, file); } catch (e) { setModelError(e instanceof Error ? e.message : String(e)); }
                 }
-                if (draftThinking) { try { await models.setThinkingLevel(file, draftThinking); } catch (e) { setModelError(e instanceof Error ? e.message : String(e)); } }
+                if (draftThinking) { try { await models.setThinkingLevel(file, draftThinking, selectedHostId); } catch (e) { setModelError(e instanceof Error ? e.message : String(e)); } }
                 setDraftModelKey(undefined); setDraftThinking(undefined);
                 await chat.refreshSilent();
             } catch (e) { console.warn("draft model pre-create failed", e); }
@@ -1099,12 +1220,13 @@ export default function App() {
         try {
             await chat.prompt(content, {
                 cwd: selectedCwd,
+                hostId: selectedHostId,
                 images,
                 sessionFile: preparedSessionFile,
                 onNewFile: (file, cwd, firstMessage) => {
                     const realCwd = cwd || chat.data?.cwd || selectedCwd || "";
                     promoteNewChatTab(file);
-                    sessions.addOptimistic(file, realCwd, firstMessage);
+                    sessions.addOptimistic(file, realCwd, firstMessage, selectedHostId);
                 },
             });
         } catch (e) {
@@ -1118,7 +1240,7 @@ export default function App() {
         if (chat.activeFile || preparedSessionFile || activeNewTabId) clearDraftFor(chat.activeFile ?? preparedSessionFile ?? activeNewTabId);
         sessions.refresh({ silent: true });
         focusComposer();
-    }, [chat.prompt, chat.data?.cwd, activeCwd, activeNewTabId, newChatCwd, homeCwd, sessions.addOptimistic, sessions.refresh, chat.activeFile, chat.isStreaming, chat.abort, draftModelKey, draftThinking, models.setModel, models.setThinkingLevel, promoteNewChatTab, chat.patchModel, chat.openFile, chat.refreshSilent, sessions.switchTo, focusComposer, setInlineFor, compaction]);
+    }, [chat.prompt, chat.data?.cwd, activeCwd, activeNewTabId, newChatCwd, newChatHostId, homeCwd, selectedProject, hostNameById, setActiveHostId, sessions.addOptimistic, sessions.refresh, sessions.hostOf, chat.activeFile, chat.isStreaming, chat.abort, draftModelKey, draftThinking, models.setModel, models.setThinkingLevel, promoteNewChatTab, chat.patchModel, chat.openFile, chat.refreshSilent, sessions.switchTo, focusComposer, setInlineFor, compaction]);
 
     // ---- Message queueing and steering (M3) ----
     // Synchronous mirror of the running set so interrupt can wait for the
@@ -1195,7 +1317,16 @@ export default function App() {
     }, [chat.activeFile, chat.isStreaming, chat.loading, compactingActive, queuedForActive.length, queue.shift]);
 
     const messages = useMemo(() => chat.data?.context.messages ?? [], [chat.data?.context.messages]);
-    const sessionStats = useSessionStats(chat.activeFile, messages.length, chat.isStreaming);
+    // Flattened (project, host) bindings for the palette's group lookup.
+    const commandProjects = useMemo(() => {
+        const out: Array<{ path: string; name: string }> = [];
+        for (const p of projectOptions) {
+            if (p.implicit) out.push({ path: p.path, name: p.name });
+            else for (const targetPath of Object.values(p.targets)) out.push({ path: targetPath, name: p.name });
+        }
+        return out;
+    }, [projectOptions]);
+    const sessionStats = useSessionStats(chat.activeFile, messages.length, chat.isStreaming, chat.activeFile ? sessions.hostOf(chat.activeFile) : undefined);
 
     const tabItems = useMemo(() => openTabIds.map((id) => {
         if (isNewTabId(id)) return { id, title: "New chat" };
@@ -1226,7 +1357,7 @@ export default function App() {
     }
 
     return (
-        <SessionCommand groups={sessions.groups} projects={projectOptions} loading={sessions.loading} error={sessions.error} actions={commandActions} onAction={handleCommandAction} onSelect={(file) => void handleSelect(file)}>
+        <SessionCommand groups={sessions.groups} projects={commandProjects} hostNameById={hostNameById} showHostBadges={showHostBadges} loading={sessions.loading} error={sessions.error} actions={commandActions} onAction={handleCommandAction} onSelect={(file) => void handleSelect(file)}>
             {(openSearch) => {
                 // Cmd+K ownership lives in SessionCommand alone; useShortcuts
                 // deliberately ignores that chord so there is one handler.
@@ -1239,6 +1370,8 @@ export default function App() {
                         >
                             <Sidebar
                                 projectGroups={projectGroups}
+                                hostNameById={hostNameById}
+                                showHostBadges={showHostBadges}
                                 pinnedSessions={pinnedSessions}
                                 archivedSessions={archivedSessions}
                                 orphanCount={orphanCount}
@@ -1362,8 +1495,11 @@ export default function App() {
                                             </div>
                                         )}
                                         {!chat.activeFile && (
-                                            <div className="mx-auto pl-6 mb-1 flex w-full max-w-4xl min-w-0 items-center gap-1" ref={directoryPickerRef}>
-                                                <DirectoryPicker cwd={newChatCwd} projects={projectOptions} onChange={handleNewChatCwdChange} onCreateProject={handleCreateProject} onUpdateProject={handleUpdateProject} onRemoveProject={handleRemoveProject} homeCwd={homeCwd} disabled={chat.isStreaming || (chat.activeFile ? compaction.isCompacting(chat.activeFile) : false)} />
+                                            <div className="mx-auto pl-6 mb-1 flex w-full max-w-4xl min-w-0 flex-wrap items-center gap-1" ref={directoryPickerRef}>
+                                                <DirectoryPicker selectedProjectId={newChatProjectId} projects={projectOptions} activeHostId={newChatHostId} hostNameById={hostNameById} onSelectProject={handleSelectProject} onCreateProject={handleCreateProject} onRenameProject={handleRenameProject} onRemoveProject={handleRemoveProject} onSetTarget={handleSetProjectTarget} onRemoveTarget={removeProjectTarget} homeCwd={homeCwd} disabled={chat.isStreaming || (chat.activeFile ? compaction.isCompacting(chat.activeFile) : false)} />
+                                                {selectedProject && !selectedProject.implicit && (
+                                                    <TargetPicker hosts={hosts} value={newChatHostId} boundHostIds={boundHostIds(selectedProject)} projectName={selectedProject.name} onChange={handleTargetChange} onBind={(hostId, path) => handleBindTarget(selectedProject.id, hostId, path)} disabled={chat.isStreaming} />
+                                                )}
                                             </div>
                                         )}
                                         {(() => {

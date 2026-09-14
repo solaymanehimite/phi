@@ -13,6 +13,7 @@ export async function streamPrompt(
   body: { text: string; sessionFile?: string; cwd?: string; images?: unknown[] },
   onEvent: (ev: SseEvent) => void,
   signal?: AbortSignal,
+  hostId?: string,
 ): Promise<void> {
-  return postSse(`/prompt`, body, onEvent, signal);
+  return postSse(`/prompt`, body, onEvent, signal, hostId);
 }

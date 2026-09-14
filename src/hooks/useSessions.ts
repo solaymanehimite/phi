@@ -2,8 +2,10 @@ import { useCallback, useEffect, useMemo, useState, useTransition } from "react"
 import { listSessions, createSession, switchSession, renameSession, deleteSession } from "../lib/api";
 import type { SessionInfo } from "../types/session";
 import { useLocalStorage } from "./useLocalStorage";
+import { HOSTS_CHANGED_EVENT, LOCAL_HOST, getStoredHosts } from "./useHosts";
 
 export type SessionGroup = {
+  hostId: string;
   cwd: string;
   displayCwd: string; // decoded, with ~ for home
   sessions: SessionInfo[];
@@ -21,34 +23,16 @@ function toDisplayCwd(cwd: string): string {
   return cwd;
 }
 
-function groupByCwd(sessions: SessionInfo[]): SessionGroup[] {
-  const map = new Map<string, SessionInfo[]>();
-  for (const s of sessions) {
-    const key = s.cwd || "(unknown)";
-    const arr = map.get(key) ?? [];
-    arr.push(s);
-    map.set(key, arr);
-  }
-  const groups: SessionGroup[] = [];
-  for (const [cwd, list] of map) {
-    // sort within group by modified desc (recency)
-    list.sort((a, b) => new Date(b.modified).getTime() - new Date(a.modified).getTime());
-    groups.push({ cwd, displayCwd: toDisplayCwd(cwd), sessions: list });
-  }
-  // sort groups by most recent session in group
-  groups.sort(
-    (a, b) =>
-      new Date(b.sessions[0]?.modified ?? 0).getTime() -
-      new Date(a.sessions[0]?.modified ?? 0).getTime(),
-  );
-  return groups;
-}
-
 export function useSessions() {
   const [sessions, setSessions] = useState<SessionInfo[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  // Persist collapsed directories across restarts — e.g. user collapses `~/ship/Phi` and expects it to stay collapsed
+  // Per-host fetch failures. An unreachable host degrades to an empty list —
+  // the rest of the sidebar still renders.
+  const [hostErrors, setHostErrors] = useState<Record<string, string>>({});
+  // Bumped whenever the host list changes so aggregation re-runs.
+  const [hostsVersion, setHostsVersion] = useState(0);
+  // Persist collapsed groups across restarts.
   const [collapsed, setCollapsed] = useLocalStorage<Set<string>>(
     "phi:sidebar:collapsed",
     new Set(),
@@ -71,9 +55,40 @@ export function useSessions() {
     if (!silent) setLoading(true);
     setError(null);
     try {
-      // all=1 for grouped sidebar (PRD 6.1); server decodes cwd
-      const data = await listSessions({ all: true });
-      setSessions(Array.isArray(data) ? data : []);
+      // Aggregate every run target: local first, then stored remotes.
+      // One host failing must not take down the sidebar.
+      const hosts = [LOCAL_HOST, ...getStoredHosts()];
+      const settled = await Promise.allSettled(
+        hosts.map(async (host) => ({
+          hostId: host.id,
+          sessions: await listSessions({ all: true, hostId: host.id }),
+        })),
+      );
+      const merged: SessionInfo[] = [];
+      const errors: Record<string, string> = {};
+      for (const result of settled) {
+        if (result.status === "fulfilled") {
+          for (const s of result.value.sessions) {
+            merged.push({ ...s, hostId: result.value.hostId });
+          }
+        } else {
+          const msg = result.reason instanceof Error ? result.reason.message : String(result.reason);
+          // Find which host failed by matching the in-flight order.
+          const idx = settled.indexOf(result);
+          const hostId = hosts[idx]?.id ?? "?";
+          errors[hostId] = msg;
+        }
+      }
+      setSessions(Array.isArray(merged) ? merged : []);
+      setHostErrors(errors);
+      const failures = Object.keys(errors);
+      if (failures.length > 0 && merged.length === 0) {
+        setError(
+          failures.length === hosts.length
+            ? errors[failures[0]]
+            : null,
+        );
+      }
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
@@ -83,41 +98,78 @@ export function useSessions() {
 
   useEffect(() => {
     refresh();
-  }, [refresh]);
+  }, [refresh, hostsVersion]);
 
-  const groups = useMemo(() => groupByCwd(sessions), [sessions]);
+  useEffect(() => {
+    const onHostsChanged = () => setHostsVersion((v) => v + 1);
+    window.addEventListener(HOSTS_CHANGED_EVENT, onHostsChanged);
+    return () => window.removeEventListener(HOSTS_CHANGED_EVENT, onHostsChanged);
+  }, []);
 
-  const toggleGroup = useCallback((cwd: string) => {
+  const groups = useMemo(() => {
+    const map = new Map<string, SessionGroup>();
+    for (const s of sessions) {
+      const hostId = s.hostId || LOCAL_HOST.id;
+      const key = `${hostId}\n${s.cwd || "(unknown)"}`;
+      let group = map.get(key);
+      if (!group) {
+        group = { hostId, cwd: s.cwd || "(unknown)", displayCwd: toDisplayCwd(s.cwd), sessions: [] };
+        map.set(key, group);
+      }
+      group.sessions.push(s);
+    }
+    const out = [...map.values()];
+    for (const g of out) {
+      g.sessions.sort((a, b) => new Date(b.modified).getTime() - new Date(a.modified).getTime());
+    }
+    out.sort(
+      (a, b) =>
+        new Date(b.sessions[0]?.modified ?? 0).getTime() -
+        new Date(a.sessions[0]?.modified ?? 0).getTime(),
+    );
+    return out;
+  }, [sessions]);
+
+  /** Which run target a session file lives on (local when unknown). */
+  const hostOf = useCallback(
+    (file: string): string => {
+      const found = sessions.find((s) => s.path === file);
+      return found?.hostId || LOCAL_HOST.id;
+    },
+    [sessions],
+  );
+
+  const toggleGroup = useCallback((key: string) => {
     startTransition(() => {
       setCollapsed((prev) => {
         const next = new Set(prev);
-        if (next.has(cwd)) next.delete(cwd);
-        else next.add(cwd);
+        if (next.has(key)) next.delete(key);
+        else next.add(key);
         return next;
       });
     });
-  }, []);
+  }, [setCollapsed]);
 
   const createNew = useCallback(
-    async (cwd?: string) => {
-      const res = await createSession(cwd);
+    async (cwd?: string, hostId?: string) => {
+      const res = await createSession(cwd, hostId);
       await refresh({ silent: true });
       return res.file;
     },
     [refresh],
   );
 
-  const switchTo = useCallback(async (file: string, cwd?: string) => {
-    const res = await switchSession(file, cwd);
+  const switchTo = useCallback(async (file: string, cwd?: string, hostId?: string) => {
+    const res = await switchSession(file, cwd, hostId);
     return res as Awaited<ReturnType<typeof switchSession>>;
   }, []);
 
   const rename = useCallback(
-    async (file: string, name: string) => {
+    async (file: string, name: string, hostId?: string) => {
       // optimistic — instant title update
       setSessions((prev) => prev.map((s) => (s.path === file ? { ...s, name } : s)));
       try {
-        await renameSession(file, name);
+        await renameSession(file, name, hostId);
         await refresh({ silent: true });
       } catch (e) {
         // revert on failure
@@ -129,11 +181,11 @@ export function useSessions() {
   );
 
   const remove = useCallback(
-    async (file: string) => {
+    async (file: string, hostId?: string) => {
       // optimistic — instant removal
       setSessions((prev) => prev.filter((s) => s.path !== file));
       try {
-        await deleteSession(file);
+        await deleteSession(file, hostId);
         await refresh({ silent: true });
       } catch (e) {
         await refresh({ silent: true });
@@ -143,7 +195,7 @@ export function useSessions() {
     [refresh],
   );
 
-  const addOptimistic = useCallback((file: string, cwd: string, firstMessage: string) => {
+  const addOptimistic = useCallback((file: string, cwd: string, firstMessage: string, hostId?: string) => {
     setSessions((prev) => {
       if (prev.some((s) => s.path === file)) return prev;
       const now = new Date().toISOString();
@@ -153,6 +205,7 @@ export function useSessions() {
         path: file,
         id,
         cwd,
+        hostId: hostId || LOCAL_HOST.id,
         created: now,
         modified: now,
         messageCount: 1,
@@ -168,10 +221,12 @@ export function useSessions() {
     groups,
     loading,
     error,
+    hostErrors,
     isPending,
     collapsed,
     toggleGroup,
     refresh,
+    hostOf,
     createNew,
     switchTo,
     rename,

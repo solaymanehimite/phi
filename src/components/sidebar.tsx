@@ -26,12 +26,18 @@ import {
 } from "./ui/dropdown-menu";
 import { GroupCollapsibleTrigger } from "./ui/collapsible";
 import { NavItem } from "./ui/nav-item";
+import { TargetIcon } from "./target-picker";
+import { hostOfSession } from "../lib/hosts";
 import { formatProjectPath, type ProjectGroup } from "../lib/projects";
 import type { SessionInfo } from "../types/session";
 import { useHasDraft } from "../hooks/useHasDraft";
 
 type SidebarProps = {
     projectGroups: ProjectGroup[];
+    /** Host id -> display name, for run-target badges. */
+    hostNameById: Record<string, string>;
+    /** Show run-target badges. Hidden for single-host setups. */
+    showHostBadges: boolean;
     /** Pinned sessions — shown in their own group above Projects. */
     pinnedSessions: SessionInfo[];
     /** Archived sessions — shown in the footer group above Settings. */
@@ -84,6 +90,8 @@ function titleFor(s: { name?: string; firstMessage: string }): string {
 
 export const Sidebar = memo(function Sidebar({
     projectGroups,
+    hostNameById,
+    showHostBadges,
     pinnedSessions,
     archivedSessions,
     orphanCount = 0,
@@ -221,12 +229,14 @@ export const Sidebar = memo(function Sidebar({
                                             >
                                                 {pinnedSessions.map((s) => (
                                                     <SessionRowMemo
-                                                        key={s.path}
+                                                        key={`${s.hostId ?? ""}\n${s.path}`}
                                                         session={s}
                                                         active={s.path === activeFile}
                                                         isStreaming={runningFiles.has(s.path)}
                                                         pinned
                                                         archived={false}
+                                                        hostNameById={hostNameById}
+                                                        showHostBadges={showHostBadges}
                                                         onSelect={onSelect}
                                                         onRename={onRename}
                                                         onDelete={onDelete}
@@ -248,9 +258,11 @@ export const Sidebar = memo(function Sidebar({
                                 <GroupSection
                                     key={group.project.id}
                                     group={group}
-                                    collapsed={collapsed.has(group.project.path)}
+                                    collapsed={collapsed.has(group.project.id)}
                                     activeFile={activeFile}
                                     runningFiles={runningFiles}
+                                    hostNameById={hostNameById}
+                                    showHostBadges={showHostBadges}
                                     onToggleGroup={onToggleGroup}
                                     onSelect={onSelect}
                                     onRename={onRename}
@@ -317,6 +329,8 @@ export const Sidebar = memo(function Sidebar({
                             sessions={archivedSessions}
                             activeFile={activeFile}
                             runningFiles={runningFiles}
+                            hostNameById={hostNameById}
+                            showHostBadges={showHostBadges}
                             onSelect={onSelect}
                             onRename={onRename}
                             onDelete={onDelete}
@@ -455,6 +469,8 @@ const ArchivedList = memo(function ArchivedList({
     sessions,
     activeFile,
     runningFiles,
+    hostNameById,
+    showHostBadges,
     onSelect,
     onRename,
     onDelete,
@@ -466,6 +482,8 @@ const ArchivedList = memo(function ArchivedList({
     sessions: SessionInfo[];
     activeFile: string | null;
     runningFiles: ReadonlySet<string>;
+    hostNameById: Record<string, string>;
+    showHostBadges: boolean;
     onSelect: (file: string) => void;
     onRename: (file: string, name: string) => Promise<void>;
     onDelete: (file: string) => Promise<void>;
@@ -531,12 +549,14 @@ const ArchivedList = memo(function ArchivedList({
                     >
                         {sessions.map((s) => (
                             <SessionRowMemo
-                                key={s.path}
+                                key={`${s.hostId ?? ""}\n${s.path}`}
                                 session={s}
                                 active={s.path === activeFile}
                                 isStreaming={runningFiles.has(s.path)}
                                 pinned={false}
                                 archived
+                                hostNameById={hostNameById}
+                                showHostBadges={showHostBadges}
                                 onSelect={onSelect}
                                 onRename={onRename}
                                 onDelete={onDelete}
@@ -626,6 +646,8 @@ const GroupSection = memo(function GroupSection({
     collapsed,
     activeFile,
     runningFiles,
+    hostNameById,
+    showHostBadges,
     onToggleGroup,
     onSelect,
     onRename,
@@ -638,6 +660,8 @@ const GroupSection = memo(function GroupSection({
     collapsed: boolean;
     activeFile: string | null;
     runningFiles: ReadonlySet<string>;
+    hostNameById: Record<string, string>;
+    showHostBadges: boolean;
     onToggleGroup: (key: string) => void;
     onSelect: (file: string) => void;
     onRename: (file: string, name: string) => Promise<void>;
@@ -647,10 +671,13 @@ const GroupSection = memo(function GroupSection({
     onPrefetch?: (file: string) => void;
 }) {
     const handleToggle = useCallback(
-        () => onToggleGroup(group.project.path),
-        [onToggleGroup, group.project.path],
+        () => onToggleGroup(group.project.id),
+        [onToggleGroup, group.project.id],
     );
     const { project } = group;
+    const headerTitle = project.implicit
+        ? `${project.name} — ${formatProjectPath(project.path)} on ${hostNameById[project.hostId] ?? project.hostId}`
+        : `${project.name} — runs on ${Object.keys(project.targets).map((id) => hostNameById[id] ?? id).join(", ")}`;
 
     return (
         <div>
@@ -659,11 +686,16 @@ const GroupSection = memo(function GroupSection({
                 onClick={handleToggle}
                 aria-expanded={!collapsed}
                 aria-label={`${project.name}, ${group.sessions.length} session${group.sessions.length === 1 ? "" : "s"}`}
-                title={`${project.name} — ${formatProjectPath(project.path)}`}
+                title={headerTitle}
             >
                 <span className="min-w-0 flex-1 truncate text-current">
                     {project.name}
                 </span>
+                {showHostBadges && project.implicit && (
+                    <span title={`Runs on ${hostNameById[project.hostId] ?? project.hostId}`} className="shrink-0 text-phi-text-faint">
+                        <TargetIcon hostId={project.hostId} className="size-3.5" />
+                    </span>
+                )}
             </GroupCollapsibleTrigger>
 
             <div
@@ -677,12 +709,14 @@ const GroupSection = memo(function GroupSection({
                         >
                             {group.sessions.map((s) => (
                                 <SessionRowMemo
-                                    key={s.path}
+                                    key={`${s.hostId ?? ""}\n${s.path}`}
                                     session={s}
                                     active={s.path === activeFile}
                                     isStreaming={runningFiles.has(s.path)}
                                     pinned={false}
                                     archived={false}
+                                    hostNameById={hostNameById}
+                                    showHostBadges={showHostBadges}
                                     onSelect={onSelect}
                                     onRename={onRename}
                                     onDelete={onDelete}
@@ -712,6 +746,8 @@ const SessionRowMemo = memo(function SessionRowMemo({
     isStreaming,
     pinned,
     archived,
+    hostNameById,
+    showHostBadges,
     onSelect,
     onRename,
     onDelete,
@@ -724,6 +760,8 @@ const SessionRowMemo = memo(function SessionRowMemo({
     isStreaming?: boolean;
     pinned: boolean;
     archived: boolean;
+    hostNameById: Record<string, string>;
+    showHostBadges: boolean;
     onSelect: (file: string) => void;
     onRename: (file: string, name: string) => Promise<void>;
     onDelete: (file: string) => Promise<void>;
@@ -766,6 +804,8 @@ const SessionRowMemo = memo(function SessionRowMemo({
         [onPrefetch, session.path],
     );
     const hasDraft = useHasDraft(session.path);
+    const sessionHostId = hostOfSession(session);
+    const hostName = showHostBadges ? (hostNameById[sessionHostId] ?? sessionHostId) : null;
 
     return (
         <SessionRow
@@ -773,6 +813,8 @@ const SessionRowMemo = memo(function SessionRowMemo({
             title={title}
             time={time}
             hasDraft={hasDraft}
+            hostName={hostName}
+            hostId={sessionHostId}
             pinned={pinned}
             archived={archived}
             onClick={handleSelect}
@@ -939,6 +981,8 @@ const SessionRow = memo(function SessionRow({
     title,
     time,
     hasDraft,
+    hostName,
+    hostId,
     pinned,
     archived,
     onClick,
@@ -953,6 +997,9 @@ const SessionRow = memo(function SessionRow({
     title: string;
     time: string;
     hasDraft?: boolean;
+    /** Run-target display name. Null hides the badge (single-host setups). */
+    hostName: string | null;
+    hostId: string;
     pinned: boolean;
     archived: boolean;
     onClick: () => void;
@@ -1044,6 +1091,11 @@ const SessionRow = memo(function SessionRow({
                     className="flex min-w-0 flex-1 items-center truncate rounded-lg px-1.5 py-1 pr-8 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-phi-accent/40"
                 >
                     <MarqueeTitle title={title} />
+                    {hostName && (
+                        <span title={`Runs on ${hostName}`} className="ml-1.5 inline-flex shrink-0 items-center text-phi-text-faint">
+                            <TargetIcon hostId={hostId} className="size-3" />
+                        </span>
+                    )}
                     {hasDraft && (
                         <IconSendFilled
                             className="ml-2.5 size-3 shrink-0 rotate-45 text-phi-text-muted"

@@ -36,7 +36,7 @@ export function useCompaction(opts: {
   }, []);
 
   const compact = useCallback(
-    async (file: string, customInstructions?: string, cwd?: string) => {
+    async (file: string, customInstructions?: string, cwd?: string, hostId?: string) => {
       if (!file) throw new Error("missing session file");
       if (compactingRef.current.has(file)) throw new Error("compaction already in progress");
       const controller = new AbortController();
@@ -49,7 +49,7 @@ export function useCompaction(opts: {
         let errorMsg = "";
         let aborted = false;
         await streamCompact(
-          { sessionFile: file, customInstructions, cwd },
+          { sessionFile: file, customInstructions, cwd, hostId },
           (ev) => {
             const t = String((ev as Record<string, unknown>).type ?? "");
             if (t === "compaction_start") {
@@ -80,7 +80,7 @@ export function useCompaction(opts: {
         try {
           if (opts.revalidate) await opts.revalidate(file);
           else if (opts.getMessages && opts.storeResponse) {
-            const payload = await getMessages(file);
+            const payload = await getMessages(file, hostId);
             opts.storeResponse(file, payload);
           }
         } catch {}
@@ -108,12 +108,12 @@ export function useCompaction(opts: {
   );
 
   const abort = useCallback(
-    async (file: string, cwd?: string) => {
+    async (file: string, cwd?: string, hostId?: string) => {
       if (!file) return;
       // local abort
       controllersRef.current.get(file)?.abort();
       try {
-        await abortCompaction(file, cwd);
+        await abortCompaction(file, cwd, hostId);
       } catch {}
       markCompacting(file, false);
       setErr(file, null);
@@ -122,9 +122,9 @@ export function useCompaction(opts: {
   );
 
   const retry = useCallback(
-    async (file: string, customInstructions?: string, cwd?: string) => {
+    async (file: string, customInstructions?: string, cwd?: string, hostId?: string) => {
       setErr(file, null);
-      return compact(file, customInstructions, cwd);
+      return compact(file, customInstructions, cwd, hostId);
     },
     [compact, setErr],
   );

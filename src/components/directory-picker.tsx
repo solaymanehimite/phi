@@ -16,18 +16,24 @@ import { Popover, PopoverContent, PopoverTrigger } from "./ui/popover";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
 import type { NewProjectInput } from "../hooks/useProjects";
-import { basenameOfPath, formatProjectPath, type Project, type ProjectOption } from "../lib/projects";
-import { formatCwd } from "../lib/paths";
+import { LOCAL_HOST_ID } from "../hooks/useHosts";
+import { basenameOfPath, boundHostIds, formatProjectPath, type Project, type ProjectOption } from "../lib/projects";
 import { canBrowseDirectories, pickDirectory } from "../lib/directories";
+import { TargetIcon } from "./target-picker";
 
 type DirectoryPickerProps = {
-    /** Currently selected project path (new-chat cwd). */
-    cwd: string | null;
+    /** Selected project id (explicit or implicit). */
+    selectedProjectId: string | null;
     projects: ProjectOption[];
-    onChange: (path: string | null) => void;
+    /** Run target new sessions start on. Creation binds to this host. */
+    activeHostId: string;
+    hostNameById: Record<string, string>;
+    onSelectProject: (id: string) => void;
     onCreateProject: (input: NewProjectInput) => Project;
-    onUpdateProject: (id: string, input: NewProjectInput) => void;
+    onRenameProject: (id: string, name: string) => void;
     onRemoveProject?: (id: string) => void;
+    onSetTarget: (id: string, hostId: string, path: string) => void;
+    onRemoveTarget: (id: string, hostId: string) => void;
     /** Only used as the browse dialog's starting directory — never listed. */
     homeCwd?: string;
     disabled?: boolean;
@@ -35,6 +41,8 @@ type DirectoryPickerProps = {
 
 function ProjectForm({
     homeCwd,
+    remote,
+    remoteHostName,
     nameInputRef,
     title,
     submitLabel,
@@ -44,6 +52,9 @@ function ProjectForm({
     onSubmit,
 }: {
     homeCwd?: string;
+    /** True when the path lives on a remote host: typed by hand, never browsed. */
+    remote: boolean;
+    remoteHostName?: string;
     nameInputRef: React.RefObject<HTMLInputElement | null>;
     title: string;
     submitLabel: string;
@@ -55,7 +66,7 @@ function ProjectForm({
     const [name, setName] = useState(initialName);
     const [path, setPath] = useState(initialPath);
     const [browseError, setBrowseError] = useState<string | null>(null);
-    const canBrowse = canBrowseDirectories();
+    const canBrowse = canBrowseDirectories() && !remote;
 
     const browse = useCallback(async () => {
         setBrowseError(null);
@@ -116,7 +127,7 @@ function ProjectForm({
                     id="new-project-path-label"
                     className="mb-1.5 mt-3 block text-[13px] font-medium text-phi-text-primary"
                 >
-                    Path
+                    Path{remote && remoteHostName ? ` on ${remoteHostName}` : ""}
                 </span>
                 {canBrowse ? (
                     <div className="flex gap-1.5">
@@ -148,17 +159,24 @@ function ProjectForm({
                         )}
                     </div>
                 ) : (
-                    <Input
-                        id="new-project-path"
-                        value={path}
-                        onChange={(event) => setPath(event.target.value)}
-                        placeholder="/path/to/project"
-                        aria-label="Project path"
-                        spellCheck={false}
-                        autoComplete="off"
-                        variant="default"
-                        className="w-full !border-0 !bg-phi-overlay-strong !px-3 placeholder:!text-phi-text-tertiary focus-visible:ring-2 focus-visible:ring-phi-accent/40"
-                    />
+                    <>
+                        <Input
+                            id="new-project-path"
+                            value={path}
+                            onChange={(event) => setPath(event.target.value)}
+                            placeholder="/home/you/code/project"
+                            aria-label="Project path"
+                            spellCheck={false}
+                            autoComplete="off"
+                            variant="default"
+                            className="w-full !border-0 !bg-phi-overlay-strong !px-3 placeholder:!text-phi-text-tertiary focus-visible:ring-2 focus-visible:ring-phi-accent/40"
+                        />
+                        {remote && (
+                            <p className="mt-1.5 text-[11px] leading-4 text-phi-text-muted">
+                                Typed by hand — the folder picker only sees this machine.
+                            </p>
+                        )}
+                    </>
                 )}
                 {browseError && (
                     <p className="mt-1.5 text-[11px] leading-4 text-phi-error-text">
@@ -185,9 +203,173 @@ function ProjectForm({
     );
 }
 
+function EditProjectForm({
+    project,
+    activeHostId,
+    hostNameById,
+    nameInputRef,
+    onBack,
+    onRename,
+    onRemoveTarget,
+    onAddTarget,
+}: {
+    project: ProjectOption & { implicit: false };
+    activeHostId: string;
+    hostNameById: Record<string, string>;
+    nameInputRef: React.RefObject<HTMLInputElement | null>;
+    onBack: () => void;
+    onRename: (name: string) => void;
+    onRemoveTarget: (hostId: string) => void;
+    onAddTarget: (path: string) => void;
+}) {
+    const [name, setName] = useState(project.name);
+    const [newPath, setNewPath] = useState("");
+    const [targetError, setTargetError] = useState<string | null>(null);
+    const bound = boundHostIds(project);
+    const activeBound = project.targets[activeHostId] !== undefined;
+
+    const submitRename = useCallback(() => {
+        const trimmed = name.trim();
+        if (trimmed && trimmed !== project.name) onRename(trimmed);
+    }, [name, onRename, project.name]);
+
+    const submitAddTarget = useCallback(() => {
+        const path = newPath.trim();
+        if (!path) return;
+        try {
+            onAddTarget(path);
+            setNewPath("");
+            setTargetError(null);
+        } catch (e) {
+            setTargetError(e instanceof Error ? e.message : String(e));
+        }
+    }, [newPath, onAddTarget]);
+
+    return (
+        <div className="w-full">
+            <div className="flex items-center gap-2 px-2 pb-1 pt-2">
+                <Button variant="icon" size="icon" onClick={() => { submitRename(); onBack(); }} aria-label="Back to projects" className="!size-7">
+                    <IconChevronLeft className="size-5 shrink-0" />
+                </Button>
+                <p className="min-w-0 flex-1 truncate text-[13px] text-phi-text-primary">
+                    Edit project
+                </p>
+            </div>
+
+            <div className="px-3 py-3">
+                <label
+                    htmlFor="edit-project-name"
+                    className="mb-1.5 block text-[13px] font-medium text-phi-text-primary"
+                >
+                    Name
+                </label>
+                <Input
+                    id="edit-project-name"
+                    ref={nameInputRef}
+                    value={name}
+                    onChange={(event) => setName(event.target.value)}
+                    onBlur={submitRename}
+                    onKeyDown={(event) => {
+                        if (event.key === "Enter") {
+                            event.preventDefault();
+                            submitRename();
+                            onBack();
+                        }
+                    }}
+                    placeholder="My project"
+                    aria-label="Project name"
+                    spellCheck={false}
+                    autoComplete="off"
+                    variant="default"
+                    className="w-full !border-0 !bg-phi-overlay-strong !px-3 !text-[13px] placeholder:!text-phi-text-tertiary focus-visible:ring-2 focus-visible:ring-phi-accent/40"
+                />
+
+                <span className="mb-1.5 mt-3 block text-[13px] font-medium text-phi-text-primary">
+                    Run targets
+                </span>
+                <div className="space-y-1">
+                    {bound.map((hostId) => (
+                        <div
+                            key={hostId}
+                            className="group flex w-full items-center gap-2 rounded-md bg-phi-overlay-strong px-2.5 py-1.5"
+                        >
+                            <TargetIcon hostId={hostId} className="size-3.5 shrink-0 text-phi-text-tertiary" />
+                            <span className="shrink-0 text-[12px] font-medium text-phi-text-secondary">
+                                {hostNameById[hostId] ?? hostId}
+                            </span>
+                            <span
+                                title={project.targets[hostId]}
+                                className="min-w-0 flex-1 truncate text-[11.5px] text-phi-text-muted"
+                            >
+                                {formatProjectPath(project.targets[hostId])}
+                            </span>
+                            <button
+                                type="button"
+                                onClick={() => onRemoveTarget(hostId)}
+                                title={bound.length === 1 ? "Remove this target (deletes the project)" : `Remove ${hostNameById[hostId] ?? hostId} target`}
+                                aria-label={bound.length === 1 ? "Remove this target (deletes the project)" : `Remove ${hostNameById[hostId] ?? hostId} target`}
+                                className="inline-flex size-6 shrink-0 items-center justify-center rounded-md text-phi-text-muted hover:bg-phi-overlay-hover hover:text-phi-error-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-phi-accent/40"
+                            >
+                                <IconTrashFilled className="size-3.5" />
+                            </button>
+                        </div>
+                    ))}
+                </div>
+                {!activeBound && (
+                    <div className="mt-2">
+                        <div className="flex gap-1.5">
+                            <Input
+                                value={newPath}
+                                onChange={(event) => setNewPath(event.target.value)}
+                                onKeyDown={(event) => {
+                                    if (event.key === "Enter") {
+                                        event.preventDefault();
+                                        submitAddTarget();
+                                    }
+                                }}
+                                placeholder={`Path on ${hostNameById[activeHostId] ?? activeHostId}…`}
+                                aria-label={`Workspace path on ${hostNameById[activeHostId] ?? activeHostId}`}
+                                spellCheck={false}
+                                autoComplete="off"
+                                variant="default"
+                                className="min-w-0 flex-1 !border-0 !bg-phi-overlay-strong !px-3 !text-[12px] placeholder:!text-phi-text-tertiary focus-visible:ring-2 focus-visible:ring-phi-accent/40"
+                            />
+                            <Button
+                                type="button"
+                                variant="primary"
+                                size="xs"
+                                onClick={submitAddTarget}
+                                disabled={!newPath.trim()}
+                                className="!rounded-md !text-[12.5px]"
+                            >
+                                Add
+                            </Button>
+                        </div>
+                        {activeHostId !== LOCAL_HOST_ID ? (
+                            <p className="mt-1.5 text-[11px] leading-4 text-phi-text-muted">
+                                Typed by hand — the folder picker only sees this machine.
+                            </p>
+                        ) : null}
+                        {targetError && (
+                            <p className="mt-1.5 text-[11px] leading-4 text-phi-error-text">{targetError}</p>
+                        )}
+                    </div>
+                )}
+            </div>
+
+            <div className="flex items-center justify-end gap-1.5 px-2 pb-2 pt-2">
+                <Button variant="ghost" size="xs" onClick={() => { submitRename(); onBack(); }} className="!text-[12.5px]">
+                    Done
+                </Button>
+            </div>
+        </div>
+    );
+}
+
 type PanelMode = "list" | "create" | "edit";
 
-type DirectoryPanelProps = Omit<DirectoryPickerProps, "disabled"> & {
+type DirectoryPanelProps = Omit<DirectoryPickerProps, "disabled" | "selectedProjectId"> & {
+    selectedProjectId: string | null;
     mode: PanelMode;
     onModeChange: (mode: PanelMode) => void;
     editingProject: ProjectOption | null;
@@ -195,13 +377,17 @@ type DirectoryPanelProps = Omit<DirectoryPickerProps, "disabled"> & {
 };
 
 function DirectoryPanel({
-    cwd,
+    selectedProjectId,
     projects,
+    activeHostId,
+    hostNameById,
     homeCwd,
-    onChange,
+    onSelectProject,
     onCreateProject,
-    onUpdateProject,
+    onRenameProject,
     onRemoveProject,
+    onSetTarget,
+    onRemoveTarget,
     mode,
     onModeChange,
     editingProject,
@@ -233,56 +419,118 @@ function DirectoryPanel({
         else nameInputRef.current?.focus();
     }, [mode]);
 
-    const filteredProjects = useMemo(() => {
-        const term = query.trim().toLowerCase();
-        if (!term) return projects;
-        return projects.filter(
-            (project) =>
-                project.name.toLowerCase().includes(term) ||
-                project.path.toLowerCase().includes(term) ||
-                formatProjectPath(project.path).toLowerCase().includes(term),
+    const matchQuery = useCallback((project: ProjectOption, term: string): boolean => {
+        if (!term) return true;
+        if (project.name.toLowerCase().includes(term)) return true;
+        const paths = project.implicit ? [project.path] : Object.values(project.targets);
+        return paths.some(
+            (p) => p.toLowerCase().includes(term) || formatProjectPath(p).toLowerCase().includes(term),
         );
-    }, [projects, query]);
+    }, []);
+
+    const { hereProjects, elsewhereProjects } = useMemo(() => {
+        const term = query.trim().toLowerCase();
+        const here: ProjectOption[] = [];
+        const elsewhere: ProjectOption[] = [];
+        for (const project of projects) {
+            if (!matchQuery(project, term)) continue;
+            if (project.implicit) {
+                // Implicit entries belong to one host. Only the active host's
+                // are listed; the rest stay reachable via search-all (Cmd+K).
+                if (project.hostId === activeHostId) here.push(project);
+                continue;
+            }
+            if (project.targets[activeHostId] !== undefined) here.push(project);
+            else elsewhere.push(project);
+        }
+        return { hereProjects: here, elsewhereProjects: elsewhere };
+    }, [activeHostId, matchQuery, projects, query]);
 
     const selectProject = useCallback(
-        (projectPath: string | null) => {
-            onChange(projectPath);
+        (id: string) => {
+            onSelectProject(id);
             close();
         },
-        [close, onChange],
+        [close, onSelectProject],
     );
 
     const handleCreate = useCallback(
         (input: NewProjectInput) => {
-            const project = onCreateProject(input);
-            selectProject(project.path);
+            const project = onCreateProject({ ...input, hostId: activeHostId });
+            selectProject(project.id);
         },
-        [onCreateProject, selectProject],
-    );
-
-    const handleFormSubmit = useCallback(
-        (input: NewProjectInput) => {
-            if (mode === "edit" && editingProject) {
-                onUpdateProject(editingProject.id, input);
-                onModeChange("list");
-                return;
-            }
-            handleCreate(input);
-        },
-        [editingProject, handleCreate, mode, onModeChange, onUpdateProject],
+        [activeHostId, onCreateProject, selectProject],
     );
 
     const handleSearchKeyDown = useCallback(
         (event: React.KeyboardEvent<HTMLInputElement>) => {
             if (event.key === "Enter") {
                 event.preventDefault();
-                if (filteredProjects.length > 0) {
-                    selectProject(filteredProjects[0].path);
-                }
+                const first = hereProjects[0] ?? elsewhereProjects[0];
+                if (first) selectProject(first.id);
             }
         },
-        [filteredProjects, selectProject],
+        [elsewhereProjects, hereProjects, selectProject],
     );
+
+    const activeHostName = hostNameById[activeHostId] ?? activeHostId;
+    const remote = activeHostId !== LOCAL_HOST_ID;
+
+    const renderRow = (project: ProjectOption) => {
+        const selected = project.id === selectedProjectId;
+        const detail = project.implicit
+            ? formatProjectPath(project.path)
+            : Object.keys(project.targets)
+                .map((id) => hostNameById[id] ?? id)
+                .join(", ");
+        return (
+            <div
+                key={project.id}
+                className="group flex w-full items-center gap-1 rounded-lg pr-1 hover:bg-phi-overlay-strong focus-within:bg-phi-overlay-strong"
+            >
+                <button
+                    type="button"
+                    onClick={() => selectProject(project.id)}
+                    title={project.implicit ? `${project.name} — ${formatProjectPath(project.path)}` : `${project.name} — runs on ${detail}`}
+                    className="flex min-w-0 flex-1 items-center gap-3 rounded-lg py-2 pl-3 pr-2 text-left text-[13px] text-phi-text-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-phi-accent/40"
+                >
+                    {selected ? (
+                        <IconCheckFilled className="size-4 shrink-0 text-phi-text-secondary" />
+                    ) : (
+                        <span aria-hidden="true" className="size-4 shrink-0" />
+                    )}
+                    <span className="min-w-0 flex-1 truncate font-medium">
+                        {project.name}
+                        <span className="ml-1.5 truncate text-[11px] font-normal text-phi-text-faint">
+                            {detail}
+                        </span>
+                    </span>
+                </button>
+                {!project.implicit && (
+                    <button
+                        type="button"
+                        onClick={() => onEditProject(project)}
+                        title={`Edit ${project.name}`}
+                        aria-label={`Edit ${project.name}`}
+                        className="inline-flex size-6 shrink-0 items-center justify-center rounded-md text-phi-text-muted opacity-0 hover:bg-phi-overlay-hover hover:text-phi-text-primary focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-phi-accent/40 group-hover:opacity-100"
+                    >
+                        <IconPencilFilled className="size-3.5" />
+                    </button>
+                )}
+                {onRemoveProject && !project.implicit && (
+                    <button
+                        type="button"
+                        onClick={() => onRemoveProject(project.id)}
+                        title={`Remove ${project.name}`}
+                        aria-label={`Remove ${project.name}`}
+                        className="mr-1 inline-flex size-6 shrink-0 items-center justify-center rounded-md text-phi-text-muted opacity-0 hover:bg-phi-overlay-hover hover:text-phi-error-text focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-phi-accent/40 group-hover:opacity-100"
+                    >
+                        <IconTrashFilled className="size-3.5" />
+                    </button>
+                )}
+            </div>
+        );
+    };
 
     const listActive = mode === "list";
     return (
@@ -321,55 +569,7 @@ function DirectoryPanel({
             </div>
 
             <div className="max-h-56 overflow-y-auto px-1.5 pt-1.5">
-                {filteredProjects.length > 0 ? (
-                    filteredProjects.map((project) => {
-                        const selected = project.path === cwd;
-                        return (
-                            <div
-                                key={project.id}
-                                className="group flex w-full items-center gap-1 rounded-lg pr-1 hover:bg-phi-overlay-strong focus-within:bg-phi-overlay-strong"
-                            >
-                                <button
-                                    type="button"
-                                    onClick={() => selectProject(project.path)}
-                                    title={`${project.name} — ${formatProjectPath(project.path)}`}
-                                    className="flex min-w-0 flex-1 items-center gap-3 rounded-lg py-2 pl-3 pr-2 text-left text-[13px] text-phi-text-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-phi-accent/40"
-                                >
-                                    {selected ? (
-                                        <IconCheckFilled className="size-4 shrink-0 text-phi-text-secondary" />
-                                    ) : (
-                                        <span aria-hidden="true" className="size-4 shrink-0" />
-                                    )}
-                                    <span className="min-w-0 flex-1 truncate font-medium">
-                                        {project.name}
-                                    </span>
-                                </button>
-                                {!project.implicit && (
-                                    <button
-                                        type="button"
-                                        onClick={() => onEditProject(project)}
-                                        title={`Edit ${project.name}`}
-                                        aria-label={`Edit ${project.name}`}
-                                        className="inline-flex size-6 shrink-0 items-center justify-center rounded-md text-phi-text-muted opacity-0 hover:bg-phi-overlay-hover hover:text-phi-text-primary focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-phi-accent/40 group-hover:opacity-100"
-                                    >
-                                        <IconPencilFilled className="size-3.5" />
-                                    </button>
-                                )}
-                                {onRemoveProject && !project.implicit && (
-                                    <button
-                                        type="button"
-                                        onClick={() => onRemoveProject(project.id)}
-                                        title={`Remove ${project.name}`}
-                                        aria-label={`Remove ${project.name}`}
-                                        className="mr-1 inline-flex size-6 shrink-0 items-center justify-center rounded-md text-phi-text-muted opacity-0 hover:bg-phi-overlay-hover hover:text-phi-error-text focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-phi-accent/40 group-hover:opacity-100"
-                                    >
-                                        <IconTrashFilled className="size-3.5" />
-                                    </button>
-                                )}
-                            </div>
-                        );
-                    })
-                ) : (
+                {hereProjects.length === 0 && elsewhereProjects.length === 0 ? (
                     <div className="px-2.5 py-6 text-center">
                         <p className="text-[12.5px] font-medium text-phi-text-secondary">
                             {projects.length ? "No matching projects" : "No projects yet"}
@@ -380,6 +580,25 @@ function DirectoryPanel({
                             </p>
                         )}
                     </div>
+                ) : (
+                    <>
+                        {hereProjects.length > 0 && (
+                            <>
+                                <p className="px-2.5 pb-1 pt-1 text-[11px] font-medium text-phi-text-faint">
+                                    On {activeHostName}
+                                </p>
+                                {hereProjects.map(renderRow)}
+                            </>
+                        )}
+                        {elsewhereProjects.length > 0 && (
+                            <>
+                                <p className="px-2.5 pb-1 pt-2 text-[11px] font-medium text-phi-text-faint">
+                                    Other run targets
+                                </p>
+                                {elsewhereProjects.map(renderRow)}
+                            </>
+                        )}
+                    </>
                 )}
             </div>
 
@@ -402,36 +621,55 @@ function DirectoryPanel({
                 aria-hidden={listActive}
                 className={`w-full transition-opacity duration-150 motion-reduce:transition-none ${listActive ? "pointer-events-none absolute inset-x-0 top-0 opacity-0" : "relative opacity-100"}`}
             >
-                <ProjectForm
-                    key={mode === "edit" ? (editingProject?.id ?? "edit") : "create"}
-                    homeCwd={homeCwd}
-                    nameInputRef={nameInputRef}
-                    title={mode === "edit" ? "Edit project" : "New project"}
-                    submitLabel={mode === "edit" ? "Save changes" : "Create project"}
-                    initialName={mode === "edit" ? (editingProject?.name ?? "") : ""}
-                    initialPath={mode === "edit" ? (editingProject?.path ?? "") : ""}
-                    onBack={() => onModeChange("list")}
-                    onSubmit={handleFormSubmit}
-                />
+                {mode === "edit" && editingProject && !editingProject.implicit ? (
+                    <EditProjectForm
+                        key={editingProject.id}
+                        project={editingProject}
+                        activeHostId={activeHostId}
+                        hostNameById={hostNameById}
+                        nameInputRef={nameInputRef}
+                        onBack={() => onModeChange("list")}
+                        onRename={(name) => onRenameProject(editingProject.id, name)}
+                        onRemoveTarget={(hostId) => onRemoveTarget(editingProject.id, hostId)}
+                        onAddTarget={(path) => onSetTarget(editingProject.id, activeHostId, path)}
+                    />
+                ) : (
+                    <ProjectForm
+                        key="create"
+                        homeCwd={homeCwd}
+                        remote={remote}
+                        remoteHostName={activeHostName}
+                        nameInputRef={nameInputRef}
+                        title={`New project on ${activeHostName}`}
+                        submitLabel="Create project"
+                        onBack={() => onModeChange("list")}
+                        onSubmit={handleCreate}
+                    />
+                )}
             </div>
         </div>
     );
 }
 
 export function DirectoryPicker({
-    cwd,
+    selectedProjectId,
     projects,
-    onChange,
+    activeHostId,
+    hostNameById,
+    onSelectProject,
     onCreateProject,
-    onUpdateProject,
+    onRenameProject,
     onRemoveProject,
+    onSetTarget,
+    onRemoveTarget,
     homeCwd,
     disabled,
 }: DirectoryPickerProps) {
     const [mode, setMode] = useState<PanelMode>("list");
     const [editingId, setEditingId] = useState<string | null>(null);
     const editingProject = editingId ? (projects.find((p) => p.id === editingId) ?? null) : null;
-    const active = cwd ? projects.find((p) => p.path === cwd) : undefined;
+    const selected = selectedProjectId ? (projects.find((p) => p.id === selectedProjectId) ?? null) : null;
+    const label = selected?.name ?? "Select project";
 
     const handleModeChange = useCallback((next: PanelMode) => {
         if (next === "list") setEditingId(null);
@@ -439,10 +677,10 @@ export function DirectoryPicker({
     }, []);
 
     const handleEditProject = useCallback((project: ProjectOption) => {
+        if (project.implicit) return;
         setEditingId(project.id);
         setMode("edit");
     }, []);
-    const label = active?.name ?? (cwd ? formatCwd(cwd) : "Select project");
 
     return (
         <Popover className="relative min-w-0">
@@ -450,7 +688,7 @@ export function DirectoryPicker({
                 disabled={disabled}
                 data-project-picker-trigger
                 className="group inline-flex max-w-full min-w-0 items-center gap-1.5 rounded-md px-1.5 py-1 text-left text-phi-text-secondary transition-colors hover:bg-phi-overlay-hover hover:text-phi-text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-phi-accent/40 disabled:pointer-events-none disabled:opacity-60"
-                aria-label={`Change project${active ? `, currently ${active.name}` : cwd ? `, currently ${cwd}` : ", no project selected"}`}
+                aria-label={`Change project${selected ? `, currently ${selected.name}` : ", no project selected"}`}
             >
                 <IconFolderFilled className="size-4 shrink-0 text-phi-text-secondary" />
                 <span className="min-w-0 truncate text-[12.5px] font-medium">
@@ -463,13 +701,17 @@ export function DirectoryPicker({
                 className="w-max max-w-[min(360px,calc(100vw-32px))] overflow-hidden p-0"
             >
                 <DirectoryPanel
-                    cwd={cwd}
+                    selectedProjectId={selectedProjectId}
                     projects={projects}
+                    activeHostId={activeHostId}
+                    hostNameById={hostNameById}
                     homeCwd={homeCwd}
-                    onChange={onChange}
+                    onSelectProject={onSelectProject}
                     onCreateProject={onCreateProject}
-                    onUpdateProject={onUpdateProject}
+                    onRenameProject={onRenameProject}
                     onRemoveProject={onRemoveProject}
+                    onSetTarget={onSetTarget}
+                    onRemoveTarget={onRemoveTarget}
                     mode={mode}
                     onModeChange={handleModeChange}
                     editingProject={editingProject}

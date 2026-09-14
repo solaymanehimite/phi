@@ -18,17 +18,21 @@ export function useSessionStats(
   file: string | null,
   revision: number,
   isStreaming: boolean,
+  hostId?: string,
 ) {
   const [stats, setStats] = useState<SessionStatsResponse | null>(null);
   const [loading, setLoading] = useState(false);
   const fileRef = useRef(file);
   fileRef.current = file;
 
+  const hostRef = useRef(hostId);
+  hostRef.current = hostId;
+
   const refresh = useCallback(async () => {
     const current = fileRef.current;
     if (!current) return;
     try {
-      const data = await getSessionStats(current);
+      const data = await getSessionStats(current, hostRef.current);
       if (fileRef.current === current) setStats(data);
     } catch {
       // Indicator stays on its last reading when a refresh fails.
@@ -43,7 +47,7 @@ export function useSessionStats(
     }
     let cancelled = false;
     setLoading(true);
-    getSessionStats(file)
+    getSessionStats(file, hostId)
       .then((data) => {
         if (!cancelled) setStats(data);
       })
@@ -56,8 +60,7 @@ export function useSessionStats(
     return () => {
       cancelled = true;
     };
-  }, [file, revision]);
-
+  }, [file, revision, hostId]);
   useEffect(() => {
     if (!file || !isStreaming) return;
     const timer = window.setInterval(() => {

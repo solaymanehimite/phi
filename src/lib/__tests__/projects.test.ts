@@ -1,21 +1,30 @@
 // Characterization tests: project normalization and grouping.
 // Covers current behavior in `src/lib/projects.ts` — tilde expansion,
-// trailing slashes, empty input, duplicate paths.
+// trailing slashes, empty input, target bindings, implicit entries.
 
 import { describe, expect, test } from "bun:test";
 import {
     basenameOfPath,
+    boundHostIds,
     implicitProjectName,
     normalizeProjectPath,
+    projectPathFor,
     resolveProjectOptions,
+    sanitizeProjects,
     sessionsForProject,
     type Project,
+    type ProjectOption,
 } from "../projects";
 
 const HOME = "/home/tester";
 
-function project(id: string, path: string, name?: string): Project {
-    return { id, name: name ?? path, path, createdAt: 1 };
+function project(id: string, targets: Record<string, string>, name?: string): Project {
+    const first = Object.values(targets)[0] ?? id;
+    return { id, name: name ?? first, targets, createdAt: 1 };
+}
+
+function session(cwd: string, hostId: string, modified: string) {
+    return { cwd, hostId, modified } as Parameters<typeof sessionsForProject>[0][number];
 }
 
 describe("normalizeProjectPath", () => {
@@ -42,31 +51,51 @@ describe("normalizeProjectPath", () => {
     });
 });
 
+describe("sanitizeProjects", () => {
+    test("migrates legacy single-path projects to a local binding", () => {
+        const out = sanitizeProjects([{ id: "a", name: "A", path: "/repo/a", createdAt: 1 }]);
+        expect(out).toHaveLength(1);
+        expect(out[0].targets).toEqual({ local: "/repo/a" });
+    });
+});
+
 describe("resolveProjectOptions", () => {
     test("explicit projects keep stored order first, implicit follow in recency order", () => {
         const out = resolveProjectOptions(
-            [project("a", "/repo/a"), project("b", "/repo/b")],
-            ["/repo/c", "/repo/a"],
+            [project("a", { local: "/repo/a" }), project("b", { local: "/repo/b" })],
+            [
+                { hostId: "local", cwd: "/repo/c" },
+                { hostId: "local", cwd: "/repo/a" },
+            ],
             HOME,
         );
-        expect(out.map((o) => o.path)).toEqual(["/repo/a", "/repo/b", "/repo/c"]);
+        expect(out.map((o) => (o.implicit ? o.path : Object.values(o.targets)[0]))).toEqual([
+            "/repo/a",
+            "/repo/b",
+            "/repo/c",
+        ]);
         expect(out[2].implicit).toBe(true);
         expect(out[0].implicit).toBe(false);
     });
 
-    test("duplicate explicit paths collapse to the first entry", () => {
+    test("the same path on two hosts yields two implicit entries", () => {
         const out = resolveProjectOptions(
-            [project("a", "/repo/a", "first"), project("a2", "/repo/a", "second")],
             [],
+            [
+                { hostId: "local", cwd: "/repo/a" },
+                { hostId: "vps", cwd: "/repo/a" },
+            ],
             HOME,
         );
-        expect(out).toHaveLength(1);
-        expect(out[0].name).toBe("first");
+        expect(out).toHaveLength(2);
+        expect(out.every((o) => o.implicit)).toBe(true);
     });
 
     test("non-absolute cwds are skipped", () => {
-        const out = resolveProjectOptions([], ["(unknown)", "/repo/a"], HOME);
-        expect(out.map((o) => o.path)).toEqual(["/repo/a"]);
+        const out = resolveProjectOptions([], [{ hostId: "local", cwd: "(unknown)" }, { hostId: "local", cwd: "/repo/a" }], HOME);
+        expect(out).toHaveLength(1);
+        const only = out[0];
+        expect(only.implicit && only.path).toBe("/repo/a");
     });
 
     test("home cwd renders as ~", () => {
@@ -76,15 +105,40 @@ describe("resolveProjectOptions", () => {
     });
 });
 
+describe("projectPathFor / boundHostIds", () => {
+    const opt: ProjectOption = { id: "a", name: "A", implicit: false, targets: { local: "/repo/a", vps: "/srv/a" } };
+    test("resolves the bound path per host", () => {
+        expect(projectPathFor(opt, "local")).toBe("/repo/a");
+        expect(projectPathFor(opt, "vps")).toBe("/srv/a");
+        expect(projectPathFor(opt, "elsewhere")).toBeNull();
+    });
+
+    test("lists bound hosts", () => {
+        expect(boundHostIds(opt).sort()).toEqual(["local", "vps"]);
+    });
+});
+
 describe("sessionsForProject", () => {
-    test("filters by exact cwd match, newest first", () => {
+    test("explicit projects match any binding, newest first", () => {
         const sessions = [
-            { cwd: "/repo/a", modified: "2024-01-01T00:00:00Z" },
-            { cwd: "/repo/a", modified: "2024-02-01T00:00:00Z" },
-            { cwd: "/repo/b", modified: "2024-03-01T00:00:00Z" },
-        ] as Parameters<typeof sessionsForProject>[0];
-        const out = sessionsForProject(sessions, "/repo/a");
+            session("/repo/a", "local", "2024-01-01T00:00:00Z"),
+            session("/srv/a", "vps", "2024-02-01T00:00:00Z"),
+            session("/repo/b", "local", "2024-03-01T00:00:00Z"),
+        ];
+        const opt: ProjectOption = { id: "a", name: "A", implicit: false, targets: { local: "/repo/a", vps: "/srv/a" } };
+        const out = sessionsForProject(sessions, opt);
         expect(out).toHaveLength(2);
         expect(out[0].modified).toBe("2024-02-01T00:00:00Z");
+    });
+
+    test("implicit options match a single host and directory", () => {
+        const sessions = [
+            session("/repo/a", "local", "2024-01-01T00:00:00Z"),
+            session("/repo/a", "vps", "2024-02-01T00:00:00Z"),
+        ];
+        const opt: ProjectOption = { id: "implicit:vps:/repo/a", name: "a", implicit: true, hostId: "vps", path: "/repo/a" };
+        const out = sessionsForProject(sessions, opt);
+        expect(out).toHaveLength(1);
+        expect(out[0].hostId).toBe("vps");
     });
 });

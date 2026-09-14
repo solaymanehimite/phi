@@ -1,6 +1,17 @@
 import type { ModelInfo, SessionInfo, SessionMessagesResponse, ThinkingLevel } from "../types/session";
 import type { SseEvent } from "../types/sse";
-import { LOCAL_HOST_ID, getStoredActiveHost } from "../hooks/useHosts";
+import { LOCAL_HOST, LOCAL_HOST_ID, getStoredActiveHost, getStoredHosts, type Host } from "../hooks/useHosts";
+
+/**
+ * Resolve a host id to its Host record. Empty ids mean the active host;
+ * unknown ids fall back to the active host so a deleted host degrades
+ * instead of failing every call.
+ */
+export function resolveHost(hostId?: string | null): Host {
+  if (!hostId) return getStoredActiveHost();
+  if (hostId === LOCAL_HOST_ID) return LOCAL_HOST;
+  return getStoredHosts().find((h) => h.id === hostId) ?? getStoredActiveHost();
+}
 
 // --- Sidecar discovery ---
 // Packaged app: Electron main picks a free port at launch, renderer learns it
@@ -13,9 +24,8 @@ export async function getApiBase(): Promise<string> {
   return getBase();
 }
 
-/** Bearer token for the active host, or null for the local host / no token. */
-async function getAuthToken(): Promise<string | null> {
-  const host = getStoredActiveHost();
+/** Bearer token for the given host (default: active), or null for local / no token. */
+async function getAuthToken(host: Host = getStoredActiveHost()): Promise<string | null> {
   if (host.id === LOCAL_HOST_ID) return null;
   return host.token ? host.token : null;
 }
@@ -30,8 +40,7 @@ function unauthorizedMessage(res: Response, data: unknown): string | null {
   return "unauthorized — check host token";
 }
 
-async function getBase(): Promise<string> {
-  const host = getStoredActiveHost();
+async function getBase(host: Host = getStoredActiveHost()): Promise<string> {
   if (host.id !== LOCAL_HOST_ID) {
     return `${host.url.replace(/\/+$/, "")}/api`;
   }
@@ -51,9 +60,10 @@ async function getBase(): Promise<string> {
   return "/api";
 }
 
-async function apiFetch(path: string, init?: RequestInit): Promise<Response> {
-  const base = await getBase();
-  const token = await getAuthToken();
+async function apiFetch(path: string, init?: RequestInit, hostId?: string): Promise<Response> {
+  const host = resolveHost(hostId);
+  const base = await getBase(host);
+  const token = await getAuthToken(host);
   const headers = new Headers(init?.headers);
   if (token && !headers.has("Authorization")) headers.set("Authorization", `Bearer ${token}`);
   return fetch(`${base}${path}`, { ...init, headers });
@@ -70,59 +80,59 @@ async function jsonOrThrow(res: Response) {
   return data;
 }
 
-export async function health(): Promise<{ ok: boolean; port: number; agentDir: string; cwd: string; home: string }> {
-  const res = await apiFetch(`/health`);
+export async function health(hostId?: string): Promise<{ ok: boolean; port: number; agentDir: string; cwd: string; home: string }> {
+  const res = await apiFetch(`/health`, undefined, hostId);
   return jsonOrThrow(res);
 }
 
-export async function listSessions(opts: { cwd?: string; all?: boolean } = {}): Promise<SessionInfo[]> {
+export async function listSessions(opts: { cwd?: string; all?: boolean; hostId?: string } = {}): Promise<SessionInfo[]> {
   const params = new URLSearchParams();
   if (opts.cwd) params.set("cwd", opts.cwd);
   if (opts.all) params.set("all", "1");
   const qs = params.toString();
   const path = qs ? `/sessions?${qs}` : `/sessions`;
-  const res = await apiFetch(path);
+  const res = await apiFetch(path, undefined, opts.hostId);
   return jsonOrThrow(res);
 }
 
-export async function getMessages(file: string): Promise<SessionMessagesResponse> {
+export async function getMessages(file: string, hostId?: string): Promise<SessionMessagesResponse> {
   const path = `/sessions/messages?file=${encodeURIComponent(file)}`;
-  const res = await apiFetch(path);
+  const res = await apiFetch(path, undefined, hostId);
   return jsonOrThrow(res);
 }
 
-export async function createSession(cwd?: string): Promise<{ ok: boolean; file: string; cwd: string }> {
+export async function createSession(cwd?: string, hostId?: string): Promise<{ ok: boolean; file: string; cwd: string }> {
   const res = await apiFetch(`/sessions/new`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ cwd }),
-  });
+  }, hostId);
   return jsonOrThrow(res);
 }
 
 export type SwitchSessionResponse = { ok: boolean; file: string } & Partial<SessionMessagesResponse>;
-export async function switchSession(file: string, cwd?: string): Promise<SwitchSessionResponse> {
+export async function switchSession(file: string, cwd?: string, hostId?: string): Promise<SwitchSessionResponse> {
   const res = await apiFetch(`/sessions/switch`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ file, cwd }),
-  });
+  }, hostId);
   return jsonOrThrow(res);
 }
 
-export async function renameSession(file: string, name: string): Promise<{ ok: boolean; name: string }> {
+export async function renameSession(file: string, name: string, hostId?: string): Promise<{ ok: boolean; name: string }> {
   const res = await apiFetch(`/sessions/rename`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ file, name }),
-  });
+  }, hostId);
   return jsonOrThrow(res);
 }
 
-export async function deleteSession(file: string): Promise<{ ok: boolean }> {
+export async function deleteSession(file: string, hostId?: string): Promise<{ ok: boolean }> {
   const res = await apiFetch(`/sessions?file=${encodeURIComponent(file)}`, {
     method: "DELETE",
-  });
+  }, hostId);
   return jsonOrThrow(res);
 }
 
@@ -136,9 +146,9 @@ export type ModelsResponse = {
   defaultThinkingLevel?: string | null;
 };
 
-export async function getModels(cwd?: string): Promise<ModelsResponse> {
+export async function getModels(cwd?: string, hostId?: string): Promise<ModelsResponse> {
   const qs = cwd ? `?cwd=${encodeURIComponent(cwd)}` : "";
-  const res = await apiFetch(`/models${qs}`);
+  const res = await apiFetch(`/models${qs}`, undefined, hostId);
   return jsonOrThrow(res);
 }
 
@@ -147,21 +157,23 @@ export async function setModel(opts: {
   provider: string;
   modelId: string;
   thinkingLevel?: ThinkingLevel;
+  hostId?: string;
 }): Promise<{ ok: boolean; model?: ModelInfo; thinkingLevel?: string }> {
+  const { hostId, ...body } = opts;
   const res = await apiFetch(`/model`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(opts),
-  });
+    body: JSON.stringify(body),
+  }, hostId);
   return jsonOrThrow(res);
 }
 
-export async function setThinkingLevel(sessionFile: string, thinkingLevel: ThinkingLevel): Promise<{ ok: boolean; thinkingLevel: string }> {
+export async function setThinkingLevel(sessionFile: string, thinkingLevel: ThinkingLevel, hostId?: string): Promise<{ ok: boolean; thinkingLevel: string }> {
   const res = await apiFetch(`/model`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ sessionFile, thinkingLevel }),
-  });
+  }, hostId);
   return jsonOrThrow(res);
 }
 
@@ -176,11 +188,13 @@ export async function postSse(
   body: unknown,
   onEvent: (ev: SseEvent) => void,
   signal?: AbortSignal,
+  hostId?: string,
 ): Promise<void> {
-  const base = await getBase();
+  const host = resolveHost(hostId);
+  const base = await getBase(host);
   const res = await fetch(`${base}${path}`, {
     method: "POST",
-    headers: { "Content-Type": "application/json", ...authHeaders(await getAuthToken()) },
+    headers: { "Content-Type": "application/json", ...authHeaders(await getAuthToken(host)) },
     body: JSON.stringify(body),
     signal,
   });
@@ -231,19 +245,20 @@ export async function postSse(
 }
 
 export async function streamCompact(
-  opts: { sessionFile: string; customInstructions?: string; cwd?: string },
+  opts: { sessionFile: string; customInstructions?: string; cwd?: string; hostId?: string },
   onEvent: (ev: SseEvent) => void,
   signal?: AbortSignal,
 ): Promise<void> {
-  return postSse(`/compact`, opts, onEvent, signal);
+  const { hostId, ...body } = opts;
+  return postSse(`/compact`, body, onEvent, signal, hostId);
 }
 
-export async function abortCompaction(sessionFile: string, cwd?: string): Promise<{ ok: boolean; active: boolean }> {
+export async function abortCompaction(sessionFile: string, cwd?: string, hostId?: string): Promise<{ ok: boolean; active: boolean }> {
   const res = await apiFetch(`/compact/abort`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ sessionFile, cwd }),
-  });
+  }, hostId);
   return jsonOrThrow(res);
 }
 
@@ -258,21 +273,21 @@ export type NavResult = {
   };
 } & Partial<SessionMessagesResponse>;
 
-export async function undoTurn(sessionFile: string, cwd?: string): Promise<NavResult> {
+export async function undoTurn(sessionFile: string, cwd?: string, hostId?: string): Promise<NavResult> {
   const res = await apiFetch(`/undo`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ sessionFile, cwd }),
-  });
+  }, hostId);
   return jsonOrThrow(res);
 }
 
-export async function redoTurn(sessionFile: string, cwd?: string): Promise<NavResult> {
+export async function redoTurn(sessionFile: string, cwd?: string, hostId?: string): Promise<NavResult> {
   const res = await apiFetch(`/redo`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ sessionFile, cwd }),
-  });
+  }, hostId);
   return jsonOrThrow(res);
 }
 
@@ -305,26 +320,27 @@ export type SessionStatsResponse = {
   };
 };
 
-export async function getSessionStats(file: string): Promise<SessionStatsResponse> {
-  const res = await apiFetch(`/session/stats?file=${encodeURIComponent(file)}`);
+export async function getSessionStats(file: string, hostId?: string): Promise<SessionStatsResponse> {
+  const res = await apiFetch(`/session/stats?file=${encodeURIComponent(file)}`, undefined, hostId);
   return jsonOrThrow(res);
 }
 
-export async function abortPrompt(sessionFile: string): Promise<{ ok: boolean; active: boolean }> {
+export async function abortPrompt(sessionFile: string, hostId?: string): Promise<{ ok: boolean; active: boolean }> {
   const res = await apiFetch(`/abort`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ sessionFile }),
-  });
+  }, hostId);
   return jsonOrThrow(res);
 }
 
 export async function streamContinue(
-  body: { sessionFile: string; cwd?: string },
+  body: { sessionFile: string; cwd?: string; hostId?: string },
   onEvent: (ev: SseEvent) => void,
   signal?: AbortSignal,
 ): Promise<void> {
-  return postSse(`/continue`, body, onEvent, signal);
+  const { hostId, ...payload } = body;
+  return postSse(`/continue`, payload, onEvent, signal, hostId);
 }
 
 export type ProviderRow = { id: string; label: string; baseUrl: string; hasKey: boolean; maskedKey: string };
@@ -417,18 +433,18 @@ export type SkillRow = {
   baseDir: string | null;
 };
 
-export async function listSkills(cwd?: string): Promise<{ skills: SkillRow[] }> {
+export async function listSkills(cwd?: string, hostId?: string): Promise<{ skills: SkillRow[] }> {
   const qs = cwd ? `?cwd=${encodeURIComponent(cwd)}` : "";
-  const res = await apiFetch(`/skills${qs}`);
+  const res = await apiFetch(`/skills${qs}`, undefined, hostId);
   return jsonOrThrow(res);
 }
 
-export async function toggleSkill(path: string, enabled: boolean, cwd?: string): Promise<{ ok: boolean; enabled: boolean }> {
+export async function toggleSkill(path: string, enabled: boolean, cwd?: string, hostId?: string): Promise<{ ok: boolean; enabled: boolean }> {
   const res = await apiFetch(`/skills/toggle`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ path, enabled, cwd }),
-  });
+  }, hostId);
   return jsonOrThrow(res);
 }
 
@@ -446,17 +462,17 @@ export type CommandsResponse = {
   prompts: Array<{ name: string; description?: string; argumentHint?: string; filePath?: string }>;
 };
 
-export async function getCommands(cwd?: string): Promise<CommandsResponse> {
+export async function getCommands(cwd?: string, hostId?: string): Promise<CommandsResponse> {
   const qs = cwd ? `?cwd=${encodeURIComponent(cwd)}` : "";
-  const res = await apiFetch(`/commands${qs}`);
+  const res = await apiFetch(`/commands${qs}`, undefined, hostId);
   return jsonOrThrow(res);
 }
 
 export type ProjectFile = { path: string; name: string; isDirectory: boolean };
 export type FilesResponse = { files: ProjectFile[] };
-export async function listFiles(cwd?: string): Promise<ProjectFile[]> {
+export async function listFiles(cwd?: string, hostId?: string): Promise<ProjectFile[]> {
   const qs = cwd ? `?cwd=${encodeURIComponent(cwd)}` : "";
-  const res = await apiFetch(`/files${qs}`);
+  const res = await apiFetch(`/files${qs}`, undefined, hostId);
   const data = (await jsonOrThrow(res)) as FilesResponse;
   return data.files ?? [];
 }
