@@ -11,6 +11,7 @@ import {
     IconSettingsFilled,
     IconTrashFilled,
 } from "@tabler/icons-react";
+import { Orb } from "@aicss/react";
 import { memo, useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { Button } from "./ui/button";
 import { HostPicker } from "./host-picker";
@@ -24,7 +25,6 @@ import {
     DropdownMenuTrigger,
 } from "./ui/dropdown-menu";
 import { GroupCollapsibleTrigger } from "./ui/collapsible";
-import { RunningOrb } from "./running-orb";
 import { NavItem } from "./ui/nav-item";
 import { formatProjectPath, type ProjectGroup } from "../lib/projects";
 import type { SessionInfo } from "../types/session";
@@ -1003,6 +1003,14 @@ const SessionRow = memo(function SessionRow({
             onFocusCapture={onPrefetch}
             className={`session-row group relative flex h-8 w-full items-center gap-1 rounded-lg pl-7 pr-1 text-left text-[13px] ${active ? "bg-phi-overlay-active text-phi-text-primary" : "text-phi-text-tertiary hover:bg-phi-overlay-hover hover:text-phi-text-secondary"}`}
         >
+            {isStreaming && (
+                <span
+                    aria-hidden
+                    className={`pointer-events-none absolute left-1 top-1/2 grid size-6 -translate-y-1/2 place-items-center transition-none ${renaming ? "" : "group-hover:opacity-0 group-focus-within:opacity-0"}`}
+                >
+                    <Orb variant="S3" size={14} />
+                </span>
+            )}
             {!renaming && (
                 <button
                     type="button"
@@ -1020,7 +1028,6 @@ const SessionRow = memo(function SessionRow({
             )}
             {renaming ? (
                 <div className="flex min-w-0 flex-1 items-center truncate rounded-lg px-1.5 py-1 pr-8">
-                    <RunningOrb running={isStreaming} size={16} gap={10} />
                     <Input
                         autoFocus
                         value={draft}
@@ -1036,7 +1043,6 @@ const SessionRow = memo(function SessionRow({
                     onClick={onClick}
                     className="flex min-w-0 flex-1 items-center truncate rounded-lg px-1.5 py-1 pr-8 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-phi-accent/40"
                 >
-                    <RunningOrb running={isStreaming} size={16} gap={10} />
                     <MarqueeTitle title={title} />
                     {hasDraft && (
                         <IconSendFilled
