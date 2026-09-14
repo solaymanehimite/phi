@@ -10,7 +10,69 @@ import { Popover, PopoverContent, PopoverTrigger } from "./ui/popover";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
 import { LOCAL_HOST, LOCAL_HOST_ID, type Host } from "../hooks/useHosts";
-import { LocalHomeIcon, RemoteCloudIcon } from "./host-picker";
+
+// Local-host mark: Tabler's filled home with the door split into its own
+// path so it can slide open (pocket-door collapse into the left jamb) when
+// the picker row is hovered. Resting pixels match IconHomeFilled exactly.
+const HOME_BODY_D =
+    "M12.707 2.293l9 9c.63 .63 .184 1.707 -.707 1.707h-1v6a3 3 0 0 1 -3 3h-1v-7a3 3 0 0 0 -2.824 -2.995l-.176 -.005h-2a3 3 0 0 0 -3 3v7h-1a3 3 0 0 1 -3 -3v-6h-1c-.89 0 -1.337 -1.077 -.707 -1.707l9 -9a1 1 0 0 1 1.414 0";
+const HOME_DOOR_D = "M13 14a1 1 0 0 1 1 1v7h-4v-7a1 1 0 0 1 .883 -.993L11 14z";
+
+// Tabler's filled cloud path, reused for every drift layer.
+const CLOUD_D =
+    "M10.04 4.305c2.195 -.667 4.615 -.224 6.36 1.176c1.386 1.108 2.188 2.686 2.252 4.34l.003 .212l.091 .003c2.3 .107 4.143 1.961 4.25 4.27l.004 .211c0 2.407 -1.885 4.372 -4.255 4.482l-.21 .005h-11.878l-.222 -.008c-2.94 -.11 -5.317 -2.399 -5.43 -5.263l-.005 -.216c0 -2.747 2.08 -5.01 4.784 -5.417l.114 -.016l.07 -.181c.663 -1.62 2.056 -2.906 3.829 -3.518l.244 -.08z";
+
+export function LocalHomeIcon({ className = "size-4 shrink-0" }: { className?: string }) {
+    return (
+        <svg
+            aria-hidden
+            viewBox="0 0 24 24"
+            fill="currentColor"
+            stroke="none"
+            className={className}
+        >
+            <path d={HOME_BODY_D} />
+            <path
+                d={HOME_DOOR_D}
+                className="origin-left [transform-box:fill-box] transition-transform duration-300 ease-out group-hover:scale-x-0 motion-reduce:transition-none"
+            />
+        </svg>
+    );
+}
+
+export function RemoteCloudIcon({ className = "size-4 shrink-0" }: { className?: string }) {
+    return (
+        <svg
+            aria-hidden
+            viewBox="0 0 24 24"
+            fill="currentColor"
+            stroke="none"
+            className={`overflow-hidden ${className}`}
+        >
+            <g className="phi-cloud-main">
+                <path d={CLOUD_D} />
+            </g>
+            <g className="phi-cloud-puff1 text-phi-text-muted">
+                <g transform="translate(12 14.5) scale(0.5) translate(-12 -12)">
+                    <path d={CLOUD_D} />
+                </g>
+            </g>
+            <g className="phi-cloud-puff2 text-phi-text-muted">
+                <g transform="translate(12 10) scale(0.34) translate(-12 -12)">
+                    <path d={CLOUD_D} />
+                </g>
+            </g>
+            <g className="phi-cloud-puff3 text-phi-text-muted">
+                <g transform="translate(12 11) scale(0.65) translate(-12 -12)">
+                    <path d={CLOUD_D} />
+                </g>
+            </g>
+            <g className="phi-cloud-incoming">
+                <path d={CLOUD_D} />
+            </g>
+        </svg>
+    );
+}
 
 export function TargetIcon({ hostId, className = "size-3.5 shrink-0" }: { hostId?: string | null; className?: string }) {
     return hostId && hostId !== LOCAL_HOST_ID ? (

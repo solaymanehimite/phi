@@ -96,10 +96,11 @@ Plain HTTP + token stops casual snooping, nothing more. Pick one:
 
 ## 6. Connect from Phi
 
-1. Sidebar header, host picker, New host.
+1. Open Settings, Hosts tab, Add host.
 2. Name: whatever (e.g. "VPS"). URL: `http://vps:3001` (or `https://…`
    behind a proxy). Token: the `PHI_TOKEN` value.
-3. Select the host. Green dot means `/api/health` answered.
+3. New chats pick the host from the run-target picker next to the project
+   picker. Opening any session jumps execution to the target it lives on.
 
 ## 7. Projects across run targets
 

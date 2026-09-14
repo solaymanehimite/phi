@@ -14,7 +14,6 @@ import {
 import { Orb } from "@aicss/react";
 import { memo, useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { Button } from "./ui/button";
-import { HostPicker } from "./host-picker";
 import { Input } from "./ui/input";
 import { Alert } from "./ui/alert";
 import { EmptyState } from "./ui/empty-state";
@@ -165,11 +164,8 @@ export const Sidebar = memo(function Sidebar({
             <div
                 data-tauri-drag-region
                 className="mb-2 flex h-10 shrink-0 items-end pl-2 pr-[85px]"
-            >
-                <div className="flex min-w-0 w-full items-center">
-                    <HostPicker />
-                </div>
-            </div>
+                aria-hidden
+            />
 
             <div className="shrink-0 space-y-0.5 px-2 pt-2">
                 <Button className="w-full justify-start" onClick={onNewChat}>

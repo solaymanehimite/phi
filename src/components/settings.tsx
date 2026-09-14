@@ -15,7 +15,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "./ui/popover";
 import { Highlight, type PrismTheme } from "prism-react-renderer";
 import { CODE_THEMES, setCodeTheme, useCodeTheme, type CodeThemeId } from "./code-theme";
 import { ThemeEditorToggle } from "./dev/ThemeEditor";
-import { LocalHomeIcon, RemoteCloudIcon } from "./host-picker";
+import { LocalHomeIcon, RemoteCloudIcon } from "./target-picker";
 import { ProviderLogo } from "./provider-logo";
 import { Switch } from "./ui/switch";
 import { listProviders, deleteProvider, testProvider, listPiAuth, listSkills, toggleSkill, type ProviderRow, type PiAuthRow, type SkillRow } from "../lib/api";
