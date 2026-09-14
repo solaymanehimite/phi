@@ -1,10 +1,6 @@
-import { LOCAL_HOST, LOCAL_HOST_ID, getStoredHosts, type Host } from "../hooks/useHosts";
+import { LOCAL_HOST, LOCAL_HOST_ID } from "../hooks/useHosts";
+import type { Host } from "../hooks/useHosts";
 import type { SessionInfo } from "../types/session";
-
-/** Every host Phi can run on: the local sidecar first, then stored remotes. */
-export function allHosts(): Host[] {
-  return [LOCAL_HOST, ...getStoredHosts()];
-}
 
 /** Display name for a host id. Unknown ids fall back to the id itself. */
 export function hostName(hosts: Host[], hostId?: string | null): string {

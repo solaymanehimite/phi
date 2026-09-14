@@ -32,7 +32,6 @@ import { useSessions } from "./hooks/useSessions";
 import { useSessionFlags } from "./hooks/useSessionFlags";
 import { useProjects, type NewProjectInput } from "./hooks/useProjects";
 import { LOCAL_HOST_ID, useHosts } from "./hooks/useHosts";
-import { allHosts, hostOfSession } from "./lib/hosts";
 import { boundHostIds, resolveProjectOptions, sessionsForProject, type Project, type ProjectOption } from "./lib/projects";
 import { useChat } from "./hooks/useChat";
 import { useCompaction } from "./hooks/useCompaction";
@@ -232,9 +231,11 @@ export default function App() {
     const newChatHostIdRef = useRef<string>(newChatHostId);
     newChatHostIdRef.current = newChatHostId;
     // Sidebar + palette run-target badges. Hidden until a remote host exists.
+    // Built from the subscribed hosts array: never read localStorage during
+    // render, or the store snapshot churns and React re-renders forever.
     const hostNameById = useMemo(() => {
         const map: Record<string, string> = { [LOCAL_HOST_ID]: "Local" };
-        for (const h of allHosts()) map[h.id] = h.name;
+        for (const h of hosts) map[h.id] = h.name;
         return map;
     }, [hosts]);
     const showHostBadges = hosts.length > 0;
