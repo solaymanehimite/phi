@@ -34,7 +34,17 @@ const PHI_TOKEN = process.env.PHI_TOKEN || "";
 const PHI_SYSTEM_PROMPT_APPEND = "When writing reasoning or thinking, use plain text only. Do not use Markdown formatting.";
 
 const app = express();
-app.use(cors());
+// Behind Caddy/Nginx on a VPS, client IPs come via X-Forwarded-For.
+app.set("trust proxy", 1);
+app.disable("x-powered-by");
+// Explicit preflight config so browsers/Electron reliably allow the
+// Authorization header when the sidecar is reached over the network.
+app.use(
+  cors({
+    methods: ["GET", "HEAD", "PUT", "PATCH", "POST", "DELETE", "OPTIONS"],
+    allowedHeaders: ["Content-Type", "Authorization"],
+  }),
+);
 app.use(express.json({ limit: "10mb" }));
 
 // ---- token auth ----
