@@ -479,7 +479,7 @@ function DirectoryPanel({
     const renderRow = (project: ProjectOption) => {
         const selected = project.id === selectedProjectId;
         const detail = project.implicit
-            ? formatProjectPath(project.path)
+            ? (hostNameById[project.hostId] ?? project.hostId)
             : Object.keys(project.targets)
                 .map((id) => hostNameById[id] ?? id)
                 .join(", ");
@@ -582,14 +582,7 @@ function DirectoryPanel({
                     </div>
                 ) : (
                     <>
-                        {hereProjects.length > 0 && (
-                            <>
-                                <p className="px-2.5 pb-1 pt-1 text-[11px] font-medium text-phi-text-faint">
-                                    On {activeHostName}
-                                </p>
-                                {hereProjects.map(renderRow)}
-                            </>
-                        )}
+                        {hereProjects.map(renderRow)}
                         {elsewhereProjects.length > 0 && (
                             <>
                                 <p className="px-2.5 pb-1 pt-2 text-[11px] font-medium text-phi-text-faint">
