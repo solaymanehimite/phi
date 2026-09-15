@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useClose } from "@headlessui/react";
 import {
     IconCheckFilled,
@@ -161,6 +161,23 @@ function TargetPanel({
     const [bindPath, setBindPath] = useState("");
     const [bindError, setBindError] = useState<string | null>(null);
     const bindInputRef = useRef<HTMLInputElement>(null);
+    const listRef = useRef<HTMLDivElement>(null);
+    const formRef = useRef<HTMLDivElement>(null);
+    const [contentHeight, setContentHeight] = useState<number | undefined>(undefined);
+
+    // Morph the popover height to fit the active view, same as the project
+    // picker: measure the visible view and animate height towards it while
+    // the views cross-fade.
+    useLayoutEffect(() => {
+        const el = bindingId ? formRef.current : listRef.current;
+        if (!el) return;
+        const update = () => setContentHeight(el.offsetHeight);
+        update();
+        const ro = new ResizeObserver(update);
+        ro.observe(el);
+        return () => ro.disconnect();
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [bindingId]);
 
     useEffect(() => {
         if (bindingId) {
@@ -199,16 +216,64 @@ function TargetPanel({
         close();
     }, [bindingId, bindPath, close, onBind]);
 
-    if (bindingId) {
-        const host = all.find((h) => h.id === bindingId);
-        return (
-            <div className="w-[304px]">
+    const listActive = bindingId === null;
+    const bindingHost = bindingId ? all.find((h) => h.id === bindingId) : undefined;
+
+    return (
+        <div
+            className="relative w-[304px] max-w-full overflow-hidden transition-[height] duration-200 ease-[cubic-bezier(0.4,0,0.2,1)] motion-reduce:transition-none"
+            style={contentHeight !== undefined ? { height: contentHeight } : undefined}
+        >
+            <div
+                ref={listRef}
+                inert={!listActive}
+                aria-hidden={!listActive}
+                className={`w-full px-1.5 py-1.5 transition-opacity duration-150 motion-reduce:transition-none ${listActive ? "relative opacity-100" : "pointer-events-none absolute inset-x-0 top-0 opacity-0"}`}
+            >
+                {all.map((host) => {
+                    const bound = boundSet.has(host.id);
+                    const selected = host.id === value;
+                    return (
+                        <div
+                            key={host.id}
+                            className="group flex w-full items-center gap-1 rounded-lg pr-1 hover:bg-phi-overlay-strong focus-within:bg-phi-overlay-strong"
+                        >
+                            <button
+                                type="button"
+                                onClick={() => (bound ? select(host.id) : setBindingId(host.id))}
+                                title={bound ? `Run on ${host.name}` : `Set ${projectName || "project"} up on ${host.name}`}
+                                className="flex min-w-0 flex-1 items-center gap-2.5 rounded-lg py-2 pl-3 pr-2 text-left text-[13px] text-phi-text-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-phi-accent/40"
+                            >
+                                {selected ? (
+                                    <IconCheckFilled className="size-4 shrink-0 text-phi-text-secondary" />
+                                ) : (
+                                    <span aria-hidden="true" className="size-4 shrink-0" />
+                                )}
+                                <TargetIcon hostId={host.id} />
+                                <span className="min-w-0 flex-1 truncate font-medium">{host.name}</span>
+                                {!bound && (
+                                    <span className="inline-flex shrink-0 items-center gap-1 text-[11px] text-phi-text-faint">
+                                        <IconPlusFilled className="size-3" />
+                                        set up
+                                    </span>
+                                )}
+                            </button>
+                        </div>
+                    );
+                })}
+            </div>
+            <div
+                ref={formRef}
+                inert={listActive}
+                aria-hidden={listActive}
+                className={`w-full transition-opacity duration-150 motion-reduce:transition-none ${listActive ? "pointer-events-none absolute inset-x-0 top-0 opacity-0" : "relative opacity-100"}`}
+            >
                 <div className="flex items-center gap-2 px-2 pb-1 pt-2">
                     <Button variant="icon" size="icon" onClick={() => setBindingId(null)} aria-label="Back to targets" className="!size-7">
                         <IconChevronLeft className="size-5 shrink-0" />
                     </Button>
                     <p className="min-w-0 flex-1 truncate text-[13px] text-phi-text-primary">
-                        Set up {projectName || "project"} on {host?.name ?? bindingId}
+                        Set up {projectName || "project"} on {bindingHost?.name ?? bindingId}
                     </p>
                 </div>
                 <div className="px-3 py-3">
@@ -242,42 +307,6 @@ function TargetPanel({
                     </Button>
                 </div>
             </div>
-        );
-    }
-
-    return (
-        <div className="w-[304px] px-1.5 py-1.5">
-            {all.map((host) => {
-                const bound = boundSet.has(host.id);
-                const selected = host.id === value;
-                return (
-                    <div
-                        key={host.id}
-                        className="group flex w-full items-center gap-1 rounded-lg pr-1 hover:bg-phi-overlay-strong focus-within:bg-phi-overlay-strong"
-                    >
-                        <button
-                            type="button"
-                            onClick={() => (bound ? select(host.id) : setBindingId(host.id))}
-                            title={bound ? `Run on ${host.name}` : `Set ${projectName || "project"} up on ${host.name}`}
-                            className="flex min-w-0 flex-1 items-center gap-2.5 rounded-lg py-2 pl-3 pr-2 text-left text-[13px] text-phi-text-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-phi-accent/40"
-                        >
-                            {selected ? (
-                                <IconCheckFilled className="size-4 shrink-0 text-phi-text-secondary" />
-                            ) : (
-                                <span aria-hidden="true" className="size-4 shrink-0" />
-                            )}
-                            <TargetIcon hostId={host.id} />
-                            <span className="min-w-0 flex-1 truncate font-medium">{host.name}</span>
-                            {!bound && (
-                                <span className="inline-flex shrink-0 items-center gap-1 text-[11px] text-phi-text-faint">
-                                    <IconPlusFilled className="size-3" />
-                                    set up
-                                </span>
-                            )}
-                        </button>
-                    </div>
-                );
-            })}
         </div>
     );
 }
