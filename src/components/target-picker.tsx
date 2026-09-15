@@ -212,10 +212,6 @@ function TargetPanel({
                     </p>
                 </div>
                 <div className="px-3 py-3">
-                    <p className="mb-1.5 text-[12px] leading-5 text-phi-text-muted">
-                        {projectName ? `${projectName} isn't` : "This project isn't"} checked out on{" "}
-                        {host?.name ?? "that host"} yet. Type its absolute path there.
-                    </p>
                     <Input
                         ref={bindInputRef}
                         value={bindPath}
