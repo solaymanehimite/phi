@@ -15,6 +15,7 @@ import {
 import { Popover, PopoverContent, PopoverTrigger } from "./ui/popover";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
+import { Select } from "./ui/select";
 import type { NewProjectInput } from "../hooks/useProjects";
 import { LOCAL_HOST_ID, type Host } from "../hooks/useHosts";
 import { basenameOfPath, boundHostIds, formatProjectPath, type Project, type ProjectOption } from "../lib/projects";
@@ -129,32 +130,24 @@ function ProjectForm({
                 />
 
                 <span
-                    id="new-project-path-label"
+                    id="new-project-host-label"
                     className="mb-1.5 mt-3 block text-[13px] font-medium text-phi-text-primary"
                 >
                     Host
                 </span>
-                <div className="space-y-1">
-                    {[{ id: LOCAL_HOST_ID, name: "Local" }, ...hosts].map((h) => (
-                        <button
-                            key={h.id}
-                            type="button"
-                            onClick={() => setHostId(h.id)}
-                            aria-pressed={hostId === h.id}
-                            className="flex w-full items-center gap-2.5 rounded-md bg-phi-overlay-strong px-3 py-1.5 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-phi-accent/40"
-                        >
-                            {hostId === h.id ? (
-                                <IconCheckFilled className="size-4 shrink-0 text-phi-text-secondary" />
-                            ) : (
-                                <span aria-hidden="true" className="size-4 shrink-0" />
-                            )}
-                            <TargetIcon hostId={h.id} className="size-3.5 shrink-0 text-phi-text-tertiary" />
-                            <span className="min-w-0 flex-1 truncate text-[12.5px] font-medium text-phi-text-secondary">
-                                {h.name}
-                            </span>
-                        </button>
+                <Select
+                    aria-labelledby="new-project-host-label"
+                    value={hostId}
+                    onChange={(e) => setHostId(e.target.value)}
+                    className="w-full"
+                >
+                    <option value={LOCAL_HOST_ID}>Local</option>
+                    {hosts.map((h) => (
+                        <option key={h.id} value={h.id}>
+                            {h.name}
+                        </option>
                     ))}
-                </div>
+                </Select>
 
                 <span
                     id="new-project-path-label"
@@ -204,11 +197,6 @@ function ProjectForm({
                             variant="default"
                             className="w-full !border-0 !bg-phi-overlay-strong !px-3 placeholder:!text-phi-text-tertiary focus-visible:ring-2 focus-visible:ring-phi-accent/40"
                         />
-                        {remote && (
-                            <p className="mt-1.5 text-[11px] leading-4 text-phi-text-muted">
-                                Typed by hand — the folder picker only sees this machine.
-                            </p>
-                        )}
                     </>
                 )}
                 {browseError && (
@@ -378,11 +366,6 @@ function EditProjectForm({
                                 Add
                             </Button>
                         </div>
-                        {activeHostId !== LOCAL_HOST_ID ? (
-                            <p className="mt-1.5 text-[11px] leading-4 text-phi-text-muted">
-                                Typed by hand — the folder picker only sees this machine.
-                            </p>
-                        ) : null}
                         {targetError && (
                             <p className="mt-1.5 text-[11px] leading-4 text-phi-error-text">{targetError}</p>
                         )}
