@@ -16,7 +16,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "./ui/popover";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
 import type { NewProjectInput } from "../hooks/useProjects";
-import { LOCAL_HOST_ID } from "../hooks/useHosts";
+import { LOCAL_HOST_ID, type Host } from "../hooks/useHosts";
 import { basenameOfPath, boundHostIds, formatProjectPath, type Project, type ProjectOption } from "../lib/projects";
 import { canBrowseDirectories, pickDirectory } from "../lib/directories";
 import { TargetIcon } from "./target-picker";
@@ -25,6 +25,8 @@ type DirectoryPickerProps = {
     /** Selected project id (explicit or implicit). */
     selectedProjectId: string | null;
     projects: ProjectOption[];
+    /** All remote hosts, for the creation form. Local is always listed first. */
+    hosts: Host[];
     /** Run target new sessions start on. Creation binds to this host. */
     activeHostId: string;
     hostNameById: Record<string, string>;
@@ -41,8 +43,8 @@ type DirectoryPickerProps = {
 
 function ProjectForm({
     homeCwd,
-    remote,
-    remoteHostName,
+    hosts,
+    initialHostId,
     nameInputRef,
     title,
     submitLabel,
@@ -52,9 +54,8 @@ function ProjectForm({
     onSubmit,
 }: {
     homeCwd?: string;
-    /** True when the path lives on a remote host: typed by hand, never browsed. */
-    remote: boolean;
-    remoteHostName?: string;
+    hosts: Host[];
+    initialHostId: string;
     nameInputRef: React.RefObject<HTMLInputElement | null>;
     title: string;
     submitLabel: string;
@@ -65,7 +66,11 @@ function ProjectForm({
 }) {
     const [name, setName] = useState(initialName);
     const [path, setPath] = useState(initialPath);
+    const [hostId, setHostId] = useState(initialHostId);
     const [browseError, setBrowseError] = useState<string | null>(null);
+    // The folder picker only sees this machine, so remote paths are typed.
+    const remote = hostId !== LOCAL_HOST_ID;
+    const remoteHostName = hostId === LOCAL_HOST_ID ? undefined : (hosts.find((h) => h.id === hostId)?.name ?? hostId);
     const canBrowse = canBrowseDirectories() && !remote;
 
     const browse = useCallback(async () => {
@@ -85,9 +90,9 @@ function ProjectForm({
         (event: React.FormEvent<HTMLFormElement>) => {
             event.preventDefault();
             if (!name.trim() || !path.trim()) return;
-            onSubmit({ name: name.trim(), path: path.trim() });
+            onSubmit({ name: name.trim(), path: path.trim(), hostId });
         },
-        [name, onSubmit, path],
+        [name, onSubmit, path, hostId],
     );
 
     const canSubmit = name.trim().length > 0 && path.trim().length > 0;
@@ -122,6 +127,34 @@ function ProjectForm({
                     variant="default"
                     className="w-full !border-0 !bg-phi-overlay-strong !px-3 !text-[13px] placeholder:!text-phi-text-tertiary focus-visible:ring-2 focus-visible:ring-phi-accent/40"
                 />
+
+                <span
+                    id="new-project-path-label"
+                    className="mb-1.5 mt-3 block text-[13px] font-medium text-phi-text-primary"
+                >
+                    Host
+                </span>
+                <div className="space-y-1">
+                    {[{ id: LOCAL_HOST_ID, name: "Local" }, ...hosts].map((h) => (
+                        <button
+                            key={h.id}
+                            type="button"
+                            onClick={() => setHostId(h.id)}
+                            aria-pressed={hostId === h.id}
+                            className="flex w-full items-center gap-2.5 rounded-md bg-phi-overlay-strong px-3 py-1.5 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-phi-accent/40"
+                        >
+                            {hostId === h.id ? (
+                                <IconCheckFilled className="size-4 shrink-0 text-phi-text-secondary" />
+                            ) : (
+                                <span aria-hidden="true" className="size-4 shrink-0" />
+                            )}
+                            <TargetIcon hostId={h.id} className="size-3.5 shrink-0 text-phi-text-tertiary" />
+                            <span className="min-w-0 flex-1 truncate text-[12.5px] font-medium text-phi-text-secondary">
+                                {h.name}
+                            </span>
+                        </button>
+                    ))}
+                </div>
 
                 <span
                     id="new-project-path-label"
@@ -369,8 +402,7 @@ function EditProjectForm({
 type PanelMode = "list" | "create" | "edit";
 
 type DirectoryPanelProps = Omit<DirectoryPickerProps, "disabled" | "selectedProjectId"> & {
-    selectedProjectId: string | null;
-    mode: PanelMode;
+    selectedProjectId: string | null;    mode: PanelMode;
     onModeChange: (mode: PanelMode) => void;
     editingProject: ProjectOption | null;
     onEditProject: (project: ProjectOption) => void;
@@ -379,6 +411,7 @@ type DirectoryPanelProps = Omit<DirectoryPickerProps, "disabled" | "selectedProj
 function DirectoryPanel({
     selectedProjectId,
     projects,
+    hosts,
     activeHostId,
     hostNameById,
     homeCwd,
@@ -456,7 +489,7 @@ function DirectoryPanel({
 
     const handleCreate = useCallback(
         (input: NewProjectInput) => {
-            const project = onCreateProject({ ...input, hostId: activeHostId });
+            const project = onCreateProject({ ...input, hostId: input.hostId ?? activeHostId });
             selectProject(project.id);
         },
         [activeHostId, onCreateProject, selectProject],
@@ -472,9 +505,6 @@ function DirectoryPanel({
         },
         [elsewhereProjects, hereProjects, selectProject],
     );
-
-    const activeHostName = hostNameById[activeHostId] ?? activeHostId;
-    const remote = activeHostId !== LOCAL_HOST_ID;
 
     const renderRow = (project: ProjectOption) => {
         const selected = project.id === selectedProjectId;
@@ -630,10 +660,10 @@ function DirectoryPanel({
                     <ProjectForm
                         key="create"
                         homeCwd={homeCwd}
-                        remote={remote}
-                        remoteHostName={activeHostName}
+                        hosts={hosts}
+                        initialHostId={activeHostId}
                         nameInputRef={nameInputRef}
-                        title={`New project on ${activeHostName}`}
+                        title="New project"
                         submitLabel="Create project"
                         onBack={() => onModeChange("list")}
                         onSubmit={handleCreate}
@@ -647,6 +677,7 @@ function DirectoryPanel({
 export function DirectoryPicker({
     selectedProjectId,
     projects,
+    hosts,
     activeHostId,
     hostNameById,
     onSelectProject,
@@ -696,6 +727,7 @@ export function DirectoryPicker({
                 <DirectoryPanel
                     selectedProjectId={selectedProjectId}
                     projects={projects}
+                    hosts={hosts}
                     activeHostId={activeHostId}
                     hostNameById={hostNameById}
                     homeCwd={homeCwd}
