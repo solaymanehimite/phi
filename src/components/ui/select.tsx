@@ -7,8 +7,8 @@ type SelectProps = SelectHTMLAttributes<HTMLSelectElement> & {
   className?: string;
 };
 
-/** Bordered select chip with chevron — code theme picker. Pairs with the
- *  secondary button: same elevated fill and accent-lift hover. */
+/** Bordered select chip — wears the secondary/xs button treatment (code
+ *  theme picker) so every dropdown trigger looks identical. */
 export function Select({ children, className = "", ...props }: SelectProps) {
   // A consumer-passed position (e.g. `absolute` for floating overlays) must
   // win over the default `relative` chevron anchor — both classes on one
@@ -18,7 +18,7 @@ export function Select({ children, className = "", ...props }: SelectProps) {
     <label className={`inline-flex ${positioned ? "" : "relative "}${className}`}>
       <span className="sr-only">Select option</span>
       <select
-        className="h-7 w-full appearance-none rounded-lg border border-phi-border-strong bg-phi-bg-elevated py-0 pl-2.5 pr-7 text-[11px] font-medium text-phi-text-secondary outline-none transition-colors hover:border-phi-accent/60 hover:bg-phi-overlay-active hover:text-phi-text-primary focus-visible:border-phi-accent/70 focus-visible:ring-1 focus-visible:ring-phi-accent/40"
+        className="h-7 w-full appearance-none rounded-lg border border-phi-border-strong bg-phi-bg-elevated py-0 pl-2.5 pr-7 text-[12px] font-medium text-phi-text-secondary outline-none transition-colors hover:bg-phi-overlay-active hover:text-phi-text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-phi-accent/40 disabled:pointer-events-none disabled:opacity-50"
         {...props}
       >
         {children}
