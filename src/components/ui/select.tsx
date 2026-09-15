@@ -1,32 +1,108 @@
-import { IconChevronDownFilled } from "@tabler/icons-react";
-import type { ReactNode, SelectHTMLAttributes } from "react";
+import { useClose } from "@headlessui/react";
+import { IconCheckFilled, IconChevronDownFilled } from "@tabler/icons-react";
+import { useState } from "react";
+import { MenuItem } from "./menu";
+import { Popover, PopoverContent, PopoverTrigger } from "./popover";
 
-type SelectProps = SelectHTMLAttributes<HTMLSelectElement> & {
-  children: ReactNode;
-  /** Width of the floating select (code theme uses a fixed narrow chip). */
-  className?: string;
+export type SelectOption = {
+    value: string;
+    label: string;
 };
 
-/** Bordered select chip — wears the secondary/xs button treatment (code
- *  theme picker) so every dropdown trigger looks identical. */
-export function Select({ children, className = "", ...props }: SelectProps) {
-  // A consumer-passed position (e.g. `absolute` for floating overlays) must
-  // win over the default `relative` chevron anchor — both classes on one
-  // element would conflict and `relative` would win the cascade.
-  const positioned = /\b(absolute|fixed|sticky)\b/.test(className);
-  return (
-    <label className={`inline-flex ${positioned ? "" : "relative "}${className}`}>
-      <span className="sr-only">Select option</span>
-      <select
-        className="h-7 w-full appearance-none rounded-lg border border-phi-border-strong bg-phi-bg-elevated py-0 pl-2.5 pr-7 text-[12px] font-medium text-phi-text-secondary outline-none transition-colors hover:bg-phi-overlay-active hover:text-phi-text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-phi-accent/40 disabled:pointer-events-none disabled:opacity-50"
-        {...props}
-      >
-        {children}
-      </select>
-      <IconChevronDownFilled
-        aria-hidden
-        className="pointer-events-none absolute right-2 top-1/2 size-3.5 -translate-y-1/2 text-phi-text-muted"
-      />
-    </label>
-  );
+type SelectProps = {
+    options: SelectOption[];
+    /** Controlled value. Omit + use defaultValue for uncontrolled. */
+    value?: string;
+    defaultValue?: string;
+    onChange?: (value: string) => void;
+    className?: string;
+    disabled?: boolean;
+    ariaLabel?: string;
+    placeholder?: string;
+};
+
+/** Dropdown select — the code theme picker treatment: a secondary trigger
+ *  opening a menu of rows with a check on the current one. Never a native
+ *  `<select>`, so the trigger and the list always match the theme. */
+export function Select({
+    options,
+    value,
+    defaultValue,
+    onChange,
+    className = "",
+    disabled,
+    ariaLabel,
+    placeholder,
+}: SelectProps) {
+    const [internal, setInternal] = useState(defaultValue ?? options[0]?.value ?? "");
+    const current = value ?? internal;
+    const selected = options.find((o) => o.value === current);
+
+    return (
+        <Popover className={`min-w-0 ${className}`}>
+            <SelectPanel
+                options={options}
+                current={current}
+                disabled={disabled}
+                ariaLabel={ariaLabel}
+                placeholder={placeholder}
+                onPick={(next) => {
+                    if (value === undefined) setInternal(next);
+                    onChange?.(next);
+                }}
+            />
+        </Popover>
+    );
+}
+
+function SelectPanel({
+    options,
+    current,
+    disabled,
+    ariaLabel,
+    placeholder,
+    onPick,
+}: {
+    options: SelectOption[];
+    current: string;
+    disabled?: boolean;
+    ariaLabel?: string;
+    placeholder?: string;
+    onPick: (value: string) => void;
+}) {
+    const close = useClose();
+    const selected = options.find((o) => o.value === current);
+
+    return (
+        <>
+            <PopoverTrigger
+                disabled={disabled}
+                aria-label={ariaLabel}
+                className="group flex h-7 w-full items-center gap-2 rounded-lg border border-phi-border-strong bg-phi-bg-elevated px-2.5 text-left text-[12px] font-medium text-phi-text-secondary transition-colors hover:bg-phi-overlay-active hover:text-phi-text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-phi-accent/40 disabled:pointer-events-none disabled:opacity-50"
+            >
+                <span className="min-w-0 flex-1 truncate">
+                    {selected?.label ?? placeholder ?? ""}
+                </span>
+                <IconChevronDownFilled className="size-3.5 shrink-0 text-phi-text-muted transition-transform group-data-open:rotate-180" />
+            </PopoverTrigger>
+            <PopoverContent anchor={{ to: "bottom start", gap: 8 }} className="w-48 !rounded-xl p-1">
+                {options.map((option) => {
+                    const active = option.value === current;
+                    return (
+                        <MenuItem
+                            key={option.value}
+                            active={active}
+                            onClick={() => {
+                                onPick(option.value);
+                                close();
+                            }}
+                        >
+                            <span className="min-w-0 flex-1 truncate">{option.label}</span>
+                            {active && <IconCheckFilled className="size-3.5 shrink-0 text-phi-accent" />}
+                        </MenuItem>
+                    );
+                })}
+            </PopoverContent>
+        </>
+    );
 }

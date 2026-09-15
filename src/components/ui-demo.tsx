@@ -310,13 +310,8 @@ export function UiDemoPanel() {
 
                         <DemoSection id="selects" title="Select">
                             <div className="flex flex-wrap items-center gap-3">
-                                <Select value={selectValue} onChange={(e) => setSelectValue(e.target.value)} aria-label="Demo code theme">
-                                    <option value="phi-dark">Phi dark</option>
-                                    <option value="phi-light">Phi light</option>
-                                </Select>
-                                <Select disabled defaultValue="phi-dark" aria-label="Demo disabled select">
-                                    <option value="phi-dark">Disabled</option>
-                                </Select>
+                                <Select value={selectValue} onChange={setSelectValue} ariaLabel="Demo code theme" options={[{ value: "phi-dark", label: "Phi dark" }, { value: "phi-light", label: "Phi light" }]} />
+                                <Select disabled defaultValue="phi-dark" ariaLabel="Demo disabled select" options={[{ value: "phi-dark", label: "Disabled" }]} />
                             </div>
                         </DemoSection>
 

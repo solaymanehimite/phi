@@ -130,24 +130,17 @@ function ProjectForm({
                 />
 
                 <span
-                    id="new-project-host-label"
                     className="mb-1.5 mt-3 block text-[13px] font-medium text-phi-text-primary"
                 >
                     Host
                 </span>
                 <Select
-                    aria-labelledby="new-project-host-label"
+                    ariaLabel="Host"
                     value={hostId}
-                    onChange={(e) => setHostId(e.target.value)}
+                    onChange={setHostId}
+                    options={[{ value: LOCAL_HOST_ID, label: "Local" }, ...hosts.map((h) => ({ value: h.id, label: h.name }))]} 
                     className="w-full"
-                >
-                    <option value={LOCAL_HOST_ID}>Local</option>
-                    {hosts.map((h) => (
-                        <option key={h.id} value={h.id}>
-                            {h.name}
-                        </option>
-                    ))}
-                </Select>
+                />
 
                 <span
                     id="new-project-path-label"
