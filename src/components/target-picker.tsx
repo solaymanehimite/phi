@@ -208,7 +208,7 @@ function TargetPanel({
                         <IconChevronLeft className="size-5 shrink-0" />
                     </Button>
                     <p className="min-w-0 flex-1 truncate text-[13px] text-phi-text-primary">
-                        Set up on {host?.name ?? bindingId}
+                        Set up {projectName || "project"} on {host?.name ?? bindingId}
                     </p>
                 </div>
                 <div className="px-3 py-3">
