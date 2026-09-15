@@ -102,7 +102,7 @@ function CodeThemeSection() {
                 <CodeThemePreview theme={previewTheme} />
                 <Popover className="absolute right-3 top-3">
                     <PopoverTrigger
-                        className={buttonClass("secondary", "xs", "group")}
+                        className={buttonClass("secondary", "sm", "group")}
                         aria-label={`Code theme, currently ${currentLabel}`}
                     >
                         <span className="min-w-0 flex-1 truncate text-left">{currentLabel}</span>

@@ -1,12 +1,13 @@
 import { useClose } from "@headlessui/react";
 import { IconCheckFilled, IconChevronDownFilled } from "@tabler/icons-react";
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import { MenuItem } from "./menu";
 import { Popover, PopoverContent, PopoverTrigger } from "./popover";
 
 export type SelectOption = {
     value: string;
     label: string;
+    icon?: ReactNode;
 };
 
 type SelectProps = {
@@ -78,8 +79,9 @@ function SelectPanel({
             <PopoverTrigger
                 disabled={disabled}
                 aria-label={ariaLabel}
-                className="group flex h-7 w-full items-center gap-2 rounded-lg border border-phi-border-strong bg-phi-bg-elevated px-2.5 text-left text-[12px] font-medium text-phi-text-secondary transition-colors hover:bg-phi-overlay-active hover:text-phi-text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-phi-accent/40 disabled:pointer-events-none disabled:opacity-50"
+                className="group flex h-8 w-full items-center gap-2 rounded-lg border border-phi-border-strong bg-phi-bg-elevated px-3 text-left text-[13px] font-medium text-phi-text-secondary transition-colors hover:bg-phi-overlay-active hover:text-phi-text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-phi-accent/40 disabled:pointer-events-none disabled:opacity-50"
             >
+                {selected?.icon}
                 <span className="min-w-0 flex-1 truncate">
                     {selected?.label ?? placeholder ?? ""}
                 </span>
@@ -97,6 +99,7 @@ function SelectPanel({
                                 close();
                             }}
                         >
+                            {option.icon}
                             <span className="min-w-0 flex-1 truncate">{option.label}</span>
                             {active && <IconCheckFilled className="size-3.5 shrink-0 text-phi-accent" />}
                         </MenuItem>

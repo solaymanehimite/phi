@@ -138,7 +138,7 @@ function ProjectForm({
                     ariaLabel="Host"
                     value={hostId}
                     onChange={setHostId}
-                    options={[{ value: LOCAL_HOST_ID, label: "Local" }, ...hosts.map((h) => ({ value: h.id, label: h.name }))]} 
+                    options={[{ value: LOCAL_HOST_ID, label: "Local", icon: <TargetIcon hostId={LOCAL_HOST_ID} className="size-4 shrink-0 text-phi-text-tertiary" /> }, ...hosts.map((h) => ({ value: h.id, label: h.name, icon: <TargetIcon hostId={h.id} className="size-4 shrink-0 text-phi-text-tertiary" /> }))]} 
                     className="w-full"
                 />
 
