@@ -735,7 +735,19 @@ export default function App() {
         chat.clear();
         focusComposer();
     }, [chat.clear, focusComposer, newTabTargets, setActiveHostId]);
+    // Tracks whether the picker was open at pointer-down (before the
+    // popover's outside-click handler runs) so a hero click toggles closed.
+    const heroPickerWasOpenRef = useRef(false);
+    const handleHeroPickerPointerDown = useCallback(() => {
+        const el = document.querySelector<HTMLElement>('[data-project-picker-trigger]');
+        heroPickerWasOpenRef.current = el?.matches("[data-open]") ?? false;
+    }, []);
     const focusProjectPicker = useCallback(() => {
+        if (heroPickerWasOpenRef.current) {
+            // Picker was open: the outside-click already closed it — don't reopen.
+            heroPickerWasOpenRef.current = false;
+            return;
+        }
         const el = document.querySelector<HTMLElement>('[data-project-picker-trigger]');
         if (!el) return;
         // HeadlessUI Popover opens on click — click to open dropdown
@@ -1454,6 +1466,7 @@ export default function App() {
                                                     <button
                                                         type="button"
                                                         onClick={focusProjectPicker}
+                                                        onPointerDown={handleHeroPickerPointerDown}
                                                         title={newChatProjectDisplay ? `Change project, currently ${newChatProjectDisplay}` : "Select a project"}
                                                         aria-label={newChatProjectDisplay ? `Change project, currently ${newChatProjectDisplay}` : "Select a project"}
                                                         className="mr-2 inline-flex max-w-full items-center gap-2 rounded-xl bg-phi-overlay px-3 py-1 align-baseline font-medium text-phi-text-primary hover:bg-phi-overlay-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-phi-accent/40"
