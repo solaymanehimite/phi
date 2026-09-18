@@ -301,7 +301,7 @@ export default function App() {
         const lower = msg.toLowerCase();
         if (lower.includes("abort")) return "Abort";
         if (lower.includes("interrupt")) return "Interruption";
-        if (lower.includes("auth") || lower.includes("api key") || lower.includes("unauthorized") || lower.includes("401")) return "Auth";
+        if (lower.includes("auth") || lower.includes("api key") || lower.includes("unauthorized") || lower.includes("401")) return "Providers";
         if (lower.includes("rate") || lower.includes("429")) return "Rate limit";
         if (lower.includes("provider") || lower.includes("down") || lower.includes("overload") || lower.includes("5")) return "Provider down";
         return "Error";
@@ -639,7 +639,7 @@ export default function App() {
             const msg = e instanceof Error ? e.message : String(e);
             // move auth errors to inline block instead of banner
             const reason = makeInlineReason(msg);
-            if (reason === "Auth" || reason === "Rate limit" || reason === "Provider down") {
+            if (reason === "Providers" || reason === "Rate limit" || reason === "Provider down") {
                 const err: InlineError = { id: `${sessionFile}-${Date.now()}`, reason, message: msg, time: new Date().toLocaleTimeString(), canContinue: false };
                 setInlineFor(sessionFile, err);
             } else setModelError(msg);
@@ -1493,7 +1493,7 @@ export default function App() {
                                         {!modelError && !models.loading && models.models.length === 0 && !models.error && (
                                             <div className="mx-auto mb-2 w-full max-w-4xl">
                                                 <Alert variant="warning" className="!text-[12.5px]">
-                                                    No models available — check auth (run <InlineCode>pi auth</InlineCode>) or configure API keys. The model selector will populate after auth.
+                                                    No models available — add a provider (run <InlineCode>pi auth</InlineCode>) or configure an API key. The model selector will populate once a provider is ready.
                                                 </Alert>
                                             </div>
                                         )}

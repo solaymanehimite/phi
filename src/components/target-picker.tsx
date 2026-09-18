@@ -203,7 +203,7 @@ function TargetPanel({
         if (!bindingId) return;
         const path = bindPath.trim();
         if (!path) {
-            setBindError("Type the absolute path on that host.");
+            setBindError("Type the absolute path on that run target.");
             return;
         }
         try {
@@ -241,7 +241,7 @@ function TargetPanel({
                             <button
                                 type="button"
                                 onClick={() => (bound ? select(host.id) : setBindingId(host.id))}
-                                title={bound ? `Run on ${host.name}` : `Set ${projectName || "project"} up on ${host.name}`}
+                                title={bound ? `Run on ${host.name}` : `Add ${projectName || "project"} to ${host.name}`}
                                 className="flex min-w-0 flex-1 items-center gap-2.5 rounded-lg py-2 pl-3 pr-2 text-left text-[13px] text-phi-text-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-phi-accent/40"
                             >
                                 {selected ? (
@@ -254,7 +254,7 @@ function TargetPanel({
                                 {!bound && (
                                     <span className="inline-flex shrink-0 items-center gap-1 text-[11px] text-phi-text-faint">
                                         <IconPlusFilled className="size-3" />
-                                        set up
+                                        add
                                     </span>
                                 )}
                             </button>
@@ -273,7 +273,7 @@ function TargetPanel({
                         <IconChevronLeft className="size-5 shrink-0" />
                     </Button>
                     <p className="min-w-0 flex-1 truncate text-[13px] text-phi-text-primary">
-                        Set up {projectName || "project"} on {bindingHost?.name ?? bindingId}
+                        Add {projectName || "project"} to {bindingHost?.name ?? bindingId}
                     </p>
                 </div>
                 <div className="px-3 py-3">
@@ -288,7 +288,7 @@ function TargetPanel({
                             }
                         }}
                         placeholder="/home/you/code/project"
-                        aria-label="Workspace path on host"
+                        aria-label="Workspace path on run target"
                         spellCheck={false}
                         autoComplete="off"
                         variant="default"
@@ -303,7 +303,7 @@ function TargetPanel({
                         Cancel
                     </Button>
                     <Button type="button" variant="primary" size="xs" onClick={submitBind} disabled={!bindPath.trim()} className="!rounded-md !text-[12.5px]">
-                        Set up
+                        Add
                     </Button>
                 </div>
             </div>

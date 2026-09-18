@@ -27,8 +27,8 @@ export type SettingsSection = "appearance" | "providers" | "hosts" | "skills";
 const sections: { id: SettingsSection; label: string; description: string; icon: ComponentType<{ className?: string }> }[] = [
     { id: "appearance", label: "Appearance", description: "Theme and colors", icon: IconPaletteFilled },
     { id: "skills", label: "Skills", description: "Agent skills", icon: IconBox },
-    { id: "providers", label: "Auth", description: "Models and API keys", icon: IconKeyFilled },
-    { id: "hosts", label: "Hosts", description: "Local and remote sidecars", icon: IconCloudFilled },
+    { id: "providers", label: "Providers", description: "Providers, models, and API keys", icon: IconKeyFilled },
+    { id: "hosts", label: "Run targets", description: "Local and remote sidecars", icon: IconCloudFilled },
 ];
 
 export function SettingsPanel({
@@ -520,9 +520,9 @@ function HostFormBody({ form, setForm, saveLabel, onCancel, onSave }: {
         "w-full !border-0 !bg-phi-overlay-strong !px-3 !text-[13px] placeholder:!text-phi-text-tertiary focus-visible:ring-2 focus-visible:ring-phi-accent/40";
     return (
         <div className="min-w-0 flex-1 space-y-2">
-            <Input autoFocus placeholder="Name" aria-label="Host name" value={form.name} onChange={(e) => setForm((p) => ({ ...p, name: e.target.value }))} variant="default" className={inputClass} />
-            <Input placeholder="URL http://host:port" aria-label="Host URL" value={form.url} onChange={(e) => setForm((p) => ({ ...p, url: e.target.value }))} variant="default" className={inputClass} />
-            <Input placeholder="Token (optional)" aria-label="Host token" type="password" value={form.token ?? ""} onChange={(e) => setForm((p) => ({ ...p, token: e.target.value }))} variant="default" className={inputClass} />
+            <Input autoFocus placeholder="Name" aria-label="Run target name" value={form.name} onChange={(e) => setForm((p) => ({ ...p, name: e.target.value }))} variant="default" className={inputClass} />
+            <Input placeholder="URL https://192.168.1.10:3001" aria-label="Run target URL" value={form.url} onChange={(e) => setForm((p) => ({ ...p, url: e.target.value }))} variant="default" className={inputClass} />
+            <Input placeholder="Token (optional)" aria-label="Run target token" type="password" value={form.token ?? ""} onChange={(e) => setForm((p) => ({ ...p, token: e.target.value }))} variant="default" className={inputClass} />
             <div className="flex items-center justify-end gap-1.5 pt-1">
                 <Button onClick={onCancel} variant="ghost" size="xs" className="!text-[12px]">Cancel</Button>
                 <Button onClick={onSave} disabled={!canSubmit} variant="primary" size="xs" className="!text-[12px]">{saveLabel}</Button>
@@ -576,7 +576,7 @@ function HostsTab() {
     }, [addHost, editingId, form, updateHost]);
 
     const handleDelete = useCallback((id: string, name: string) => {
-        if (!confirm(`Remove host "${name}"?`)) return;
+        if (!confirm(`Remove run target "${name}"?`)) return;
         removeHost(id);
     }, [removeHost]);
 
@@ -589,7 +589,7 @@ function HostsTab() {
                         <span aria-hidden="true" className="grid size-6 shrink-0 place-items-center text-phi-text-tertiary"><LocalHomeIcon className="size-5 shrink-0" /></span>
                         <button type="button" onClick={() => setActiveHostId(LOCAL_HOST_ID)} title="Switch to the local sidecar" className="min-w-0 flex-1 rounded text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-phi-accent/40">
                             <HostName name="Local" isCurrent={activeHostId === LOCAL_HOST_ID} />
-                            <div className="mt-0.5 truncate text-[12px] text-phi-text-muted">This machine</div>
+                            <div className="mt-0.5 truncate text-[12px] text-phi-text-muted">Local sidecar</div>
                         </button>
                         <span className="shrink-0 text-[13px] text-phi-text-muted">{activeHostId === LOCAL_HOST_ID ? "Active" : ""}</span>
                 </ListRow>
@@ -623,15 +623,15 @@ function HostsTab() {
                             className="flex min-h-[60px] w-full items-center gap-3 border-t border-phi-border px-6 py-3 text-left text-[13px] font-medium text-phi-text-muted hover:bg-phi-overlay-hover hover:text-phi-text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-phi-accent/40"
                         >
                             <IconPlus className="size-4 shrink-0" />
-                            Add host
+                            Add run target
                         </button>
                     )}
                 </ListGroup>
 
             {showForm && !editingId && (
                 <div className="space-y-2 rounded-lg border border-phi-border bg-phi-bg-surface p-3">
-                    <h4 className="text-[12px] font-semibold text-phi-text-primary">New host</h4>
-                    <HostFormBody form={form} setForm={setForm} saveLabel="Add host" onCancel={handleCancel} onSave={handleSave} />
+                    <h4 className="text-[12px] font-semibold text-phi-text-primary">New run target</h4>
+                    <HostFormBody form={form} setForm={setForm} saveLabel="Add run target" onCancel={handleCancel} onSave={handleSave} />
                 </div>
             )}
         </div>

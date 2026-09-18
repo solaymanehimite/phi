@@ -174,8 +174,8 @@ export function addStoredHost(input: NewHostInput): Host {
     url: normalizeHostUrl(input.url),
     token: input.token?.trim() ?? "",
   };
-  if (!host.name) throw new Error("Host name is required");
-  if (!host.url) throw new Error("Host URL is required");
+  if (!host.name) throw new Error("Run target name is required");
+  if (!host.url) throw new Error("Run target URL is required");
   hostsSnapshot = [...hostsSnapshot, host];
   writeStoredHosts(hostsSnapshot);
   emit();

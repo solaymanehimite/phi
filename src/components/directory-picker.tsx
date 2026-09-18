@@ -132,10 +132,10 @@ function ProjectForm({
                 <span
                     className="mb-1.5 mt-3 block text-[13px] font-medium text-phi-text-primary"
                 >
-                    Host
+                    Run target
                 </span>
                 <Select
-                    ariaLabel="Host"
+                    ariaLabel="Run target"
                     value={hostId}
                     onChange={setHostId}
                     options={[{ value: LOCAL_HOST_ID, label: "Local", icon: <TargetIcon hostId={LOCAL_HOST_ID} className="size-4 shrink-0 text-phi-text-tertiary" /> }, ...hosts.map((h) => ({ value: h.id, label: h.name, icon: <TargetIcon hostId={h.id} className="size-4 shrink-0 text-phi-text-tertiary" /> }))]} 

@@ -167,7 +167,7 @@ export function UiDemoPanel() {
                         <DemoSection id="alerts" title="Alert">
                             <div className="flex flex-col gap-2">
                                 <Alert variant="error">Error — streaming failed. Check the sidecar and retry.</Alert>
-                                <Alert variant="warning">Warning — no models available. Run <InlineCode>pi auth</InlineCode> to connect one.</Alert>
+                                <Alert variant="warning">Warning — no models available. Run <InlineCode>pi auth</InlineCode> to add a provider.</Alert>
                                 <Alert variant="info">Info — 3 sessions were archived this week.</Alert>
                                 <Alert variant="muted">Muted — this notice was dismissed and kept for context.</Alert>
                             </div>

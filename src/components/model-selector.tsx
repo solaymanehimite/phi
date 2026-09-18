@@ -415,9 +415,9 @@ export const ModelSelector = memo(function ModelSelector({
                                     )}
                                     {!loading && !error && list.length === 0 && (
                                         <Alert variant="warning" className="mx-3.5 mb-2 mt-2 !rounded-md !text-[11.5px] !leading-snug">
-                                            No models available — check auth (run{" "}
+                                            No models available — run{" "}
                                             <InlineCode>pi auth</InlineCode>
-                                            ) or add an API key for your provider.
+                                            {" "}in the terminal, or add an API key under Settings → Providers.
                                         </Alert>
                                     )}
 
