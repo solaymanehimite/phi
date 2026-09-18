@@ -15,6 +15,7 @@ import { NEW_TAB_PREFIX, SETTINGS_TAB_ID, Tabs, UI_DEMO_TAB_ID, isNewTabId } fro
 import { closeTab, nextTabAfterClose, promoteDraftTab } from "./lib/tabs";
 import {
     IconArrowDown,
+    IconChevronDownFilled,
     IconComponents,
     IconLayoutSidebarFilled,
     IconMessageCircleFilled,
@@ -1455,9 +1456,10 @@ export default function App() {
                                                         onClick={focusProjectPicker}
                                                         title={newChatProjectDisplay ? `Change project, currently ${newChatProjectDisplay}` : "Select a project"}
                                                         aria-label={newChatProjectDisplay ? `Change project, currently ${newChatProjectDisplay}` : "Select a project"}
-                                                        className="underline decoration-dashed decoration-phi-text-muted decoration-[2px] underline-offset-[6px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-phi-accent/40"
+                                                        className="mr-2 inline-flex max-w-full items-center gap-2 rounded-xl border border-phi-border bg-phi-overlay px-3 py-1 align-baseline font-medium text-phi-text-primary hover:bg-phi-overlay-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-phi-accent/40"
                                                     >
-                                                        {newChatProjectDisplay || "a project"}
+                                                        <span className="min-w-0 truncate">{newChatProjectDisplay || "a project"}</span>
+                                                        <IconChevronDownFilled className="size-[0.7em] shrink-0 text-phi-text-muted" aria-hidden="true" />
                                                     </button>?
                                                 </h1>
                                                 {!sessions.loading && !sessions.error && projectOptions.length === 0 && (
