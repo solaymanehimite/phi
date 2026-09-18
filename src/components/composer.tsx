@@ -12,7 +12,7 @@ import {
     type ClipboardEvent,
 } from "react";
 import { Button } from "./ui/button";
-import { IconArrowUp, IconPaperclip, IconXFilled } from "@tabler/icons-react";
+import { IconArrowUp, IconPaperclip, IconSquareFilled, IconXFilled } from "@tabler/icons-react";
 import { SlashMenu } from "./composer/slash-menu";
 import { AtMenu } from "./composer/at-menu";
 import { useSlashCommands } from "../hooks/useSlashCommands";
@@ -27,7 +27,9 @@ export type ComposerImagePayload = {
 
 type ComposerProps = {
     onSend: (message: string, images?: ComposerImagePayload[]) => void;
-    /** True after the first Escape press while streaming — second press stops the turn. */
+    /** Abort the in-flight turn immediately (one tap). */
+    onAbort?: () => void;
+    /** True after the first Escape press while streaming — the button reads Esc until arming expires. Tapping it still stops immediately. */
     abortArmed?: boolean;
     /** Queue a follow-up while the agent is streaming. */
     onQueue?: (message: string, images?: ComposerImagePayload[]) => void;
@@ -122,6 +124,7 @@ function fileToAttached(file: File): Promise<AttachedImage | null> {
 
 export const Composer = memo(function Composer({
     onSend,
+    onAbort,
     abortArmed,
     onQueue,
     isStreaming,
@@ -822,16 +825,18 @@ export const Composer = memo(function Composer({
                 <div className="flex shrink-0 items-center justify-end">
                     {isStreaming ? (
                         <Button
-                            type="submit"
+                            type="button"
                             variant="primary"
-                            disabled={!hasContent || !!disabled || !!isCompacting}
-                            aria-label={abortArmed ? "Press Esc again to stop" : "Queue as follow-up"}
-                            title={abortArmed ? "Press Esc again to stop" : "Queue as follow-up (Enter)"}
+                            disabled={!!disabled || !!isCompacting}
+                            onClick={() => onAbort?.()}
+                            aria-label={abortArmed ? "Press Esc again to stop" : "Stop"}
+                            title={abortArmed ? "Press Esc again to stop" : "Stop"}
+                            className="shrink-0"
                         >
                             {abortArmed ? (
                                 <span className="px-0.5 text-[11px] font-semibold leading-none">Esc</span>
                             ) : (
-                                <IconArrowUp className="size-4" />
+                                <IconSquareFilled className="size-4" />
                             )}
                         </Button>
                     ) : (

@@ -84,7 +84,6 @@ export function UiDemoPanel() {
         { id: "demo-1", text: "Also update the empty-state copy while you're in there", createdAt: Date.now() },
         { id: "demo-2", text: "And check the mobile layout for the sidebar", createdAt: Date.now() },
     ]);
-    const [demoAbortArmed, setDemoAbortArmed] = useState(false);
     // Sonner demo — fires real bottom-right toasts via the live viewport.
     const demoSonners = useSonners();
 
@@ -342,6 +341,7 @@ export function UiDemoPanel() {
                                 />
                                 <Composer
                                     onSend={() => {}}
+                                    onAbort={() => {}}
                                     abortArmed={demoAbortArmed}
                                     onQueue={(message) => {
                                         const trimmed = message.trim();
@@ -349,7 +349,8 @@ export function UiDemoPanel() {
                                         setDemoQueue((prev) => [
                                             ...prev,
                                             { id: `demo-${Date.now().toString(36)}`, text: trimmed, createdAt: Date.now() },
-                                        ]);
+    ]);
+    const [demoAbortArmed, setDemoAbortArmed] = useState(false);
                                     }}
                                     isStreaming
                                     draftKey="ui-demo-steering"

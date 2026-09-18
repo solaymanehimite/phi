@@ -1456,7 +1456,7 @@ export default function App() {
                                                         onClick={focusProjectPicker}
                                                         title={newChatProjectDisplay ? `Change project, currently ${newChatProjectDisplay}` : "Select a project"}
                                                         aria-label={newChatProjectDisplay ? `Change project, currently ${newChatProjectDisplay}` : "Select a project"}
-                                                        className="mr-2 inline-flex max-w-full items-center gap-2 rounded-xl border border-phi-border bg-phi-overlay px-3 py-1 align-baseline font-medium text-phi-text-primary hover:bg-phi-overlay-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-phi-accent/40"
+                                                        className="mr-2 inline-flex max-w-full items-center gap-2 rounded-xl bg-phi-overlay px-3 py-1 align-baseline font-medium text-phi-text-primary hover:bg-phi-overlay-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-phi-accent/40"
                                                     >
                                                         <span className="min-w-0 truncate">{newChatProjectDisplay || "a project"}</span>
                                                         <IconChevronDownFilled className="size-[0.7em] shrink-0 text-phi-text-muted" aria-hidden="true" />
@@ -1536,7 +1536,7 @@ export default function App() {
                                                             )}
                                                         </div>
                                                     </div>
-                                                    <Composer onSend={handleSend} abortArmed={abortArmed} onQueue={handleQueue} isStreaming={chat.isStreaming} isCompacting={isCompacting} cwd={chat.activeFile ? activeCwd : (newChatCwd ?? homeCwd)} draftKey={chat.activeFile ?? activeNewTabId} beforeSend={<><ModelSelector models={models.models} value={selectedModelKey} thinkingLevel={thinkingLevel} onSelect={handleSelectModel} onThinkingChange={handleThinkingChange} disabled={chat.isStreaming || (cFile ? compaction.isCompacting(cFile) : false)} isStreaming={chat.isStreaming} loading={models.loading} error={models.error} /><ThinkingEffortSelector models={models.models} modelKey={selectedModelKey} value={thinkingLevel} onChange={handleThinkingChange} disabled={chat.isStreaming || (cFile ? compaction.isCompacting(cFile) : false)} /></>} />
+                                                    <Composer onSend={handleSend} onAbort={() => void handleAbort()} abortArmed={abortArmed} onQueue={handleQueue} isStreaming={chat.isStreaming} isCompacting={isCompacting} cwd={chat.activeFile ? activeCwd : (newChatCwd ?? homeCwd)} draftKey={chat.activeFile ?? activeNewTabId} beforeSend={<><ModelSelector models={models.models} value={selectedModelKey} thinkingLevel={thinkingLevel} onSelect={handleSelectModel} onThinkingChange={handleThinkingChange} disabled={chat.isStreaming || (cFile ? compaction.isCompacting(cFile) : false)} isStreaming={chat.isStreaming} loading={models.loading} error={models.error} /><ThinkingEffortSelector models={models.models} modelKey={selectedModelKey} value={thinkingLevel} onChange={handleThinkingChange} disabled={chat.isStreaming || (cFile ? compaction.isCompacting(cFile) : false)} /></>} />
                                                 </div>
                                             );
                                         })()}
