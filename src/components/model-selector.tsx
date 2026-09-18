@@ -215,6 +215,13 @@ export const ModelSelector = memo(function ModelSelector({
                     m.provider.toLowerCase().includes(q),
             );
         }
+        // All-models view shows favourites first (stable — keeps list order otherwise).
+        if (activeCategory === "all" && favorites.length > 0) {
+            const fav = new Set(favorites);
+            out = [...out].sort(
+                (a, b) => Number(fav.has(modelKey(b))) - Number(fav.has(modelKey(a))),
+            );
+        }
         return out;
     }, [list, query, activeCategory, favorites]);
 

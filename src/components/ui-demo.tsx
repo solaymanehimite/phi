@@ -263,7 +263,6 @@ export function UiDemoPanel() {
                                     ariaCurrent={navActive === "chats" ? "page" : undefined}
                                 />
                                 <NavItem
-                                    label="Settings"
                                     icon={IconSettingsFilled}
                                     active={navActive === "settings"}
                                     onClick={() => setNavActive("settings")}
@@ -333,9 +332,6 @@ export function UiDemoPanel() {
                         </DemoSection>
 
                         <DemoSection id="steering" title="Steering & queue">
-                            <p className="mb-3 text-[12.5px] leading-5 text-phi-text-muted">
-                                Live stack from the chat view: <InlineCode>QueueIndicator</InlineCode> floating above a streaming <InlineCode>Composer</InlineCode>. Type a follow-up and hit Enter to queue it; arm Esc to preview the two-step stop.
-                            </p>
                             {/* Same stack as App.tsx: queue floats narrower above the composer. */}
                             <div className="mx-auto flex w-full max-w-3xl flex-col gap-0">
                                 <QueueIndicator
@@ -382,9 +378,6 @@ export function UiDemoPanel() {
                         </DemoSection>
 
                         <DemoSection id="sonners" title="Sonners">
-                            <p className="mb-3 text-[12.5px] leading-5 text-phi-text-muted">
-                                Background finish notices pin to the <InlineCode>bottom-right</InlineCode> of the window — fire one to see it live. <InlineCode>View session</InlineCode> jumps to the session; they auto-dismiss after a few seconds.
-                            </p>
                             <div className="flex flex-wrap items-center gap-2">
                                 <Button
                                     variant="secondary"
