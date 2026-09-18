@@ -25,7 +25,6 @@ import {
 } from "./ui/dropdown-menu";
 import { GroupCollapsibleTrigger } from "./ui/collapsible";
 import { NavItem } from "./ui/nav-item";
-import { TargetIcon } from "./target-picker";
 import { hostOfSession } from "../lib/hosts";
 import { formatProjectPath, type ProjectGroup } from "../lib/projects";
 import type { SessionInfo } from "../types/session";
@@ -687,11 +686,6 @@ const GroupSection = memo(function GroupSection({
                 <span className="min-w-0 flex-1 truncate text-current">
                     {project.name}
                 </span>
-                {showHostBadges && project.implicit && (
-                    <span title={`Runs on ${hostNameById[project.hostId] ?? project.hostId}`} className="shrink-0 text-phi-text-faint">
-                        <TargetIcon hostId={project.hostId} className="size-3.5" />
-                    </span>
-                )}
             </GroupCollapsibleTrigger>
 
             <div
@@ -1087,11 +1081,6 @@ const SessionRow = memo(function SessionRow({
                     className="flex min-w-0 flex-1 items-center truncate rounded-lg px-1.5 py-1 pr-8 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-phi-accent/40"
                 >
                     <MarqueeTitle title={title} />
-                    {hostName && (
-                        <span title={`Runs on ${hostName}`} className="ml-1.5 inline-flex shrink-0 items-center text-phi-text-faint">
-                            <TargetIcon hostId={hostId} className="size-3" />
-                        </span>
-                    )}
                     {hasDraft && (
                         <IconSendFilled
                             className="ml-2.5 size-3 shrink-0 rotate-45 text-phi-text-muted"
