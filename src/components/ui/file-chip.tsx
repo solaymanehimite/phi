@@ -150,10 +150,10 @@ export const FileChip = memo(function FileChip({ path, className = "" }: FileChi
             onClick={onClick}
             title={`${title} — add to composer`}
             aria-label={`Add ${title} to composer`}
-            className={`inline-flex max-w-full cursor-pointer items-center gap-1 rounded-md border border-phi-border bg-phi-overlay px-1.5 py-px align-middle text-[12px] font-medium leading-5 text-phi-text-primary transition-colors hover:bg-phi-overlay-hover focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-phi-accent/60 ${className}`}
+            className={`inline-flex max-w-full cursor-pointer items-center gap-1 rounded-lg border border-phi-border bg-phi-overlay-code px-1.5 py-px align-middle text-[12px] font-medium leading-5 text-phi-text-primary transition-colors hover:bg-phi-overlay-strong focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-phi-accent/60 ${className}`}
         >
             <ChipIcon name={name} isDirectory={isDirectory} />
-            <span className="min-w-0 max-w-[220px] truncate">{name}</span>
+            <span className="min-w-0 max-w-[320px] truncate">{name}</span>
         </button>
     );
 });

@@ -1,7 +1,7 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { WorkItem } from "../../types/work";
 import { IconChevronDownFilled } from "@tabler/icons-react";
-import { ToolLine } from "./tool-line";
+import { ToolGroupLine, ToolLine, groupConsecutiveTools } from "./tool-line";
 import { Orb } from "@aicss/react";
 
 type Props = {
@@ -49,6 +49,10 @@ export function WorkingBlock({ items, isStreaming, variant, animateOnMount, star
         const id = window.setInterval(() => setNow(Date.now()), 1000);
         return () => window.clearInterval(id);
     }, [showLiveElapsed, startedAt]);
+
+    // Consecutive runs of the same groupable tool collapse to one line
+    // ("Read 4 files" + chips). Command tools stay separate.
+    const entries = useMemo(() => groupConsecutiveTools(items), [items]);
 
     if (!hasWork && !(isStreamingVariant && isStreaming)) return null;
 
@@ -114,7 +118,11 @@ export function WorkingBlock({ items, isStreaming, variant, animateOnMount, star
                     <div
                         className={`${isStreaming && isStreamingVariant ? "phi-work-stagger " : ""}space-y-3 pb-1 pt-1`}
                     >
-                        {items.map((item) => {
+                        {entries.map((entry) => {
+                            if (Array.isArray(entry)) {
+                                return <ToolGroupLine key={entry.map((t) => t.id).join("|")} items={entry} />;
+                            }
+                            const item = entry;
                             if (item.kind === "thinking") {
                                 return (
                                     <div

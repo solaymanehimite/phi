@@ -154,34 +154,98 @@ function DiffOutput({ diff, isError, language }: { diff: string; isError: boolea
     );
 }
 
-export function ToolLine({ item }: ToolLineProps) {
-    const [open, setOpen] = useState(false);
+export type ToolItem = Extract<WorkItem, { kind: "tool" }>;
+
+/** Command tools never group — each invocation stays on its own line. */
+const NEVER_GROUP = new Set(["bash", "powershell"]);
+
+function canGroup(name: string): boolean {
+    return !NEVER_GROUP.has(name);
+}
+
+/**
+ * Group consecutive tool items with the same groupable name.
+ * Thinking items and command tools always break a run. Singletons are
+ * returned as-is so callers render the regular ToolLine.
+ */
+export function groupConsecutiveTools(
+    items: WorkItem[],
+): Array<WorkItem | ToolItem[]> {
+    const out: Array<WorkItem | ToolItem[]> = [];
+    let run: ToolItem[] = [];
+    const flushRun = () => {
+        if (run.length === 0) return;
+        if (run.length === 1) out.push(run[0]);
+        else out.push([...run]);
+        run = [];
+    };
+    for (const item of items) {
+        if (item.kind !== "tool" || !canGroup(item.name)) {
+            flushRun();
+            out.push(item);
+            continue;
+        }
+        const tool = item as ToolItem;
+        const prev = run[run.length - 1];
+        if (prev && prev.name === tool.name) {
+            run.push(tool);
+        } else {
+            flushRun();
+            run = [tool];
+        }
+    }
+    flushRun();
+    return out;
+}
+
+function groupLabel(name: string, count: number): string {
+    if (name === "read") return `Read ${count} files`;
+    if (name === "write") return `Write ${count} files`;
+    if (name === "edit") return `Edit ${count} files`;
+    if (name === "grep") return `Search ${count} patterns`;
+    if (name === "find") return `Find ${count} patterns`;
+    if (name === "ls") return `List ${count} paths`;
+    const pretty = name.replace(/[-_]/g, " ");
+    const capitalized = pretty.charAt(0).toUpperCase() + pretty.slice(1);
+    return `${capitalized} ×${count}`;
+}
+
+type GroupChip =
+    | { kind: "file"; key: string; path: string }
+    | { kind: "code"; key: string; text: string };
+
+function groupChips(items: ToolItem[]): GroupChip[] {
+    return items.map((item, index) => {
+        const key = `${item.id}-${index}`;
+        const path = typeof item.args.path === "string" && item.args.path.trim().length > 0
+            ? String(item.args.path)
+            : null;
+        if (item.name === "read" || item.name === "write" || item.name === "edit" || item.name === "ls") {
+            if (path) return { kind: "file", key, path };
+        }
+        if (item.name === "grep" || item.name === "find") {
+            const pattern = typeof item.args.pattern === "string" ? item.args.pattern : null;
+            if (pattern) return { kind: "code", key, text: pattern };
+            if (path) return { kind: "file", key, path };
+        }
+        if (path) return { kind: "file", key, path };
+        const { detail } = toolMeta(item.name, item.args);
+        if (detail) return { kind: "code", key, text: detail };
+        return { kind: "code", key, text: item.name };
+    });
+}
+
+function ToolResultBody({ item }: { item: ToolItem }) {
     const [copied, setCopied] = useState(false);
-    // Collapsed output mounts nothing: Highlight tokenization must not run
-    // for tool results the user never expanded (the common history case).
-    // Retained after first open so collapse doesn't discard work.
-    const [hasOpened, setHasOpened] = useState(false);
-    useEffect(() => {
-        if (open && !hasOpened) setHasOpened(true);
-    }, [open, hasOpened]);
     const result = item.result;
     const output = result?.text || item.partial || "";
     const copyText = item.name === "edit" && result?.diff ? result.diff : output;
     const isError = result?.isError ?? false;
-    const { label, detail } = toolMeta(item.name, item.args);
     const filePath = typeof item.args.path === "string" ? item.args.path : undefined;
-    const isFileTool =
-        (item.name === "read" || item.name === "write" || item.name === "edit") &&
-        typeof filePath === "string" &&
-        filePath.trim().length > 0;
-    // File-content outputs (read/write/edit) highlight by file extension.
-    // Error output stays plain so the error color survives.
     const outputLanguage =
         filePath && (item.name === "read" || item.name === "write" || item.name === "edit")
             ? detectLanguage({ path: filePath })
             : undefined;
-    const finished = Boolean(result || item.done);
-    const StatusIcon = isError ? IconXFilled : IconCheckFilled;
 
     const copy = async (text: string) => {
         try {
@@ -192,23 +256,169 @@ export function ToolLine({ item }: ToolLineProps) {
     };
 
     return (
+        <div className="relative">
+            {item.name === "edit" && result?.diff ? (
+                <DiffOutput diff={result.diff} isError={isError} language={isError ? undefined : outputLanguage} />
+            ) : (
+                <Well as="pre" className={`max-h-64 overflow-auto whitespace-pre-wrap break-words px-1.5 py-2 pr-9 font-mono text-[11px] leading-5 ${isError ? "text-phi-error-text" : "text-phi-text-primary"}`}>{output ? <LazyHighlightedCode code={output} language={isError ? undefined : outputLanguage} /> : "No output"}</Well>
+            )}
+            {copyText && <span className="absolute right-1.5 top-1.5"><Button type="button" variant="mini" aria-label="Copy output" title={copied ? "Copied" : "Copy output"} onClick={() => void copy(copyText)}>{copied ? <IconCheckFilled className="size-3.5" /> : <IconCopyFilled className="size-3.5" />}</Button></span>}
+        </div>
+    );
+}
+
+export function ToolGroupLine({ items }: { items: ToolItem[] }) {
+    const [open, setOpen] = useState(false);
+    const [hasOpened, setHasOpened] = useState(false);
+    useEffect(() => {
+        if (open && !hasOpened) setHasOpened(true);
+    }, [open, hasOpened]);
+    const name = items[0]?.name ?? "";
+    const label = groupLabel(name, items.length);
+    const chips = groupChips(items);
+    const hasError = items.some((item) => item.result?.isError);
+    const allFinished = items.every((item) => Boolean(item.result || item.done));
+    const StatusIcon = hasError ? IconXFilled : IconCheckFilled;
+
+    // Read calls are not expandable — static status row only.
+    if (name === "read") {
+        return (
+            <div className="phi-tool-line group/tool">
+                <div className="flex min-h-7 w-fit max-w-full min-w-0 items-start gap-2 px-1.5 py-0.5 text-[12px]">
+                    <span className="flex h-6 shrink-0 items-center gap-2">
+                        <span className={`relative grid size-4 shrink-0 place-items-center rounded-full ${allFinished ? (hasError ? "bg-phi-error text-[color-mix(in_srgb,black_60%,var(--color-phi-error))]" : "bg-phi-thinking-low text-[color-mix(in_srgb,black_60%,var(--color-phi-thinking-low))]") : "border border-phi-text-muted text-transparent"}`}>
+                            {allFinished && <StatusIcon className="size-2.5" aria-hidden="true" />}
+                        </span>
+                        <span className={`shrink-0 font-medium ${hasError ? "text-phi-error" : "text-phi-text-secondary"}`}>{label}</span>
+                    </span>
+                    <span className="flex min-w-0 flex-wrap items-center gap-1">
+                        {chips.map((chip) =>
+                            chip.kind === "file" ? (
+                                <FileChip key={chip.key} path={chip.path} />
+                            ) : (
+                                <code key={chip.key} className="block max-w-[220px] truncate rounded bg-phi-overlay-code px-1.5 py-0.5 font-mono text-[11px] text-phi-text-tertiary">{chip.text}</code>
+                            ),
+                        )}
+                    </span>
+                </div>
+            </div>
+        );
+    }
+
+    return (
         <div className="phi-tool-line group/tool">
             <button
                 type="button"
                 onClick={() => setOpen((value) => !value)}
                 aria-expanded={open}
-                className="group flex min-h-7 w-full min-w-0 items-center gap-2 rounded-xl px-1.5 text-left text-[12px] transition-colors hover:bg-phi-overlay-hover focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-phi-accent/50"
+                aria-label={`${label}, ${items.length} calls`}
+                className="group flex min-h-7 w-fit max-w-full min-w-0 items-start gap-2 rounded-xl px-1.5 py-0.5 text-left text-[12px] hover:bg-phi-overlay-hover focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-phi-accent/50"
             >
-                <span className={`relative grid size-4 shrink-0 place-items-center rounded-full ${finished ? (isError ? "bg-phi-error text-phi-white" : "bg-phi-thinking-low text-phi-white") : "border border-phi-text-muted text-transparent"}`}>
+                <span className="flex h-6 shrink-0 items-center gap-2">
+                    <span className={`relative grid size-4 shrink-0 place-items-center rounded-full ${allFinished ? (hasError ? "bg-phi-error text-[color-mix(in_srgb,black_60%,var(--color-phi-error))]" : "bg-phi-thinking-low text-[color-mix(in_srgb,black_60%,var(--color-phi-thinking-low))]") : "border border-phi-text-muted text-transparent"}`}>
+                        {allFinished && <StatusIcon className="size-2.5" aria-hidden="true" />}
+                    </span>
+                    <span className={`shrink-0 font-medium ${hasError ? "text-phi-error" : "text-phi-text-secondary"}`}>{label}</span>
+                </span>
+                <span className="flex min-w-0 flex-wrap items-center gap-1" onClick={(event) => event.stopPropagation()}>
+                    {chips.map((chip) =>
+                        chip.kind === "file" ? (
+                            <FileChip key={chip.key} path={chip.path} />
+                        ) : (
+                            <code key={chip.key} className="block max-w-[220px] truncate rounded bg-phi-overlay-code px-1.5 py-0.5 font-mono text-[11px] text-phi-text-tertiary">{chip.text}</code>
+                        ),
+                    )}
+                </span>
+            </button>
+            <div className={`grid transition-[grid-template-rows,opacity] duration-250 ease-[cubic-bezier(0.16,1,0.3,1)] ${open ? "grid-rows-[1fr] opacity-100" : "grid-rows-[0fr] opacity-0"}`}>
+                <div className="min-h-0 overflow-hidden">
+                    <div className="space-y-2 py-1">
+                        {!hasOpened ? null : items.map((item) => {
+                            const itemIsError = item.result?.isError ?? false;
+                            const itemFinished = Boolean(item.result || item.done);
+                            const ItemStatus = itemIsError ? IconXFilled : IconCheckFilled;
+                            return (
+                                <div key={item.id}>
+                                    <div className="flex min-w-0 items-center gap-1.5 pb-1">
+                                        <span className={`grid size-3 shrink-0 place-items-center rounded-full ${itemFinished ? (itemIsError ? "bg-phi-error text-[color-mix(in_srgb,black_60%,var(--color-phi-error))]" : "bg-phi-thinking-low text-[color-mix(in_srgb,black_60%,var(--color-phi-thinking-low))]") : "border border-phi-text-muted text-transparent"}`}>
+                                            {itemFinished && <ItemStatus className="size-2" aria-hidden="true" />}
+                                        </span>
+                                        {typeof item.args.path === "string" && item.args.path.trim().length > 0 && (name === "read" || name === "write" || name === "edit" || name === "ls") ? (
+                                            <span className="min-w-0" onClick={(event) => event.stopPropagation()}>
+                                                <FileChip path={String(item.args.path)} />
+                                            </span>
+                                        ) : (
+                                            <code className="block max-w-[60%] truncate rounded bg-phi-overlay-code px-1.5 py-0.5 font-mono text-[11px] text-phi-text-tertiary">{toolMeta(item.name, item.args).detail ?? item.name}</code>
+                                        )}
+                                    </div>
+                                    <ToolResultBody item={item} />
+                                </div>
+                            );
+                        })}
+                    </div>
+                </div>
+            </div>
+        </div>
+    );
+}
+
+export function ToolLine({ item }: ToolLineProps) {
+    const [open, setOpen] = useState(false);
+    // Collapsed output mounts nothing: Highlight tokenization must not run
+    // for tool results the user never expanded (the common history case).
+    // Retained after first open so collapse doesn't discard work.
+    const [hasOpened, setHasOpened] = useState(false);
+    useEffect(() => {
+        if (open && !hasOpened) setHasOpened(true);
+    }, [open, hasOpened]);
+    const result = item.result;
+    const isError = result?.isError ?? false;
+    const { label, detail } = toolMeta(item.name, item.args);
+    const filePath = typeof item.args.path === "string" ? item.args.path : undefined;
+    const isFileTool =
+        (item.name === "read" || item.name === "write" || item.name === "edit") &&
+        typeof filePath === "string" &&
+        filePath.trim().length > 0;
+    const finished = Boolean(result || item.done);
+    const StatusIcon = isError ? IconXFilled : IconCheckFilled;
+
+    // Read calls are not expandable — static status row only.
+    if (item.name === "read") {
+        return (
+            <div className="phi-tool-line group/tool">
+                <div className="flex min-h-7 w-fit max-w-full min-w-0 items-center gap-2 px-1.5 text-[12px]">
+                    <span className={`relative grid size-4 shrink-0 place-items-center rounded-full ${finished ? (isError ? "bg-phi-error text-[color-mix(in_srgb,black_60%,var(--color-phi-error))]" : "bg-phi-thinking-low text-[color-mix(in_srgb,black_60%,var(--color-phi-thinking-low))]") : "border border-phi-text-muted text-transparent"}`}>
+                        {finished && <StatusIcon className="size-2.5" aria-hidden="true" />}
+                    </span>
+                    <span className={`shrink-0 font-medium ${isError ? "text-phi-error" : "text-phi-text-secondary"}`}>{label}</span>
+                    {typeof item.args.path === "string" && item.args.path.trim().length > 0 && (
+                        <span className="min-w-0 max-w-full shrink-0">
+                            <FileChip path={String(item.args.path)} />
+                        </span>
+                    )}
+                </div>
+            </div>
+        );
+    }
+
+    return (
+        <div className="phi-tool-line group/tool">
+            <button
+                type="button"
+                onClick={() => setOpen((value) => !value)}
+                aria-expanded={open}
+                className="group flex min-h-7 w-fit max-w-full min-w-0 items-center gap-2 rounded-xl px-1.5 text-left text-[12px] hover:bg-phi-overlay-hover focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-phi-accent/50"
+            >
+                <span className={`relative grid size-4 shrink-0 place-items-center rounded-full ${finished ? (isError ? "bg-phi-error text-[color-mix(in_srgb,black_60%,var(--color-phi-error))]" : "bg-phi-thinking-low text-[color-mix(in_srgb,black_60%,var(--color-phi-thinking-low))]") : "border border-phi-text-muted text-transparent"}`}>
                     {finished && <StatusIcon className="size-2.5" aria-hidden="true" />}
                 </span>
                 <span className={`shrink-0 font-medium ${isError ? "text-phi-error" : "text-phi-text-secondary"}`}>{label}</span>
                 {isFileTool && typeof item.args.path === "string" ? (
-                    <span className="min-w-0 max-w-[58%] shrink-0" onClick={(event) => event.stopPropagation()}>
+                    <span className="min-w-0 max-w-full shrink-0" onClick={(event) => event.stopPropagation()}>
                         <FileChip path={String(item.args.path)} />
                     </span>
                 ) : detail && (
-                    <span className="group/path relative min-w-0 max-w-[58%]">
+                    <span className="group/path relative min-w-0 max-w-[320px]">
                         <code className={`block truncate rounded bg-phi-overlay-code px-1.5 py-0.5 pr-7 font-mono text-[11px] ${item.name === "bash" ? "text-phi-text-primary" : "text-phi-text-tertiary"}`}>{item.name === "bash" && detail ? <InlineShell code={detail} /> : detail}</code>
                         {["ls"].includes(item.name) && typeof item.args.path === "string" && (
                             <button type="button" aria-label="Copy path to prompt" title="Copy to prompt" onClick={(event) => { event.stopPropagation(); addPath(String(item.args.path)); }} className="absolute right-0.5 top-1/2 grid size-5 -translate-y-1/2 place-items-center text-phi-text-muted opacity-0 transition-opacity hover:text-phi-text-primary group-hover/path:opacity-100 group-focus-within/path:opacity-100 focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-phi-accent/60">
@@ -220,15 +430,8 @@ export function ToolLine({ item }: ToolLineProps) {
             </button>
             <div className={`grid transition-[grid-template-rows,opacity] duration-250 ease-[cubic-bezier(0.16,1,0.3,1)] ${open ? "grid-rows-[1fr] opacity-100" : "grid-rows-[0fr] opacity-0"}`}>
                 <div className="min-h-0 overflow-hidden">
-                    <div className="ml-1 border-l border-phi-border-strong py-1 pl-2">
-                        <div className="relative">
-                            {!hasOpened ? null : item.name === "edit" && result?.diff ? (
-                                <DiffOutput diff={result.diff} isError={isError} language={isError ? undefined : outputLanguage} />
-                            ) : (
-                                <Well as="pre" className={`max-h-64 overflow-auto whitespace-pre-wrap break-words px-1.5 py-2 pr-9 font-mono text-[11px] leading-5 ${isError ? "text-phi-error-text" : "text-phi-text-primary"}`}>{output ? <LazyHighlightedCode code={output} language={isError ? undefined : outputLanguage} /> : "No output"}</Well>
-                            )}
-                            {copyText && <span className="absolute right-1.5 top-1.5"><Button type="button" variant="mini" aria-label="Copy output" title={copied ? "Copied" : "Copy output"} onClick={() => void copy(copyText)}>{copied ? <IconCheckFilled className="size-3.5" /> : <IconCopyFilled className="size-3.5" />}</Button></span>}
-                        </div>
+                    <div className="py-1">
+                        {!hasOpened ? null : <ToolResultBody item={item} />}
                     </div>
                 </div>
             </div>
