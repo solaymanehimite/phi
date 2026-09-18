@@ -260,7 +260,7 @@ export const ModelSelector = memo(function ModelSelector({
     const isDisabled = !!disabled || !!isStreaming;
 
     const railBtn = (isActive: boolean) =>
-        `grid size-11 place-items-center rounded-xl ${
+        `grid size-9 place-items-center rounded-xl ${
             isActive
                 ? "text-phi-text-primary"
                 : "text-phi-text-muted hover:bg-phi-overlay hover:text-phi-text-secondary"
@@ -268,7 +268,7 @@ export const ModelSelector = memo(function ModelSelector({
 
     // Sliding rail indicator — a single bar that glides between the active
     // buttons via transform (compositor-thread, no library needed).
-    const INDICATOR_HEIGHT = 24;
+    const INDICATOR_HEIGHT = 20;
     const railColRef = useRef<HTMLDivElement>(null);
     const railBtnRefs = useRef(new Map<string, HTMLButtonElement>());
     const [indicatorY, setIndicatorY] = useState<number | null>(null);
@@ -322,7 +322,7 @@ export const ModelSelector = memo(function ModelSelector({
 
                     <PopoverContent
                         anchor={{ to: "top start", gap: 12 }}
-                        className="h-[360px] w-[420px] overflow-hidden"
+                        className="h-[300px] w-[360px] overflow-hidden"
                     >
                         <div
                             className="flex h-full flex-col"
@@ -331,8 +331,8 @@ export const ModelSelector = memo(function ModelSelector({
                         >
                             <div className="flex min-h-0 flex-1 items-stretch">
                                 {/* left column — star + provider rail, owns the sliding indicator */}
-                                <div ref={railColRef} className="relative flex w-[54px] shrink-0 flex-col border-r border-phi-border-faint">
-                                    <div className="flex h-[52px] shrink-0 items-center justify-center border-b border-phi-border-faint">
+                                <div ref={railColRef} className="relative flex w-[44px] shrink-0 flex-col border-r border-phi-border-faint">
+                                    <div className="flex h-[44px] shrink-0 items-center justify-center border-b border-phi-border-faint">
                                         <button
                                             ref={registerRailBtn("favorites")}
                                             onClick={() =>
@@ -344,7 +344,7 @@ export const ModelSelector = memo(function ModelSelector({
                                             title="Favorites"
                                             className={railBtn(activeCategory === "favorites")}
                                         >
-                                            <IconStarFilled className={`size-5 ${activeCategory === "favorites" ? "text-phi-warning" : ""}`} />
+                                            <IconStarFilled className={`size-4 ${activeCategory === "favorites" ? "text-phi-warning" : ""}`} />
                                         </button>
                                     </div>
                                     <div
@@ -373,13 +373,13 @@ export const ModelSelector = memo(function ModelSelector({
                                                         <img
                                                             src={url}
                                                             alt=""
-                                                            width={22}
-                                                            height={22}
-                                                            className="size-[22px] object-contain"
+                                                            width={18}
+                                                            height={18}
+                                                            className="size-[18px] object-contain"
                                                             draggable={false}
                                                         />
                                                     ) : (
-                                                        <Icon className="size-[22px]" />
+                                                        <Icon className="size-[18px]" />
                                                     )}
                                                 </button>
                                             );
@@ -389,7 +389,7 @@ export const ModelSelector = memo(function ModelSelector({
                                     {indicatorY != null && (
                                         <span
                                             aria-hidden="true"
-                                            className={`absolute right-0 top-0 h-6 w-[3px] rounded-full bg-phi-accent motion-safe:transition-[transform,opacity] motion-safe:duration-200 motion-safe:ease-out ${isRailActive ? "opacity-100" : "opacity-0"}`}
+                                            className={`absolute right-0 top-0 h-5 w-[3px] rounded-full bg-phi-accent motion-safe:transition-[transform,opacity] motion-safe:duration-200 motion-safe:ease-out ${isRailActive ? "opacity-100" : "opacity-0"}`}
                                             style={{ transform: `translateY(${indicatorY}px)` }}
                                         />
                                     )}
@@ -398,14 +398,14 @@ export const ModelSelector = memo(function ModelSelector({
                                 {/* right column */}
                                 <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
                                     {/* search — same height as the star cell so separators line up */}
-                                    <div className="flex h-[52px] shrink-0 items-center gap-2 border-b border-phi-border-faint px-3.5">
-                                        <IconSearch className="size-4 shrink-0 text-phi-text-tertiary" />
+                                    <div className="flex h-[44px] shrink-0 items-center gap-2 border-b border-phi-border-faint px-3">
+                                        <IconSearch className="size-3.5 shrink-0 text-phi-text-tertiary" />
                                         <input
                                             autoFocus
                                             value={query}
                                             onChange={handleQueryChange}
                                             placeholder="Search models..."
-                                            className="h-full w-full bg-transparent text-[14px] text-phi-text-primary placeholder:text-phi-text-muted focus:outline-none"
+                                            className="h-full w-full bg-transparent text-[13px] text-phi-text-primary placeholder:text-phi-text-muted focus:outline-none"
                                         />
                                     </div>
                                     {error && (
@@ -421,7 +421,7 @@ export const ModelSelector = memo(function ModelSelector({
                                         </Alert>
                                     )}
 
-                                    <div className="min-h-0 flex-1 overflow-y-auto px-2.5 py-2">
+                                    <div className="min-h-0 flex-1 overflow-y-auto py-2 pl-2.5 pr-1 [scrollbar-gutter:stable]">
                                         {loading ? (
                                             <p className="px-3 py-10 text-center text-[13px] text-phi-text-muted">
                                                 Loading models…
@@ -448,78 +448,65 @@ export const ModelSelector = memo(function ModelSelector({
                                                             }}
                                                             onMouseEnter={() => setActiveIdx(idx)}
                                                             disabled={isDisabled}
-                                                            className={`group flex w-full items-center justify-between gap-3 rounded-xl px-3.5 py-2.5 text-left disabled:opacity-60 ${
+                                                            className={`group flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-left disabled:opacity-60 ${
                                                                 isSelected || isActive
                                                                     ? "bg-phi-overlay-strong"
                                                                     : "hover:bg-phi-overlay"
                                                             }`}
                                                         >
-                                                            <span className="min-w-0 flex-1">
-                                                                <span className="block truncate text-[15px] font-semibold leading-tight text-phi-text-primary">
-                                                                    {model.name}
+                                                            <span title={prettyProvider(model.provider)} className="inline-flex shrink-0 items-center">
+                                                                <ProviderImg
+                                                                    provider={model.provider}
+                                                                    size={14}
+                                                                    className="shrink-0"
+                                                                />
+                                                            </span>
+                                                            <span className="min-w-0 flex-1 truncate text-[13px] font-medium text-phi-text-primary">
+                                                                {model.name}
+                                                            </span>
+                                                            <span className="inline-flex shrink-0 items-center gap-1.5 text-[11px] text-phi-text-tertiary">
+                                                                <span className="inline-flex items-center gap-0.5">
+                                                                    {formatCost(
+                                                                        model.cost.input,
+                                                                    )}{" "}
+                                                                    <IconArrowDown className="size-[10px]" />
                                                                 </span>
-                                                                <span className="mt-1 flex min-w-0 items-center gap-1.5 truncate text-[12.5px] leading-none text-phi-text-tertiary">
-                                                                    <ProviderImg
-                                                                        provider={model.provider}
-                                                                        size={13}
-                                                                        className="shrink-0"
-                                                                    />
-                                                                    <span className="truncate">
-                                                                        {prettyProvider(
-                                                                            model.provider,
-                                                                        )}
-                                                                    </span>
-                                                                    <span>
-                                                                        ·
-                                                                    </span>
-                                                                    <span className="inline-flex shrink-0 items-center gap-0.5">
-                                                                        {formatCost(
-                                                                            model.cost.input,
-                                                                        )}{" "}
-                                                                        <IconArrowDown className="size-[11px]" />
-                                                                    </span>
-                                                                    <span>
-                                                                        ·
-                                                                    </span>
-                                                                    <span className="inline-flex shrink-0 items-center gap-0.5">
-                                                                        {formatCost(
-                                                                            model.cost.output,
-                                                                        )}{" "}
-                                                                        <IconArrowUp className="size-[11px]" />
-                                                                    </span>
+                                                                <span className="inline-flex items-center gap-0.5">
+                                                                    {formatCost(
+                                                                        model.cost.output,
+                                                                    )}{" "}
+                                                                    <IconArrowUp className="size-[10px]" />
                                                                 </span>
                                                             </span>
-                                                            <span className="flex shrink-0 items-center">
-                                                                <span
-                                                                    role="button"
-                                                                    tabIndex={-1}
-                                                                    aria-label={
-                                                                        isFav
-                                                                            ? "Remove from favorites"
-                                                                            : "Add to favorites"
-                                                                    }
-                                                                    onClick={(e) => {
+                                                            <span
+                                                                role="button"
+                                                                tabIndex={-1}
+                                                                aria-label={
+                                                                    isFav
+                                                                        ? "Remove from favorites"
+                                                                        : "Add to favorites"
+                                                                }
+                                                                onClick={(e) => {
+                                                                    e.stopPropagation();
+                                                                    toggleFavorite(k);
+                                                                }}
+                                                                onKeyDown={(e) => {
+                                                                    if (
+                                                                        e.key === "Enter" ||
+                                                                        e.key === " "
+                                                                    ) {
                                                                         e.stopPropagation();
+                                                                        e.preventDefault();
                                                                         toggleFavorite(k);
-                                                                    }}
-                                                                    onKeyDown={(e) => {
-                                                                        if (
-                                                                            e.key === "Enter" ||
-                                                                            e.key === " "
-                                                                        ) {
-                                                                            e.stopPropagation();
-                                                                            e.preventDefault();
-                                                                            toggleFavorite(k);
-                                                                        }
-                                                                    }}
-                                                                    className="grid shrink-0 place-items-center rounded p-0.5"
-                                                                >
-                                                                    {isFav ? (
-                                                                        <IconStarFilled className="size-4 text-phi-warning" />
-                                                                    ) : (
-                                                                        <IconStar className="size-4 text-phi-text-tertiary" />
-                                                                    )}
-                                                                </span>
+                                                                    }
+                                                                }}
+                                                                className="grid shrink-0 place-items-center rounded p-0.5"
+                                                            >
+                                                                {isFav ? (
+                                                                    <IconStarFilled className="size-3.5 text-phi-warning" />
+                                                                ) : (
+                                                                    <IconStar className="size-3.5 text-phi-text-tertiary" />
+                                                                )}
                                                             </span>
                                                         </button>
                                                     );

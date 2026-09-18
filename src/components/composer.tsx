@@ -791,7 +791,7 @@ export const Composer = memo(function Composer({
             />
 
             <div className="mt-3 flex items-center justify-between gap-2 px-0.5 pb-0.5">
-                <div className="flex shrink-0 items-center gap-1.5">
+                <div className="flex min-w-0 flex-1 items-center gap-1.5">
                     <input
                         ref={fileInputRef}
                         type="file"
@@ -812,14 +812,14 @@ export const Composer = memo(function Composer({
                     >
                         <IconPaperclip className="size-4" />
                     </Button>
-                </div>
-
-                <div className="flex min-w-0 flex-1 items-center justify-end gap-4">
                     {beforeSend && (
                         <div className="flex min-w-0 items-center gap-1 overflow-hidden">
                             {beforeSend}
                         </div>
                     )}
+                </div>
+
+                <div className="flex shrink-0 items-center justify-end">
                     {isStreaming ? (
                         <Button
                             type="submit"
