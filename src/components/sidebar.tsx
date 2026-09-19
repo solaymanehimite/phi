@@ -26,6 +26,8 @@ import {
 import { GroupCollapsibleTrigger } from "./ui/collapsible";
 import { NavItem } from "./ui/nav-item";
 import { hostOfSession } from "../lib/hosts";
+import { useEffectiveTheme } from "../hooks/useTheme";
+import { brandingUrl } from "../lib/themed-assets";
 import { formatProjectPath, type ProjectGroup } from "../lib/projects";
 import type { SessionInfo } from "../types/session";
 import { useHasDraft } from "../hooks/useHasDraft";
@@ -155,6 +157,7 @@ export const Sidebar = memo(function Sidebar({
 
     const pinnedCollapsed = collapsed.has("pinned");
     const archivedCollapsed = collapsed.has("archived");
+    const theme = useEffectiveTheme();
     const handleTogglePinned = useCallback(() => onToggleGroup("pinned"), [onToggleGroup]);
     const handleToggleArchived = useCallback(() => onToggleGroup("archived"), [onToggleGroup]);
 
@@ -162,9 +165,16 @@ export const Sidebar = memo(function Sidebar({
         <aside className="flex h-full w-(--phi-sidebar-width) min-w-(--phi-sidebar-width) shrink-0 flex-col bg-phi-bg-sidebar">
             <div
                 data-tauri-drag-region
-                className="mb-2 flex h-10 shrink-0 items-end pl-2 pr-[85px]"
+                className="mb-2 flex h-10 shrink-0 items-end pl-[18px] pr-[85px]"
                 aria-hidden
-            />
+            >
+                <img
+                    src={brandingUrl("logo.svg", theme)}
+                    alt=""
+                    draggable={false}
+                    className="h-5 w-auto"
+                />
+            </div>
 
             <div className="shrink-0 space-y-0.5 px-2 pt-2">
                 <Button className="w-full justify-start" onClick={onNewChat}>

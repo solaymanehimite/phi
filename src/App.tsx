@@ -44,7 +44,6 @@ import { createSession, health, redoTurn, streamContinue, undoTurn } from "./lib
 import { CompactionIndicator } from "./components/compaction-indicator";
 import { useEffectiveTheme, useTheme } from "./hooks/useTheme";
 import { refreshCustomThemeApplication, clearActiveCustomTheme } from "./hooks/useCustomThemes";
-import { brandingUrl } from "./lib/themed-assets";
 import { useHealth } from "./hooks/useHealth";
 import { FatalState } from "./components/fatal";
 import { SettingsPanel, type SettingsSection } from "./components/settings";
@@ -1465,6 +1464,7 @@ export default function App() {
                                     </section>
                                 ) : (
                                 <section className="relative flex min-h-0 flex-1 flex-col">
+                                    <div aria-hidden="true" className="pointer-events-none absolute inset-0 -z-10 bg-gradient-to-b from-phi-overlay-strong via-phi-overlay to-transparent" />
                                     {chat.activeFile ? (
                                         <div className="pointer-events-none absolute right-4 top-4 z-10 flex justify-end">
                                             <div className="pointer-events-auto">
@@ -1474,14 +1474,8 @@ export default function App() {
                                     ) : null}
                                     {!chat.activeFile ? (
                                         <div className="mx-auto flex w-full max-w-4xl flex-1 flex-col overflow-y-auto px-6 pt-6">
-                                            <div className="flex flex-1 flex-col items-center justify-center pb-16 text-center">
-                                                <img
-                                                    src={brandingUrl("logo.svg", effectiveTheme)}
-                                                    alt=""
-                                                    aria-hidden="true"
-                                                    className="phi-empty-logo"
-                                                />
-                                                <h1 className="mt-8 max-w-2xl text-balance text-[26px] leading-[1.2] tracking-tight text-phi-text-primary sm:text-[32px]">
+                                            <div className="flex flex-1 flex-col items-center justify-center pb-16 pt-16 text-center">
+                                                <h1 className="mt-8 w-full max-w-2xl text-balance text-center text-[26px] leading-[1.2] tracking-tight text-phi-text-primary sm:text-[32px]">
                                                     What are we building in{" "}
                                                     <button
                                                         type="button"
@@ -1489,10 +1483,10 @@ export default function App() {
                                                         onPointerDown={handleHeroPickerPointerDown}
                                                         title={newChatProjectDisplay ? `Change project, currently ${newChatProjectDisplay}` : "Select a project"}
                                                         aria-label={newChatProjectDisplay ? `Change project, currently ${newChatProjectDisplay}` : "Select a project"}
-                                                        className="mr-2 inline-flex max-w-full items-center gap-2 rounded-xl bg-phi-overlay px-3 py-1 align-baseline font-medium text-phi-text-primary hover:bg-phi-overlay-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-phi-accent/40"
+                                                        className="mr-2 inline-flex max-w-full items-center gap-1.5 rounded-xl bg-phi-overlay px-2 py-0.5 align-baseline font-medium text-phi-text-primary hover:bg-phi-overlay-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-phi-accent/40"
                                                     >
                                                         <span className="min-w-0 truncate">{newChatProjectDisplay || "a project"}</span>
-                                                        <IconChevronDownFilled className="size-[0.7em] shrink-0 text-phi-text-muted" aria-hidden="true" />
+                                                        <IconChevronDownFilled className="size-[0.6em] shrink-0 text-phi-text-muted" aria-hidden="true" />
                                                     </button>?
                                                 </h1>
                                                 {!sessions.loading && !sessions.error && projectOptions.length === 0 && (

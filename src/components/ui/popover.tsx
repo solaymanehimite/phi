@@ -23,7 +23,7 @@ export function PopoverContent({ className = "", origin = "origin-bottom", child
     return (
         <PopoverPanel
             transition
-            className={`z-20 ${origin} rounded-2xl border border-phi-border-faint bg-phi-bg-elevated transition duration-100 ease-out [--anchor-gap:8px] focus:outline-none data-closed:scale-95 data-closed:opacity-0 ${className}`}
+            className={`z-20 ${origin} rounded-2xl border border-phi-border-faint bg-transparent backdrop-blur-xl transition duration-100 ease-out [--anchor-gap:8px] focus:outline-none data-closed:scale-95 data-closed:opacity-0 ${className}`}
             {...props}
         >
             {children}
