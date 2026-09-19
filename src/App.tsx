@@ -112,6 +112,7 @@ const ChatViewport = memo(function ChatViewport({
     inlineError,
     onContinue,
     onDismiss,
+    onUndo,
 }: {
     activeFile: string | null;
     loading: boolean;
@@ -127,6 +128,7 @@ const ChatViewport = memo(function ChatViewport({
     inlineError?: InlineError | null;
     onContinue?: () => void;
     onDismiss?: () => void;
+    onUndo?: () => void;
 }) {
     if (!activeFile) return null;
     if (loading) {
@@ -174,7 +176,7 @@ const ChatViewport = memo(function ChatViewport({
                 className="flex flex-col items-center"
             >
                 <div className="w-3xl flex h-full max-w-full flex-col">
-                    <Conversation messages={messages} hideLastWork={hideLastWork} isStreaming={isStreaming} />
+                    <Conversation messages={messages} hideLastWork={hideLastWork} isStreaming={isStreaming} onUndo={onUndo} />
                     {showLive && (
                         <div className="pt-2 phi-work-stagger">
                             <Streaming text={streaming.text} workItems={streaming.workItems} error={streaming.error} isStreaming={isStreaming} startedAt={streaming.startedAt} />
@@ -1134,6 +1136,24 @@ export default function App() {
         }
     }, [chat, activeCwd, newChatCwd, homeCwd, sessions.hostOf, setInlineFor]);
 
+    const handleUndo = useCallback(async () => {
+        const targetFile = chat.activeFile;
+        if (!targetFile || chat.isStreaming) return;
+        if (compaction.isCompacting(targetFile)) return;
+        setInlineFor(targetFile, null);
+        try {
+            const cwd = activeCwd || undefined;
+            await undoTurn(targetFile, cwd, sessions.hostOf(targetFile));
+            await chat.revalidate(targetFile);
+            sessions.refresh({ silent: true });
+        } catch (e) {
+            const msg = e instanceof Error ? e.message : String(e);
+            const err: InlineError = { id: `${targetFile}-${Date.now()}`, reason: makeInlineReason(msg), message: msg, time: new Date().toLocaleTimeString(), canContinue: false };
+            setInlineFor(targetFile, err);
+        }
+        focusComposer();
+    }, [chat.activeFile, chat.isStreaming, chat.revalidate, compaction, activeCwd, sessions, setInlineFor, focusComposer]);
+
     const handleSend = useCallback(async (content: string, images?: { type: "image"; data: string; mimeType: string }[]) => {
         const trimmed = content.trim();
         // /undo and /redo are exact-match local commands. Anything with extra
@@ -1491,6 +1511,7 @@ export default function App() {
                                             inlineError={chat.activeFile ? inlineErrors[chat.activeFile] ?? null : null}
                                             onContinue={handleContinue}
                                             onDismiss={() => chat.activeFile && setInlineFor(chat.activeFile, null)}
+                                            onUndo={() => void handleUndo()}
                                         />
                                     )}
 

@@ -1,4 +1,5 @@
-import { memo, useEffect, useMemo, useRef } from "react";
+import { memo, useEffect, useMemo, useRef, useState } from "react";
+import { IconArrowBackUp, IconCheckFilled, IconCopyFilled } from "@tabler/icons-react";
 import type { WorkItem } from "../../types/work";
 import { Markdown } from "./markdown";
 import { WorkingBlock } from "./working-block";
@@ -8,6 +9,7 @@ type Props = {
     messages: unknown[];
     hideLastWork?: boolean;
     isStreaming?: boolean;
+    onUndo?: () => void;
 };
 
 function asMessages(messages: unknown[]): Array<Record<string, unknown>> {
@@ -100,8 +102,63 @@ type Turn = {
     text: string;
     workItems: WorkItem[];
     durationMs?: number | null;
+    /** First message timestamp of the turn, for the action-row date. */
+    timestamp: number | null;
     __compactionMeta?: { summary: string; timestamp?: string; tokensBefore?: number; fromHook?: boolean };
 };
+
+function relativeTime(ts: number): string {
+    const diff = Date.now() - ts;
+    if (diff < 60_000) return "just now";
+    if (diff < 24 * 60 * 60_000) {
+        const mins = Math.floor(diff / 60_000);
+        if (mins < 60) return `${mins}m ago`;
+        return `${Math.floor(mins / 60)}h ago`;
+    }
+    const d = new Date(ts);
+    const sameYear = d.getFullYear() === new Date().getFullYear();
+    const date = d.toLocaleDateString(undefined, sameYear ? { month: "short", day: "numeric" } : { month: "short", day: "numeric", year: "numeric" });
+    const time = d.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" });
+    return `${date}, ${time}`;
+}
+
+function TurnActions({ text, timestamp, showUndo, undoDisabled, onUndo }: {
+    text: string;
+    timestamp: number | null;
+    showUndo: boolean;
+    undoDisabled?: boolean;
+    onUndo?: () => void;
+}) {
+    const [copied, setCopied] = useState(false);
+    const copy = async () => {
+        try {
+            await navigator.clipboard.writeText(text);
+            setCopied(true);
+            window.setTimeout(() => setCopied(false), 1200);
+        } catch { /* clipboard permissions are optional */ }
+    };
+    const actionClass =
+        "grid size-6 place-items-center rounded-md text-phi-text-muted hover:bg-phi-overlay-hover hover:text-phi-text-primary focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-phi-accent/60 disabled:pointer-events-none disabled:opacity-40";
+    return (
+        <div className="flex items-center gap-0.5 pt-1">
+            {text && (
+                <button type="button" onClick={() => void copy()} aria-label="Copy response" title={copied ? "Copied" : "Copy response"} className={actionClass}>
+                    {copied ? <IconCheckFilled className="size-3.5" /> : <IconCopyFilled className="size-3.5" />}
+                </button>
+            )}
+            {showUndo && onUndo && (
+                <button type="button" onClick={() => onUndo()} disabled={undoDisabled} aria-label="Undo last turn" title="Undo last turn (restores files)" className={actionClass}>
+                    <IconArrowBackUp className="size-3.5" />
+                </button>
+            )}
+            {timestamp != null && (
+                <span title={new Date(timestamp).toLocaleString()} className="ml-1 text-[11px] text-phi-text-faint">
+                    {relativeTime(timestamp)}
+                </span>
+            )}
+        </div>
+    );
+}
 
 function getMessageTimestamp(m: Record<string, unknown>): number | null {
     const t = m.timestamp;
@@ -118,11 +175,17 @@ const TurnRow = memo(function TurnRow({
     toolResults,
     hideWork,
     animateWorkCollapse,
+    isLatestAssistant,
+    onUndo,
+    undoDisabled,
 }: {
     turn: Turn;
     toolResults: Map<string, { text: string; isError: boolean; diff?: string }>;
     hideWork?: boolean;
     animateWorkCollapse?: boolean;
+    isLatestAssistant?: boolean;
+    onUndo?: () => void;
+    undoDisabled?: boolean;
 }) {
     const userText = turn.user ? renderUser(turn.user.content) : "";
     const userImages = turn.user ? getUserImages(turn.user.content) : [];
@@ -145,6 +208,7 @@ const TurnRow = memo(function TurnRow({
 
     const hasWork = workItems.length > 0;
     const showWork = hasWork && !hideWork;
+    const showUndo = Boolean(isLatestAssistant && onUndo);
 
     // empty turn
     if (!hasUser && !text && !hasWork) return null;
@@ -183,6 +247,9 @@ const TurnRow = memo(function TurnRow({
                         />
                     )}
                     {text && <Markdown text={text} />}
+                    {(text || showUndo) && (
+                        <TurnActions text={text} timestamp={turn.timestamp} showUndo={showUndo} undoDisabled={undoDisabled} onUndo={onUndo} />
+                    )}
                 </div>
             )}
         </div>
@@ -193,6 +260,7 @@ export const Conversation = memo(function Conversation({
     messages,
     hideLastWork,
     isStreaming = false,
+    onUndo,
 }: Props) {
     const wasStreaming = useRef(false);
     const justFinishedStreaming = wasStreaming.current && !isStreaming;
@@ -245,6 +313,7 @@ export const Conversation = memo(function Conversation({
                 cur.durationMs = curStart !== null && curEnd !== null && curEnd >= curStart
                     ? curEnd - curStart
                     : null;
+                cur.timestamp = curStart;
                 out.push(cur);
             }
             cur = null;
@@ -256,10 +325,10 @@ export const Conversation = memo(function Conversation({
             const role = String(m.role ?? "");
             if (role === "user") {
                 flush();
-                cur = { user: m, text: "", workItems: [] };
+                cur = { user: m, text: "", workItems: [], timestamp: null };
                 stamp(m, true);
             } else if (role === "assistant") {
-                if (!cur) cur = { user: null, text: "", workItems: [] };
+                if (!cur) cur = { user: null, text: "", workItems: [], timestamp: null };
                 stamp(m);
                 const content = Array.isArray(m.content) ? m.content : [];
                 const messageIndex = assistantMessageIndex++;
@@ -317,7 +386,7 @@ export const Conversation = memo(function Conversation({
                     text = String((m as Record<string, unknown>).text);
                 }
                 if (!text.trim()) continue;
-                if (!cur) cur = { user: null, text: "", workItems: [] };
+                if (!cur) cur = { user: null, text: "", workItems: [], timestamp: null };
                 stamp(m);
                 cur.text += (cur.text ? "\n\n" : "") + text;
             } else if (role === "compactionSummary" || String((m as Record<string, unknown>).type ?? "") === "compaction") {
@@ -364,7 +433,7 @@ export const Conversation = memo(function Conversation({
                     text = String((m as Record<string, unknown>).text);
                 }
                 if (!text.trim()) continue;
-                if (!cur) cur = { user: null, text: "", workItems: [] };
+                if (!cur) cur = { user: null, text: "", workItems: [], timestamp: null };
                 stamp(m);
                 cur.text += (cur.text ? "\n\n" : "") + text;
             }
@@ -376,6 +445,13 @@ export const Conversation = memo(function Conversation({
     const lastTurnWithWork = useMemo(() => {
         for (let i = turns.length - 1; i >= 0; i--) {
             if (turns[i].workItems.length > 0) return i;
+        }
+        return -1;
+    }, [turns]);
+
+    const lastAssistantIndex = useMemo(() => {
+        for (let i = turns.length - 1; i >= 0; i--) {
+            if (turns[i].text.trim()) return i;
         }
         return -1;
     }, [turns]);
@@ -404,6 +480,9 @@ export const Conversation = memo(function Conversation({
                             lastTurnWithWork === turns.length - 1
                         }
                         animateWorkCollapse={justFinishedStreaming && idx === lastTurnWithWork}
+                        isLatestAssistant={idx === lastAssistantIndex}
+                        onUndo={onUndo}
+                        undoDisabled={isStreaming}
                     />
                 );
             })}
