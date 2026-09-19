@@ -4,7 +4,7 @@ import {
     IconSettingsFilled,
     IconXFilled,
 } from "@tabler/icons-react";
-import { memo, type ReactNode } from "react";
+import { memo, useLayoutEffect, useRef, type ReactNode } from "react";
 import { useHasDraft } from "../hooks/useHasDraft";
 import { RunningOrb } from "./running-orb";
 
@@ -33,13 +33,14 @@ type TabsProps = {
     tablistLabel?: string;
 };
 
-const TabItem = memo(function TabItem({ tab, active, canClose, onSelect, onClose }: { tab: ChatTab; active: boolean; canClose: boolean; onSelect: (id: string) => void; onClose: (id: string) => void }) {
+const TabItem = memo(function TabItem({ tab, active, canClose, onSelect, onClose, itemRef }: { tab: ChatTab; active: boolean; canClose: boolean; onSelect: (id: string) => void; onClose: (id: string) => void; itemRef?: (el: HTMLDivElement | null) => void }) {
     const hasDraft = useHasDraft(tab.id);
     const isSettings = tab.id === SETTINGS_TAB_ID;
     const isUiDemo = tab.id === UI_DEMO_TAB_ID;
     const isSpecial = isSettings || isUiDemo;
     return (
         <div
+            ref={itemRef}
             className={`phi-tab-enter group flex h-8 max-w-[240px] min-w-[132px] shrink-0 items-center rounded-lg ${active ? "phi-tab-active bg-phi-overlay-active text-phi-text-primary" : "text-phi-text-tertiary hover:bg-phi-overlay-hover hover:text-phi-text-primary"}`}
         >
             <button
@@ -79,6 +80,30 @@ export const Tabs = memo(function Tabs({
     hideClose = false,
     tablistLabel = "Open chats",
 }: TabsProps) {
+    const itemRefs = useRef(new Map<string, HTMLDivElement>());
+    const prevLeft = useRef(new Map<string, number>());
+
+    // FLIP slide: when tabs are added/removed, surviving tabs glide from
+    // their old x to their new x instead of jumping.
+    useLayoutEffect(() => {
+        if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+        const prev = prevLeft.current;
+        const next = new Map<string, number>();
+        for (const tab of tabs) {
+            const el = itemRefs.current.get(tab.id);
+            if (!el) continue;
+            const left = el.getBoundingClientRect().left;
+            next.set(tab.id, left);
+            const old = prev.get(tab.id);
+            if (old !== undefined && old !== left) {
+                el.animate(
+                    [{ transform: `translateX(${old - left}px)` }, { transform: "translateX(0px)" }],
+                    { duration: 220, easing: "cubic-bezier(0.4,0,0.2,1)" },
+                );
+            }
+        }
+        prevLeft.current = next;
+    }, [tabs]);
     return (
         <div
             data-tauri-drag-region
@@ -99,7 +124,20 @@ export const Tabs = memo(function Tabs({
                     const active = tab.id === activeId;
                     // Every tab is closable. Closing the last chat tab swaps in a
                     // fresh new-chat tab so there is always at least one.
-                    return <TabItem key={tab.id} tab={tab} active={active} canClose={!hideClose} onSelect={onSelect} onClose={onClose} />;
+                    return (
+                        <TabItem
+                            key={tab.id}
+                            tab={tab}
+                            active={active}
+                            canClose={!hideClose}
+                            onSelect={onSelect}
+                            onClose={onClose}
+                            itemRef={(el) => {
+                                if (el) itemRefs.current.set(tab.id, el);
+                                else itemRefs.current.delete(tab.id);
+                            }}
+                        />
+                    );
                 })}
             </div>
         </div>
