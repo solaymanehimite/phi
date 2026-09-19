@@ -106,7 +106,7 @@ export const ThinkingEffortSelector = memo(function ThinkingEffortSelector({
 
             <PopoverContent
                 anchor={{ to: "top start", gap: 12 }}
-                className="w-[240px] p-3"
+                className="w-[240px] px-4 py-3"
             >
                 <div className="mb-2 flex items-center justify-between">
                     <span className="text-sm font-medium tracking-wide text-phi-text-tertiary">
@@ -120,7 +120,8 @@ export const ThinkingEffortSelector = memo(function ThinkingEffortSelector({
                     </span>
                 </div>
 
-                <div className="relative flex h-[26px] items-center">
+                <div className="flex flex-col gap-1">
+                    <div className="relative flex h-[26px] w-full items-center">
                     <div className="relative h-[14px] w-full rounded-full bg-phi-overlay-strong">
                         <div
                             className="absolute left-0 top-1/2 h-[20px] -translate-y-1/2 rounded-full transition-[width] duration-200 ease-out"
@@ -215,6 +216,21 @@ export const ThinkingEffortSelector = memo(function ThinkingEffortSelector({
                         className="pointer-events-none absolute top-1/2 z-[6] h-[26px] w-3.5 -translate-x-1/2 -translate-y-1/2 rounded-full border border-phi-border-strong bg-phi-white shadow-[0_1px_2px_var(--color-phi-shadow)] transition-[left] duration-200 ease-out"
                         style={{ left: `calc(${pct}% + ${9 - pct * 0.18}px)` }}
                     />
+                    </div>
+                    <div className="flex justify-between text-xs font-medium text-phi-text-muted">
+                        <span
+                            className="transition-opacity duration-200"
+                            style={{ opacity: 1 - pct / 160 }}
+                        >
+                            Faster
+                        </span>
+                        <span
+                            className="transition-opacity duration-200"
+                            style={{ opacity: 0.375 + pct / 160 }}
+                        >
+                            Smarter
+                        </span>
+                    </div>
                 </div>
                 {availableLevels.length <= 1 && (
                     <p className="mt-1.5 text-[10px] leading-none text-phi-text-muted">
