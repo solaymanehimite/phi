@@ -8,59 +8,54 @@
   --font-sans: Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
 
-  /* Backgrounds — 5 core + aliased */
+  /* Backgrounds — upstreamed from Playground "Refined 2" */
   --color-phi-bg-app: #08080a;
-  --color-phi-bg-main: #101012;
-  --color-phi-bg-surface: #161618;
-  --color-phi-bg-elevated: #1e1e20;
+  --color-phi-bg-main: #101011;
+  --color-phi-bg-surface: #19191c;
+  --color-phi-bg-elevated: #1f1f21;
   --color-phi-bg-inverse: #dedee1;
-  /* Aliases (ergonomic, zero-cost) */
-  --color-phi-bg-sidebar: var(--color-phi-bg-app);
-  --color-phi-bg-sunken: var(--color-phi-bg-app);
-  --color-phi-bg-disabled: var(--color-phi-overlay);
+  --color-phi-bg-sidebar: #08080a;
+  --color-phi-bg-sunken: #08080a;
+  --color-phi-bg-disabled: rgb(242 240 255 / 0.03);
 
-  /* Text — 5 core + alias */
+  /* Text */
   --color-phi-text-primary: #ffffff;
   --color-phi-text-secondary: #d5d5d5;
-  --color-phi-text-tertiary: #888888;
-  --color-phi-text-muted: #565656;
+  --color-phi-text-tertiary: #808080;
+  --color-phi-text-muted: #666666;
   --color-phi-text-inverse: #1d1d1d;
-  /* Aliases */
-  --color-phi-text-faint: var(--color-phi-text-muted);
+  --color-phi-text-faint: #666666;
   --color-phi-text-disabled: #66666c;
   --color-phi-text-brand: #d6d6d9;
-  --color-phi-icon: var(--color-phi-text-tertiary);
-  --color-phi-icon-active: var(--color-phi-text-primary);
+  --color-phi-icon: #888888;
+  --color-phi-icon-active: #ffffff;
 
   /* Accent */
   --color-phi-accent: #2f7bff;
 
-  /* Borders — 2 core */
+  /* Borders */
   --color-phi-border: rgb(242 240 255 / 0.06);
   --color-phi-border-strong: rgb(242 240 255 / 0.095);
-  /* Aliases */
-  --color-phi-border-faint: var(--color-phi-border);
-  --color-phi-border-subtle: var(--color-phi-border);
-  --color-phi-separator: var(--color-phi-border-strong);
+  --color-phi-border-faint: rgb(242 240 255 / 0.06);
+  --color-phi-border-subtle: rgb(242 240 255 / 0.06);
+  --color-phi-separator: rgb(242 240 255 / 0.095);
 
-  /* Overlays — 3 core */
+  /* Overlays */
   --color-phi-overlay: rgb(242 240 255 / 0.03);
   --color-phi-overlay-hover: rgb(242 240 255 / 0.045);
   --color-phi-overlay-active: rgb(242 240 255 / 0.075);
-  /* Aliases */
-  --color-phi-overlay-strong: var(--color-phi-overlay-active);
-  --color-phi-overlay-muted: var(--color-phi-overlay);
+  --color-phi-overlay-strong: rgb(242 240 255 / 0.075);
+  --color-phi-overlay-muted: rgb(242 240 255 / 0.03);
   --color-phi-overlay-code: rgb(242 240 255 / 0.07);
-  --color-phi-overlay-focus: var(--color-phi-overlay-hover);
+  --color-phi-overlay-focus: rgb(242 240 255 / 0.045);
 
-  /* Inputs — 2 core */
-  --color-phi-input-border: var(--color-phi-border);
-  --color-phi-input-bg: var(--color-phi-overlay);
-  /* Aliases */
-  --color-phi-input-border-focus: var(--color-phi-border-strong);
-  --color-phi-input-bg-focus: var(--color-phi-overlay-hover);
+  /* Inputs */
+  --color-phi-input-border: rgb(242 240 255 / 0.06);
+  --color-phi-input-bg: rgb(242 240 255 / 0.03);
+  --color-phi-input-border-focus: rgb(242 240 255 / 0.095);
+  --color-phi-input-bg-focus: rgb(242 240 255 / 0.045);
 
-  /* Status — error 3 + warning 3 + neutrals */
+  /* Status — error upstreamed from "Refined 2" (warning set untouched) */
   --color-phi-error: #ff5c5c;
   --color-phi-error-bg: rgb(239 68 68 / 0.1);
   --color-phi-error-border: rgb(239 68 68 / 0.2);
@@ -69,14 +64,14 @@
   --color-phi-warning-bg: rgb(234 179 8 / 0.1);
   --color-phi-warning-border: rgb(234 179 8 / 0.2);
   --color-phi-warning-text: #fde68a;
-  --color-phi-streaming: var(--color-phi-accent);
+  --color-phi-streaming: #2f7bff;
   --color-phi-white: #ffffff;
   --color-phi-white-muted: rgb(255 255 255 / 0.3);
 
-  /* Thinking — 6 */
+  /* Thinking — upstreamed from "Refined 2" */
   --color-phi-thinking-low: #7acd85;
   --color-phi-thinking-minimal: #959dad;
-  --color-phi-thinking-medium: #d1d102;
+  --color-phi-thinking-medium: #bdbd5f;
   --color-phi-thinking-high: #e0822f;
   --color-phi-thinking-xhigh: #eb0202;
   --color-phi-thinking-max: #c22faa;
@@ -98,7 +93,7 @@ html[data-theme="light"] {
   --color-phi-bg-surface: #ffffff;
   --color-phi-bg-elevated: #ffffff;
   --color-phi-bg-inverse: #0a0a0f;
-  --color-phi-bg-sidebar: var(--color-phi-bg-app);
+  --color-phi-bg-sidebar: #f5f5f6;
   --color-phi-bg-sunken: #f0f0f2;
   --color-phi-bg-disabled: #e8e8ea;
 
@@ -107,32 +102,32 @@ html[data-theme="light"] {
   --color-phi-text-tertiary: #6b6b76;
   --color-phi-text-muted: #76767e;
   --color-phi-text-inverse: #ffffff;
-  --color-phi-text-faint: var(--color-phi-text-muted);
+  --color-phi-text-faint: #76767e;
   --color-phi-text-disabled: #9a9aa0;
   --color-phi-text-brand: #1a1a20;
-  --color-phi-icon: var(--color-phi-text-tertiary);
-  --color-phi-icon-active: var(--color-phi-text-primary);
+  --color-phi-icon: #6b6b76;
+  --color-phi-icon-active: #0a0a0f;
 
   --color-phi-accent: #2f7bff;
 
   --color-phi-border: rgb(10 10 15 / 0.08);
   --color-phi-border-strong: rgb(10 10 15 / 0.14);
-  --color-phi-border-faint: var(--color-phi-border);
-  --color-phi-border-subtle: var(--color-phi-border);
-  --color-phi-separator: var(--color-phi-border-strong);
+  --color-phi-border-faint: rgb(10 10 15 / 0.08);
+  --color-phi-border-subtle: rgb(10 10 15 / 0.08);
+  --color-phi-separator: rgb(10 10 15 / 0.14);
 
   --color-phi-overlay: rgb(10 10 15 / 0.03);
   --color-phi-overlay-hover: rgb(10 10 15 / 0.05);
   --color-phi-overlay-active: rgb(10 10 15 / 0.08);
-  --color-phi-overlay-strong: var(--color-phi-overlay-active);
-  --color-phi-overlay-muted: var(--color-phi-overlay);
+  --color-phi-overlay-strong: rgb(10 10 15 / 0.08);
+  --color-phi-overlay-muted: rgb(10 10 15 / 0.03);
   --color-phi-overlay-code: rgb(10 10 15 / 0.06);
-  --color-phi-overlay-focus: var(--color-phi-overlay-hover);
+  --color-phi-overlay-focus: rgb(10 10 15 / 0.05);
 
-  --color-phi-input-border: var(--color-phi-border);
-  --color-phi-input-bg: var(--color-phi-overlay);
-  --color-phi-input-border-focus: var(--color-phi-border-strong);
-  --color-phi-input-bg-focus: var(--color-phi-overlay-hover);
+  --color-phi-input-border: rgb(10 10 15 / 0.08);
+  --color-phi-input-bg: rgb(10 10 15 / 0.03);
+  --color-phi-input-border-focus: rgb(10 10 15 / 0.14);
+  --color-phi-input-bg-focus: rgb(10 10 15 / 0.05);
 
   --color-phi-error: #d93025;
   --color-phi-error-bg: rgb(217 48 37 / 0.08);
@@ -142,16 +137,16 @@ html[data-theme="light"] {
   --color-phi-warning-bg: rgb(180 122 31 / 0.1);
   --color-phi-warning-border: rgb(180 122 31 / 0.2);
   --color-phi-warning-text: #7a3d0a;
-  --color-phi-streaming: var(--color-phi-accent);
+  --color-phi-streaming: #2f7bff;
   --color-phi-white: #ffffff;
   --color-phi-white-muted: rgb(10 10 15 / 0.4);
 
-  --color-phi-thinking-low: #1a7a2e;
-  --color-phi-thinking-minimal: #3a5a8a;
-  --color-phi-thinking-medium: #7a5e00;
-  --color-phi-thinking-high: #9a5a0a;
-  --color-phi-thinking-xhigh: #b91c1c;
-  --color-phi-thinking-max: #9a1a7a;
+  --color-phi-thinking-low: #26b344;
+  --color-phi-thinking-minimal: #6399eb;
+  --color-phi-thinking-medium: #c89b00;
+  --color-phi-thinking-high: #e2830f;
+  --color-phi-thinking-xhigh: #de2121;
+  --color-phi-thinking-max: #eb27bb;
 
   --color-phi-shadow: rgb(0 0 0 / 0.08);
   --color-phi-shadow-strong: rgb(0 0 0 / 0.12);
@@ -257,7 +252,7 @@ html[data-theme="light"] {
   position: fixed;
   inset: 0;
   z-index: 50;
-  background: color-mix(in srgb, var(--color-phi-scrim) 40%, transparent);
+  background: transparent;
 }
 
 .session-command-content {
