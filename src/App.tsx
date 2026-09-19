@@ -1435,7 +1435,7 @@ export default function App() {
                                 onSelect={handleTabSelect}
                                 onClose={handleCloseTab}
                             />
-                            <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border border-phi-border-subtle bg-phi-bg-main shadow-[0_8px_30px_var(--color-phi-shadow)]">
+                            <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border border-phi-border-subtle bg-phi-bg-main shadow-[0_4px_18px_var(--color-phi-shadow)]">
                                 {settingsActive ? (
                                     <section className="flex min-h-0 flex-1" aria-label="Settings">
                                         <SettingsPanel section={settingsSection} onSectionChange={setSettingsSection} onProvidersChanged={() => models.refresh({ silent: true })} onAddProvider={openProviderMenu} providersVersion={providersVersion} cwd={activeCwd || newChatCwd || homeCwd || undefined} />

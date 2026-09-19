@@ -326,6 +326,16 @@ html[data-theme="light"] .phi-empty-logo {
   mask-size: 592px 592px;
 }
 
+html[data-theme="light"] .phi-new-chat-pattern {
+  background-color: color-mix(in srgb, var(--color-phi-overlay-strong) 58%, transparent);
+}
+
+@media (prefers-color-scheme: light) {
+  html[data-theme="system"] .phi-new-chat-pattern {
+    background-color: color-mix(in srgb, var(--color-phi-overlay-strong) 58%, transparent);
+  }
+}
+
 @keyframes phi-shimmer {
   0% { background-position: -200% 0; }
   100% { background-position: 200% 0; }
