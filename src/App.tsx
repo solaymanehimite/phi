@@ -15,7 +15,6 @@ import { NEW_TAB_PREFIX, SETTINGS_TAB_ID, Tabs, UI_DEMO_TAB_ID, isNewTabId } fro
 import { closeTab, nextTabAfterClose, promoteDraftTab } from "./lib/tabs";
 import {
     IconArrowDown,
-    IconChevronDownFilled,
     IconComponents,
     IconLayoutSidebarFilled,
     IconMessageCircleFilled,
@@ -254,7 +253,6 @@ export default function App() {
     // single inline notice per session — interrupts clear on next send, never stack
     const [inlineErrors, setInlineErrors] = useState<Record<string, InlineError>>({});
     const streamSonners = useSonners();
-    const directoryPickerRef = useRef<HTMLDivElement>(null);
 
     // quit guard
     useEffect(() => {
@@ -611,10 +609,6 @@ export default function App() {
     }, [activeCwd, chat.activeFile, sessions.hostOf, activeHostId, projectOptions, selectedProject]);
     const currentProjectDisplay = currentProjectOption?.name ?? "";
 
-    // Display name for the new-chat hero. Empty when no project is selected
-    // yet (hero shows a placeholder instead).
-    const newChatProjectDisplay = selectedProject?.name ?? "";
-
     const ctxModel: any = (chat.data?.context as any)?.model;
     const ctxModelKey = ctxModel ? `${ctxModel.provider}/${ctxModel.modelId ?? ctxModel.id}` : undefined;
     const selectedModelKey = ctxModelKey ?? draftModelKey ?? models.defaultModelKey;
@@ -736,24 +730,12 @@ export default function App() {
         chat.clear();
         focusComposer();
     }, [chat.clear, focusComposer, newTabTargets, setActiveHostId]);
-    // Tracks whether the picker was open at pointer-down (before the
-    // popover's outside-click handler runs) so a hero click toggles closed.
-    const heroPickerWasOpenRef = useRef(false);
-    const handleHeroPickerPointerDown = useCallback(() => {
-        const el = document.querySelector<HTMLElement>('[data-project-picker-trigger]');
-        heroPickerWasOpenRef.current = el?.matches("[data-open]") ?? false;
-    }, []);
     const focusProjectPicker = useCallback(() => {
-        if (heroPickerWasOpenRef.current) {
-            // Picker was open: the outside-click already closed it — don't reopen.
-            heroPickerWasOpenRef.current = false;
-            return;
-        }
         const el = document.querySelector<HTMLElement>('[data-project-picker-trigger]');
         if (!el) return;
-        // HeadlessUI Popover opens on click — click to open dropdown
+        // HeadlessUI Popover opens on click. Focus the search field after the
+        // panel mounts so the picker is ready for keyboard input.
         (el as HTMLButtonElement).click();
-        // After panel mounts, focus the search input (autoFocus is fallback, but ensure for Ctrl+P)
         requestAnimationFrame(() => {
             requestAnimationFrame(() => {
                 const input = document.querySelector<HTMLElement>('input[aria-label="Search projects"]');
@@ -1477,17 +1459,26 @@ export default function App() {
                                             <div className="flex flex-1 flex-col items-center justify-center pb-16 pt-16 text-center">
                                                 <h1 className="mt-8 w-full max-w-2xl text-balance text-center text-[26px] leading-[1.2] tracking-tight text-phi-text-primary sm:text-[32px]">
                                                     What are we building in{" "}
-                                                    <button
-                                                        type="button"
-                                                        onClick={focusProjectPicker}
-                                                        onPointerDown={handleHeroPickerPointerDown}
-                                                        title={newChatProjectDisplay ? `Change project, currently ${newChatProjectDisplay}` : "Select a project"}
-                                                        aria-label={newChatProjectDisplay ? `Change project, currently ${newChatProjectDisplay}` : "Select a project"}
-                                                        className="mr-2 inline-flex max-w-full items-center gap-1.5 rounded-xl bg-phi-overlay px-2 py-0.5 align-baseline font-medium text-phi-text-primary hover:bg-phi-overlay-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-phi-accent/40"
-                                                    >
-                                                        <span className="min-w-0 truncate">{newChatProjectDisplay || "a project"}</span>
-                                                        <IconChevronDownFilled className="size-[0.6em] shrink-0 text-phi-text-muted" aria-hidden="true" />
-                                                    </button>?
+                                                    <DirectoryPicker
+                                                        selectedProjectId={newChatProjectId}
+                                                        projects={projectOptions}
+                                                        hosts={hosts}
+                                                        activeHostId={newChatHostId}
+                                                        hostNameById={hostNameById}
+                                                        onSelectProject={handleSelectProject}
+                                                        onCreateProject={handleCreateProject}
+                                                        onRenameProject={handleRenameProject}
+                                                        onRemoveProject={handleRemoveProject}
+                                                        onSetTarget={handleSetProjectTarget}
+                                                        onRemoveTarget={removeProjectTarget}
+                                                        homeCwd={homeCwd}
+                                                        disabled={chat.isStreaming || (chat.activeFile ? compaction.isCompacting(chat.activeFile) : false)}
+                                                        className="relative inline-block min-w-0 align-baseline"
+                                                        triggerClassName="group mr-2 inline-flex max-w-full min-w-0 items-center gap-1.5 rounded-xl bg-phi-overlay px-2 py-0.5 align-baseline text-left font-medium text-phi-text-primary hover:bg-phi-overlay-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-phi-accent/40 disabled:pointer-events-none disabled:opacity-60"
+                                                        triggerLabelClassName="min-w-0 truncate font-medium"
+                                                        triggerChevronClassName="size-[0.6em] shrink-0 text-phi-text-muted transition-transform group-data-open:rotate-180"
+                                                        showIcon={false}
+                                                    />?
                                                 </h1>
                                                 {!sessions.loading && !sessions.error && projectOptions.length === 0 && (
                                                     <p className="mt-6 text-[12px] text-phi-text-muted">No projects yet — create one from the picker below to start chatting.</p>
@@ -1525,12 +1516,9 @@ export default function App() {
                                                 </Alert>
                                             </div>
                                         )}
-                                        {!chat.activeFile && (
-                                            <div className="mx-auto pl-6 mb-1 flex w-full max-w-4xl min-w-0 flex-wrap items-center gap-1" ref={directoryPickerRef}>
-                                                <DirectoryPicker selectedProjectId={newChatProjectId} projects={projectOptions} hosts={hosts} activeHostId={newChatHostId} hostNameById={hostNameById} onSelectProject={handleSelectProject} onCreateProject={handleCreateProject} onRenameProject={handleRenameProject} onRemoveProject={handleRemoveProject} onSetTarget={handleSetProjectTarget} onRemoveTarget={removeProjectTarget} homeCwd={homeCwd} disabled={chat.isStreaming || (chat.activeFile ? compaction.isCompacting(chat.activeFile) : false)} />
-                                                {selectedProject && !selectedProject.implicit && (
-                                                    <TargetPicker hosts={hosts} value={newChatHostId} boundHostIds={boundHostIds(selectedProject)} projectName={selectedProject.name} onChange={handleTargetChange} onBind={(hostId, path) => handleBindTarget(selectedProject.id, hostId, path)} disabled={chat.isStreaming} />
-                                                )}
+                                        {!chat.activeFile && selectedProject && !selectedProject.implicit && (
+                                            <div className="mx-auto mb-1 flex w-full max-w-4xl min-w-0 flex-wrap items-center gap-1 pl-6">
+                                                <TargetPicker hosts={hosts} value={newChatHostId} boundHostIds={boundHostIds(selectedProject)} projectName={selectedProject.name} onChange={handleTargetChange} onBind={(hostId, path) => handleBindTarget(selectedProject.id, hostId, path)} disabled={chat.isStreaming} />
                                             </div>
                                         )}
                                         {(() => {

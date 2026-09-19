@@ -40,6 +40,13 @@ type DirectoryPickerProps = {
     /** Only used as the browse dialog's starting directory — never listed. */
     homeCwd?: string;
     disabled?: boolean;
+    /** Optional wrapper styling for placing the picker in a different surface. */
+    className?: string;
+    /** Optional trigger styling for the header variant. */
+    triggerClassName?: string;
+    triggerLabelClassName?: string;
+    triggerChevronClassName?: string;
+    showIcon?: boolean;
 };
 
 function ProjectForm({
@@ -664,6 +671,11 @@ export function DirectoryPicker({
     onRemoveTarget,
     homeCwd,
     disabled,
+    className = "relative min-w-0",
+    triggerClassName = "group inline-flex max-w-full min-w-0 items-center gap-1.5 rounded-md px-1.5 py-1 text-left text-phi-text-secondary transition-colors hover:bg-phi-overlay-hover hover:text-phi-text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-phi-accent/40 disabled:pointer-events-none disabled:opacity-60",
+    triggerLabelClassName = "min-w-0 truncate text-[12.5px] font-medium",
+    triggerChevronClassName = "size-3.5 shrink-0 text-phi-text-muted transition-transform group-data-open:rotate-180",
+    showIcon = true,
 }: DirectoryPickerProps) {
     const [mode, setMode] = useState<PanelMode>("list");
     const [editingId, setEditingId] = useState<string | null>(null);
@@ -683,21 +695,22 @@ export function DirectoryPicker({
     }, []);
 
     return (
-        <Popover className="relative min-w-0">
+        <Popover className={className}>
             <PopoverTrigger
                 disabled={disabled}
                 data-project-picker-trigger
-                className="group inline-flex max-w-full min-w-0 items-center gap-1.5 rounded-md px-1.5 py-1 text-left text-phi-text-secondary transition-colors hover:bg-phi-overlay-hover hover:text-phi-text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-phi-accent/40 disabled:pointer-events-none disabled:opacity-60"
+                className={triggerClassName}
                 aria-label={`Change project${selected ? `, currently ${selected.name}` : ", no project selected"}`}
             >
-                <IconFolderFilled className="size-4 shrink-0 text-phi-text-secondary" />
-                <span className="min-w-0 truncate text-[12.5px] font-medium">
+                {showIcon && <IconFolderFilled className="size-4 shrink-0 text-phi-text-secondary" />}
+                <span className={triggerLabelClassName}>
                     {label}
                 </span>
-                <IconChevronDownFilled className="size-3.5 shrink-0 text-phi-text-muted transition-transform group-data-open:rotate-180" />
+                <IconChevronDownFilled className={triggerChevronClassName} />
             </PopoverTrigger>
             <PopoverContent
-                anchor={{ to: "top start", gap: 12 }}
+                anchor={{ to: "bottom", gap: 8 }}
+                origin="origin-top"
                 className="w-max max-w-[min(360px,calc(100vw-32px))] overflow-hidden p-0"
             >
                 <DirectoryPanel
