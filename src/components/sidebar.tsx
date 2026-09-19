@@ -1,6 +1,7 @@
 import {
     IconArchiveFilled,
     IconArchiveOff,
+    IconCheckFilled,
     IconChevronDownFilled,
     IconDotsFilled,
     IconPencilFilled,
@@ -1012,6 +1013,8 @@ const SessionRow = memo(function SessionRow({
 }) {
     const [renaming, setRenaming] = useState(false);
     const [draft, setDraft] = useState(title);
+    const [deleteConfirming, setDeleteConfirming] = useState(false);
+    const deleteConfirmTimerRef = useRef<number | null>(null);
 
     const handleRename = useCallback(async () => {
         const name = draft.trim();
@@ -1040,9 +1043,24 @@ const SessionRow = memo(function SessionRow({
         setRenaming(true);
     }, [title]);
     const handleDelete = useCallback(async () => {
-        if (!confirm("Delete this session?")) return;
+        if (!deleteConfirming) {
+            setDeleteConfirming(true);
+            if (deleteConfirmTimerRef.current !== null) window.clearTimeout(deleteConfirmTimerRef.current);
+            deleteConfirmTimerRef.current = window.setTimeout(() => {
+                setDeleteConfirming(false);
+                deleteConfirmTimerRef.current = null;
+            }, 3000);
+            return;
+        }
+        if (deleteConfirmTimerRef.current !== null) window.clearTimeout(deleteConfirmTimerRef.current);
+        deleteConfirmTimerRef.current = null;
+        setDeleteConfirming(false);
         await onDelete();
-    }, [onDelete]);
+    }, [deleteConfirming, onDelete]);
+
+    useEffect(() => () => {
+        if (deleteConfirmTimerRef.current !== null) window.clearTimeout(deleteConfirmTimerRef.current);
+    }, []);
 
     return (
         <div
@@ -1135,10 +1153,13 @@ const SessionRow = memo(function SessionRow({
                             {archived ? "Unarchive" : "Archive"}
                         </DropdownMenuItem>
                         <DropdownMenuItem
-                            icon={<IconTrashFilled className="size-[15px]" />}
-                            onClick={handleDelete}
+                            icon={deleteConfirming ? <IconCheckFilled className="size-[15px]" /> : <IconTrashFilled className="size-[15px]" />}
+                            onClick={(event) => {
+                                event.preventDefault();
+                                void handleDelete();
+                            }}
                         >
-                            Delete
+                            {deleteConfirming ? "Confirm?" : "Delete"}
                         </DropdownMenuItem>
                     </DropdownMenuContent>
                 </DropdownMenu>

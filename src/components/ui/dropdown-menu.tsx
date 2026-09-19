@@ -1,5 +1,5 @@
 import { Menu, MenuButton, MenuItem, MenuItems } from "@headlessui/react";
-import type { ComponentProps, ReactNode } from "react";
+import type { ComponentProps, MouseEvent, ReactNode } from "react";
 
 type DropdownMenuProps = ComponentProps<typeof Menu>;
 export function DropdownMenu(props: DropdownMenuProps) {
@@ -42,7 +42,7 @@ export function DropdownMenuContent({
 
 type DropdownMenuItemProps = {
     children: ReactNode;
-    onClick?: () => void;
+    onClick?: (event: MouseEvent<HTMLButtonElement>) => void;
     icon?: ReactNode;
 };
 
