@@ -87,6 +87,98 @@ function modelKey(m: Pick<ModelInfo, "provider" | "id">): string {
     return `${m.provider}/${m.id}`;
 }
 
+/**
+ * One model row. Memoized on data (not handlers) so moving the mouse across
+ * the list only re-renders the two rows whose highlight flips — the hover
+ * highlight tracks instantly instead of lagging a full-list re-render.
+ */
+const ModelRow = memo(function ModelRow({
+    model,
+    isSelected,
+    isActive,
+    isFav,
+    isDisabled,
+    onHover,
+    onSelect,
+    onToggleFavorite,
+}: {
+    model: ModelInfo;
+    isSelected: boolean;
+    isActive: boolean;
+    isFav: boolean;
+    isDisabled: boolean;
+    onHover: () => void;
+    onSelect: () => void;
+    onToggleFavorite: () => void;
+}) {
+    return (
+        <button
+            onClick={onSelect}
+            onMouseEnter={onHover}
+            disabled={isDisabled}
+            className={`group flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-left disabled:opacity-60 ${
+                isSelected || isActive
+                    ? "bg-phi-overlay-strong"
+                    : "hover:bg-phi-overlay"
+            }`}
+        >
+            <span title={prettyProvider(model.provider)} className="inline-flex shrink-0 items-center">
+                <ProviderImg
+                    provider={model.provider}
+                    size={14}
+                    className="shrink-0"
+                />
+            </span>
+            <span className="min-w-0 flex-1 truncate text-[13px] font-medium text-phi-text-primary">
+                {model.name}
+            </span>
+            <span className="inline-flex shrink-0 items-center gap-1.5 text-[11px] text-phi-text-tertiary">
+                <span className="inline-flex items-center gap-0.5">
+                    {formatCost(
+                        model.cost.input,
+                    )}{" "}
+                    <IconArrowDown className="size-[10px]" />
+                </span>
+                <span className="inline-flex items-center gap-0.5">
+                    {formatCost(
+                        model.cost.output,
+                    )}{" "}
+                    <IconArrowUp className="size-[10px]" />
+                </span>
+            </span>
+            <span
+                role="button"
+                tabIndex={-1}
+                aria-label={isFav ? "Remove from favorites" : "Add to favorites"}
+                onClick={(e) => {
+                    e.stopPropagation();
+                    onToggleFavorite();
+                }}
+                onKeyDown={(e) => {
+                    if (e.key === "Enter" || e.key === " ") {
+                        e.stopPropagation();
+                        e.preventDefault();
+                        onToggleFavorite();
+                    }
+                }}
+                className="grid shrink-0 place-items-center rounded p-0.5"
+            >
+                {isFav ? (
+                    <IconStarFilled className="size-3.5 text-phi-warning" />
+                ) : (
+                    <IconStar className="size-3.5 text-phi-text-tertiary" />
+                )}
+            </span>
+        </button>
+    );
+}, (prev, next) =>
+    prev.model === next.model &&
+    prev.isSelected === next.isSelected &&
+    prev.isActive === next.isActive &&
+    prev.isFav === next.isFav &&
+    prev.isDisabled === next.isDisabled,
+);
+
 function parseModelKey(key: string): { provider: string; id: string } | null {
     const slash = key.indexOf("/");
     if (slash === -1) return null;
@@ -443,79 +535,21 @@ export const ModelSelector = memo(function ModelSelector({
                                             <div className="space-y-1">
                                                 {filtered.map((model, idx) => {
                                                     const k = modelKey(model);
-                                                    const isSelected = k === selectedKey;
-                                                    const isActive = idx === activeIdx;
-                                                    const isFav = favorites.includes(k);
                                                     return (
-                                                        <button
+                                                        <ModelRow
                                                             key={k}
-                                                            onClick={() => {
+                                                            model={model}
+                                                            isSelected={k === selectedKey}
+                                                            isActive={idx === activeIdx}
+                                                            isFav={favorites.includes(k)}
+                                                            isDisabled={isDisabled}
+                                                            onHover={() => setActiveIdx(idx)}
+                                                            onSelect={() => {
                                                                 close();
                                                                 void handleSelect(model);
                                                             }}
-                                                            onMouseEnter={() => setActiveIdx(idx)}
-                                                            disabled={isDisabled}
-                                                            className={`group flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-left disabled:opacity-60 ${
-                                                                isSelected || isActive
-                                                                    ? "bg-phi-overlay-strong"
-                                                                    : "hover:bg-phi-overlay"
-                                                            }`}
-                                                        >
-                                                            <span title={prettyProvider(model.provider)} className="inline-flex shrink-0 items-center">
-                                                                <ProviderImg
-                                                                    provider={model.provider}
-                                                                    size={14}
-                                                                    className="shrink-0"
-                                                                />
-                                                            </span>
-                                                            <span className="min-w-0 flex-1 truncate text-[13px] font-medium text-phi-text-primary">
-                                                                {model.name}
-                                                            </span>
-                                                            <span className="inline-flex shrink-0 items-center gap-1.5 text-[11px] text-phi-text-tertiary">
-                                                                <span className="inline-flex items-center gap-0.5">
-                                                                    {formatCost(
-                                                                        model.cost.input,
-                                                                    )}{" "}
-                                                                    <IconArrowDown className="size-[10px]" />
-                                                                </span>
-                                                                <span className="inline-flex items-center gap-0.5">
-                                                                    {formatCost(
-                                                                        model.cost.output,
-                                                                    )}{" "}
-                                                                    <IconArrowUp className="size-[10px]" />
-                                                                </span>
-                                                            </span>
-                                                            <span
-                                                                role="button"
-                                                                tabIndex={-1}
-                                                                aria-label={
-                                                                    isFav
-                                                                        ? "Remove from favorites"
-                                                                        : "Add to favorites"
-                                                                }
-                                                                onClick={(e) => {
-                                                                    e.stopPropagation();
-                                                                    toggleFavorite(k);
-                                                                }}
-                                                                onKeyDown={(e) => {
-                                                                    if (
-                                                                        e.key === "Enter" ||
-                                                                        e.key === " "
-                                                                    ) {
-                                                                        e.stopPropagation();
-                                                                        e.preventDefault();
-                                                                        toggleFavorite(k);
-                                                                    }
-                                                                }}
-                                                                className="grid shrink-0 place-items-center rounded p-0.5"
-                                                            >
-                                                                {isFav ? (
-                                                                    <IconStarFilled className="size-3.5 text-phi-warning" />
-                                                                ) : (
-                                                                    <IconStar className="size-3.5 text-phi-text-tertiary" />
-                                                                )}
-                                                            </span>
-                                                        </button>
+                                                            onToggleFavorite={() => toggleFavorite(k)}
+                                                        />
                                                     );
                                                 })}
                                             </div>

@@ -349,6 +349,14 @@ async function init(): Promise<void> {
     });
 }
 
+// Hardware acceleration: without these, Electron on Linux often lands on
+// Chromium's GPU blocklist and falls back to software rasterization, which
+// makes full-window animations (sidebar collapse) crawl. Software stays as
+// a fallback if no GPU is usable — nothing here disables it outright.
+app.commandLine.appendSwitch("ignore-gpu-blocklist");
+app.commandLine.appendSwitch("enable-gpu-rasterization");
+app.commandLine.appendSwitch("enable-zero-copy");
+
 // Single instance, like a well-behaved desktop app.
 if (!app.requestSingleInstanceLock()) {
     app.quit();

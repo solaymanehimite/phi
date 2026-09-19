@@ -121,7 +121,7 @@ export const ThinkingEffortSelector = memo(function ThinkingEffortSelector({
                 </div>
 
                 <div className="relative flex h-[26px] items-center">
-                    <div className="relative h-[14px] w-full rounded bg-phi-overlay">
+                    <div className="relative h-[14px] w-full rounded bg-phi-overlay-strong">
                         <div
                             className="absolute left-0 top-1/2 h-[20px] -translate-y-1/2 rounded transition-[width] duration-200 ease-out"
                             style={{ width: `calc(${pct}% + ${9 - pct * 0.18}px)` }}
@@ -167,7 +167,7 @@ export const ThinkingEffortSelector = memo(function ThinkingEffortSelector({
                             {availableLevels.map((lvl) => (
                                 <span
                                     key={lvl}
-                                    className="h-[8px] w-[3px] rounded-full bg-phi-white/40"
+                                    className="h-[8px] w-[3px] rounded-full bg-phi-bg-inverse/40"
                                 />
                             ))}
                         </div>
@@ -212,7 +212,7 @@ export const ThinkingEffortSelector = memo(function ThinkingEffortSelector({
                     />
                     <span
                         aria-hidden="true"
-                        className="pointer-events-none absolute top-1/2 z-0 h-[26px] w-3.5 -translate-x-1/2 -translate-y-1/2 rounded bg-phi-white transition-[left] duration-200 ease-out"
+                        className="pointer-events-none absolute top-1/2 z-[6] h-[26px] w-3.5 -translate-x-1/2 -translate-y-1/2 rounded border border-phi-border-strong bg-phi-white shadow-[0_1px_2px_var(--color-phi-shadow)] transition-[left] duration-200 ease-out"
                         style={{ left: `calc(${pct}% + ${9 - pct * 0.18}px)` }}
                     />
                 </div>
