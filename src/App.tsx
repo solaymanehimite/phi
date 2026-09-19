@@ -1445,8 +1445,8 @@ export default function App() {
                                         <UiDemoPanel />
                                     </section>
                                 ) : (
-                                <section className="relative flex min-h-0 flex-1 flex-col">
-                                    <div aria-hidden="true" className="pointer-events-none absolute inset-0 -z-10 bg-gradient-to-b from-phi-overlay-strong via-phi-overlay to-transparent" />
+                                <section className="relative isolate flex min-h-0 flex-1 flex-col">
+                                    {!chat.activeFile ? <div aria-hidden="true" className="phi-new-chat-pattern pointer-events-none absolute inset-0 z-0" /> : null}
                                     {chat.activeFile ? (
                                         <div className="pointer-events-none absolute right-4 top-4 z-10 flex justify-end">
                                             <div className="pointer-events-auto">
