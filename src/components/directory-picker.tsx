@@ -155,7 +155,7 @@ function ProjectForm({
                             onClick={() => void browse()}
                             aria-labelledby="new-project-path-label new-project-path-value"
                             title={path || "Choose a directory"}
-                            className="flex min-w-0 flex-1 items-center gap-2 rounded-md bg-phi-overlay-strong px-3 py-1.5 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-phi-accent/40"
+                            className="flex min-w-0 flex-1 items-center gap-2 rounded-lg bg-phi-overlay-strong px-3 py-1.5 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-phi-accent/40"
                         >
                             <IconFolderOpen className="size-3.5 shrink-0 text-phi-text-tertiary" />
                             <span
@@ -171,7 +171,7 @@ function ProjectForm({
                                 onClick={() => setPath("")}
                                 title="Clear directory"
                                 aria-label="Clear directory"
-                                className="inline-flex shrink-0 items-center justify-center rounded-md bg-phi-overlay-strong px-2 text-phi-text-tertiary hover:text-phi-text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-phi-accent/40"
+                                className="inline-flex shrink-0 items-center justify-center rounded-lg bg-phi-overlay-strong px-2 text-phi-text-tertiary hover:text-phi-text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-phi-accent/40"
                             >
                                 <IconXFilled className="size-3.5" />
                             </button>
@@ -200,7 +200,7 @@ function ProjectForm({
             </div>
 
             <div className="flex items-center justify-end gap-1.5 px-2 pb-2 pt-2">
-                <Button variant="ghost" size="xs" onClick={onBack} className="!text-[12.5px]">
+                <Button variant="ghost" size="xs" onClick={onBack} className="rounded-lg !text-[12.5px]">
                     Cancel
                 </Button>
                 <Button
@@ -208,7 +208,7 @@ function ProjectForm({
                     variant="primary"
                     size="xs"
                     disabled={!canSubmit}
-                    className="!rounded-md !text-[12.5px]"
+                    className="!rounded-lg !text-[12.5px]"
                 >
                     {submitLabel}
                 </Button>
@@ -305,7 +305,7 @@ function EditProjectForm({
                     {bound.map((hostId) => (
                         <div
                             key={hostId}
-                            className="group flex w-full items-center gap-2 rounded-md bg-phi-overlay-strong px-2.5 py-1.5"
+                            className="group flex w-full items-center gap-2 rounded-lg bg-phi-overlay-strong px-2.5 py-1.5"
                         >
                             <TargetIcon hostId={hostId} className="size-3.5 shrink-0 text-phi-text-tertiary" />
                             <span className="shrink-0 text-[12px] font-medium text-phi-text-secondary">
@@ -322,7 +322,7 @@ function EditProjectForm({
                                 onClick={() => onRemoveTarget(hostId)}
                                 title={bound.length === 1 ? "Remove this target (deletes the project)" : `Remove ${hostNameById[hostId] ?? hostId} target`}
                                 aria-label={bound.length === 1 ? "Remove this target (deletes the project)" : `Remove ${hostNameById[hostId] ?? hostId} target`}
-                                className="inline-flex size-6 shrink-0 items-center justify-center rounded-md text-phi-text-muted hover:bg-phi-overlay-hover hover:text-phi-error-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-phi-accent/40"
+                                className="inline-flex size-6 shrink-0 items-center justify-center rounded-full text-phi-text-muted hover:bg-phi-overlay-hover hover:text-phi-error-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-phi-accent/40"
                             >
                                 <IconTrashFilled className="size-3.5" />
                             </button>
@@ -367,7 +367,7 @@ function EditProjectForm({
             </div>
 
             <div className="flex items-center justify-end gap-1.5 px-2 pb-2 pt-2">
-                <Button variant="ghost" size="xs" onClick={() => { submitRename(); onBack(); }} className="!text-[12.5px]">
+                <Button variant="ghost" size="xs" onClick={() => { submitRename(); onBack(); }} className="rounded-lg !text-[12.5px]">
                     Done
                 </Button>
             </div>
@@ -518,7 +518,7 @@ function DirectoryPanel({
                         onClick={() => onEditProject(project)}
                         title={`Edit ${project.name}`}
                         aria-label={`Edit ${project.name}`}
-                        className="inline-flex size-6 shrink-0 items-center justify-center rounded-md text-phi-text-muted opacity-0 hover:bg-phi-overlay-hover hover:text-phi-text-primary focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-phi-accent/40 group-hover:opacity-100"
+                        className="inline-flex size-6 shrink-0 items-center justify-center rounded-full text-phi-text-muted opacity-0 hover:bg-phi-overlay-hover hover:text-phi-text-primary focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-phi-accent/40 group-hover:opacity-100"
                     >
                         <IconPencilFilled className="size-3.5" />
                     </button>
@@ -529,7 +529,7 @@ function DirectoryPanel({
                         onClick={() => onRemoveProject(project.id)}
                         title={`Remove ${project.name}`}
                         aria-label={`Remove ${project.name}`}
-                        className="mr-1 inline-flex size-6 shrink-0 items-center justify-center rounded-md text-phi-text-muted opacity-0 hover:bg-phi-overlay-hover hover:text-phi-error-text focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-phi-accent/40 group-hover:opacity-100"
+                        className="mr-1 inline-flex size-6 shrink-0 items-center justify-center rounded-full text-phi-text-muted opacity-0 hover:bg-phi-overlay-hover hover:text-phi-error-text focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-phi-accent/40 group-hover:opacity-100"
                     >
                         <IconTrashFilled className="size-3.5" />
                     </button>

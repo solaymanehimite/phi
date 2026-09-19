@@ -41,7 +41,7 @@ export const AtMenu = memo(function AtMenu({ files, selectedIndex, onSelect, onH
     <Menu
       role="listbox"
       aria-label="Files"
-      className="max-h-[min(300px,42vh)] overflow-y-auto transition duration-100 ease-out"
+      className="max-h-[min(300px,42vh)] overflow-y-auto !bg-transparent backdrop-blur-xl transition duration-100 ease-out"
     >
       {files.map((f, idx) => {
         const active = idx === selectedIndex;

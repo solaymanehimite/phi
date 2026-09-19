@@ -121,13 +121,13 @@ export const ThinkingEffortSelector = memo(function ThinkingEffortSelector({
                 </div>
 
                 <div className="relative flex h-[26px] items-center">
-                    <div className="relative h-[14px] w-full rounded bg-phi-overlay-strong">
+                    <div className="relative h-[14px] w-full rounded-full bg-phi-overlay-strong">
                         <div
-                            className="absolute left-0 top-1/2 h-[20px] -translate-y-1/2 rounded transition-[width] duration-200 ease-out"
+                            className="absolute left-0 top-1/2 h-[20px] -translate-y-1/2 rounded-full transition-[width] duration-200 ease-out"
                             style={{ width: `calc(${pct}% + ${9 - pct * 0.18}px)` }}
                         >
                             <div
-                                className="absolute inset-0 rounded transition-[background-color] duration-1000 ease-out"
+                                className="absolute inset-0 rounded-full transition-[background-color] duration-1000 ease-out"
                                 style={{
                                     backgroundColor:
                                         THINKING_COLORS[current] ?? "var(--color-phi-text-muted)",
@@ -135,7 +135,7 @@ export const ThinkingEffortSelector = memo(function ThinkingEffortSelector({
                             />
                             <div
                                 aria-hidden="true"
-                                className={`phi-max-fill absolute inset-0 rounded transition-opacity duration-1000 ease-out ${isMax ? "opacity-100" : "opacity-0"}`}
+                                className={`phi-max-fill absolute inset-0 rounded-full transition-opacity duration-1000 ease-out ${isMax ? "opacity-100" : "opacity-0"}`}
                             />
                             <div
                                 aria-hidden="true"
@@ -147,7 +147,7 @@ export const ThinkingEffortSelector = memo(function ThinkingEffortSelector({
                                     return (
                                         <span
                                             key={i}
-                                            className="phi-pixel block size-[3px] rounded-[1px] bg-phi-white"
+                                            className="phi-pixel block size-[3px] rounded-[2px] bg-phi-white"
                                             style={
                                                 {
                                                     "--phi-px-min": (maxOp * 0.15).toFixed(2),
@@ -212,7 +212,7 @@ export const ThinkingEffortSelector = memo(function ThinkingEffortSelector({
                     />
                     <span
                         aria-hidden="true"
-                        className="pointer-events-none absolute top-1/2 z-[6] h-[26px] w-3.5 -translate-x-1/2 -translate-y-1/2 rounded border border-phi-border-strong bg-phi-white shadow-[0_1px_2px_var(--color-phi-shadow)] transition-[left] duration-200 ease-out"
+                        className="pointer-events-none absolute top-1/2 z-[6] h-[26px] w-3.5 -translate-x-1/2 -translate-y-1/2 rounded-full border border-phi-border-strong bg-phi-white shadow-[0_1px_2px_var(--color-phi-shadow)] transition-[left] duration-200 ease-out"
                         style={{ left: `calc(${pct}% + ${9 - pct * 0.18}px)` }}
                     />
                 </div>

@@ -359,7 +359,7 @@ export const ModelSelector = memo(function ModelSelector({
     const isDisabled = !!disabled || !!isStreaming;
 
     const railBtn = (isActive: boolean) =>
-        `grid size-9 place-items-center rounded-xl ${
+        `grid size-9 place-items-center rounded-full ${
             isActive
                 ? "text-phi-text-primary"
                 : "text-phi-text-muted hover:bg-phi-overlay hover:text-phi-text-secondary"

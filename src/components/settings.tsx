@@ -205,7 +205,7 @@ function CodeThemePreview({ theme }: { theme: PrismTheme }) {
 function SchemePreview({ mode }: { mode: Theme }) {
     if (mode === "system") {
         return (
-            <span aria-hidden className="relative block h-[132px] w-full overflow-hidden rounded-[10px] border border-white/10">
+            <span aria-hidden className="relative block h-[132px] w-full overflow-hidden rounded-[20px] border border-white/10">
                 <span className="absolute inset-0 flex">
                     <SchemePreviewPane light />
                     <SchemePreviewPane light={false} />
@@ -215,7 +215,7 @@ function SchemePreview({ mode }: { mode: Theme }) {
     }
 
     return (
-        <span aria-hidden className={`relative block h-[132px] w-full overflow-hidden rounded-[10px] border ${mode === "light" ? "border-black/10 bg-white" : "border-white/10 bg-black"}`}>
+        <span aria-hidden className={`relative block h-[132px] w-full overflow-hidden rounded-[20px] border ${mode === "light" ? "border-black/10 bg-white" : "border-white/10 bg-black"}`}>
             <SchemePreviewPane light={mode === "light"} />
         </span>
     );
@@ -269,7 +269,7 @@ function CustomThemePreview({ theme }: { theme: CustomTheme }) {
     const accent = t["--color-phi-accent"] ?? "#2f7bff";
 
     return (
-        <span aria-hidden className="relative block h-[132px] w-full overflow-hidden rounded-[10px] border" style={{ background: pane, borderColor: border }}>
+        <span aria-hidden className="relative block h-[132px] w-full overflow-hidden rounded-[20px] border" style={{ background: pane, borderColor: border }}>
             <span className="absolute inset-0">
                 <span className="absolute left-1/2 top-[30%] w-[62%] -translate-x-1/2 space-y-1.5">
                     <span className="block h-1.5 rounded-full" style={{ background: line }} />
@@ -327,7 +327,7 @@ function CustomThemeCard({
                     aria-pressed={selected}
                     aria-label={`Apply theme ${theme.name}`}
                     title={`Apply ${theme.name} (${theme.base} base)`}
-                    className="block w-full rounded-[10px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-phi-accent/40"
+                    className="block w-full rounded-[20px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-phi-accent/40"
                 >
                     <CustomThemePreview theme={theme} />
                 </button>

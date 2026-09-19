@@ -8,6 +8,16 @@
   --font-sans: Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
 
+  /* Radius scale doubled: squircle corners read smaller than round ones
+     at the same value, so the whole scale compensates. */
+  --radius-xs: 0.25rem;
+  --radius-sm: 0.5rem;
+  --radius-md: 0.75rem;
+  --radius-lg: 1rem;
+  --radius-xl: 1.5rem;
+  --radius-2xl: 2rem;
+  --radius-3xl: 3rem;
+
   /* Backgrounds — upstreamed from Playground "Refined 2" */
   --color-phi-bg-app: #08080a;
   --color-phi-bg-main: #101011;
@@ -248,6 +258,14 @@ html[data-theme="light"] {
   --phi-scrollbar-thumb-active: rgb(242 240 255 / 0.36);
 }
 
+/* Corners — Apple-like squircle at 60% smoothing, applied everywhere a
+   rounded corner is used. Progressive enhancement: engines without
+   corner-shape support ignore it and keep plain round corners. */
+*:where([class*="rounded"]) {
+  corner-shape: squircle;
+  corner-smoothing: 60%;
+}
+
 .session-command-overlay {
   position: fixed;
   inset: 0;
@@ -263,7 +281,9 @@ html[data-theme="light"] {
   width: min(calc(100vw - 32px), 640px);
   overflow: hidden;
   border: 1px solid var(--color-phi-border-strong);
-  border-radius: 14px;
+  border-radius: 28px;
+  corner-shape: squircle;
+  corner-smoothing: 60%;
   background: transparent;
   backdrop-filter: blur(24px);
   -webkit-backdrop-filter: blur(24px);
@@ -813,13 +833,17 @@ html[data-theme="light"] .phi-tab-active {
     color: var(--color-phi-accent);
   }
   .phi-diff-word-remove {
-    border-radius: 3px;
+    border-radius: 6px;
+    corner-shape: squircle;
+    corner-smoothing: 60%;
     background: color-mix(in srgb, var(--color-phi-error) 32%, transparent);
     color: var(--color-phi-error-text);
     padding: 0 2px;
   }
   .phi-diff-word-add {
-    border-radius: 3px;
+    border-radius: 6px;
+    corner-shape: squircle;
+    corner-smoothing: 60%;
     background: color-mix(in srgb, var(--color-phi-thinking-low) 32%, transparent);
     color: var(--color-phi-thinking-low);
     padding: 0 2px;
@@ -829,7 +853,9 @@ html[data-theme="light"] .phi-tab-active {
     display: inline-flex;
     align-items: center;
     gap: 0.25rem;
-    border-radius: 0.3rem;
+    border-radius: 0.6rem;
+    corner-shape: squircle;
+    corner-smoothing: 60%;
     padding: 0.18rem 0.35rem;
     color: var(--color-phi-text-muted);
     font-size: 10px;
@@ -932,7 +958,9 @@ html[data-theme="light"] .phi-tab-active {
   }
   *::-webkit-scrollbar-thumb {
     background: var(--phi-scrollbar-thumb);
-    border-radius: 8px;
+    border-radius: 16px;
+    corner-shape: squircle;
+    corner-smoothing: 60%;
     border: 3px solid transparent;
     background-clip: content-box;
     min-height: 24px;

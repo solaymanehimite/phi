@@ -14,7 +14,7 @@ export function DropdownMenuTrigger({
 }: DropdownMenuTriggerProps) {
     return (
         <MenuButton
-            className={`grid size-6 place-items-center rounded text-phi-icon opacity-0 transition-colors hover:bg-phi-overlay-strong hover:text-phi-text-secondary focus:outline-none group-hover:opacity-100 focus-visible:opacity-100 data-open:bg-phi-overlay-strong data-open:text-phi-text-secondary data-open:opacity-100 ${className}`}
+            className={`grid size-6 place-items-center rounded-full text-phi-icon opacity-0 transition-colors hover:bg-phi-overlay-strong hover:text-phi-text-secondary focus:outline-none group-hover:opacity-100 focus-visible:opacity-100 data-open:bg-phi-overlay-strong data-open:text-phi-text-secondary data-open:opacity-100 ${className}`}
             {...props}
         >
             {children}

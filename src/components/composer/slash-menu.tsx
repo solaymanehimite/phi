@@ -21,7 +21,7 @@ export const SlashMenu = memo(function SlashMenu({ commands, selectedIndex, onSe
     <Menu
       role="listbox"
       aria-label="Slash commands"
-      className="max-h-[min(280px,40vh)] overflow-y-auto transition duration-100 ease-out"
+      className="max-h-[min(280px,40vh)] overflow-y-auto !bg-transparent backdrop-blur-xl transition duration-100 ease-out"
     >
       {commands.map((cmd, idx) => {
         const active = idx === selectedIndex;
