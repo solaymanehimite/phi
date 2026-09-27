@@ -1057,15 +1057,15 @@ const SessionRow = memo(function SessionRow({
             {!renaming && (
                 <button
                     type="button"
-                    onClick={onToggleArchive}
-                    title={archived ? "Unarchive session" : "Archive session"}
-                    aria-label={archived ? "Unarchive session" : "Archive session"}
+                    onClick={onTogglePin}
+                    title={pinned ? "Unpin session" : "Pin session"}
+                    aria-label={pinned ? "Unpin session" : "Pin session"}
                     className="absolute left-1 top-1/2 grid size-6 -translate-y-1/2 place-items-center rounded-full text-phi-text-faint opacity-0 transition-colors hover:bg-phi-overlay-strong hover:text-phi-text-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-phi-accent/40 focus-visible:opacity-100 group-hover:opacity-100 group-focus-within:opacity-100 group/archive"
                 >
-                    {archived ? (
-                        <IconArchiveOff className="size-[15px]" />
+                    {pinned ? (
+                        <IconPinnedOff className="size-[15px]" />
                     ) : (
-                        <ArchiveBinIcon className="size-[15px] shrink-0 text-current" hoverOn="archive" />
+                        <IconPinnedFilled className="size-[15px]" />
                     )}
                 </button>
             )}
