@@ -28,8 +28,11 @@ export function WorkingBlock({ items, isStreaming, variant, animateOnMount, star
     const isStreamingVariant = variant === "streaming";
     const hasWork = items.length > 0;
 
+    // Completed work starts collapsed. The streaming block opens while work is
+    // active; when it becomes history, it should not flash open again before
+    // the collapse effect runs.
     const [open, setOpen] = useState(() =>
-        isStreamingVariant ? Boolean(isStreaming) : Boolean(animateOnMount),
+        isStreamingVariant ? Boolean(isStreaming) : false,
     );
     const [now, setNow] = useState(() => Date.now());
 
@@ -80,7 +83,7 @@ export function WorkingBlock({ items, isStreaming, variant, animateOnMount, star
     }
 
     return (
-        <div className="mt-2 w-full pb-2">
+        <div className={`mt-0 w-full ${open ? "pb-2" : "pb-0"}`}>
             {/* muted label — no border/background container */}
             <button
                 type="button"

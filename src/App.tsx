@@ -1369,7 +1369,7 @@ export default function App() {
 
     // fatal gate
     if (healthHook.fatal) {
-        return <FatalState error={healthHook.health?.error ?? null} home={healthHook.health?.home} port={healthHook.health?.port} agentDir={healthHook.health?.agentDir} onRetry={async () => { await healthHook.retry(); }} />;
+        return <FatalState error={healthHook.health?.error ?? null} home={healthHook.health?.home} port={healthHook.health?.port} agentDir={healthHook.health?.agentDir} hosts={hosts} activeHostId={activeHostId} onHostChange={setActiveHostId} onRetry={async () => { await healthHook.retry(); }} />;
     }
 
     return (

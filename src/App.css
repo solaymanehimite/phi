@@ -949,7 +949,13 @@ html[data-theme="light"] .phi-tab-active {
   [data-tauri-drag-region] button,
   [data-tauri-drag-region] input,
   [data-tauri-drag-region] [role="tab"],
-  [data-tauri-drag-region] a {
+  [data-tauri-drag-region] a,
+  /* Chromium can intermittently keep hit-testing a nested tab strip as a
+     draggable surface, especially while the strip is scrolling or FLIP-
+     animating. Mark the whole interactive region no-drag, not just its
+     buttons. */
+  .phi-tabs-bar [role="tablist"],
+  .phi-tabs-bar .phi-tab-enter {
     -webkit-app-region: no-drag;
   }
 
