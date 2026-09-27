@@ -156,10 +156,8 @@ export const Sidebar = memo(function Sidebar({
     const scrollUp = useCallback(() => scrollByPage(-1), [scrollByPage]);
     const scrollDown = useCallback(() => scrollByPage(1), [scrollByPage]);
 
-    const pinnedCollapsed = collapsed.has("pinned");
     const archivedCollapsed = collapsed.has("archived");
     const theme = useEffectiveTheme();
-    const handleTogglePinned = useCallback(() => onToggleGroup("pinned"), [onToggleGroup]);
     const handleToggleArchived = useCallback(() => onToggleGroup("archived"), [onToggleGroup]);
 
     return (
@@ -209,7 +207,7 @@ export const Sidebar = memo(function Sidebar({
                         </p>
                     ) : error ? (
                         <Alert variant="error" className="mx-2 leading-4">{error}</Alert>
-                    ) : projectGroups.length === 0 ? (
+                    ) : projectGroups.length === 0 && pinnedSessions.length === 0 ? (
                         <EmptyState
                             title="No projects yet"
                             description="Create one from the project picker to start chatting in a directory."
@@ -218,47 +216,27 @@ export const Sidebar = memo(function Sidebar({
                     ) : (
                         <div>
                             {pinnedSessions.length > 0 && (
-                                <div className="mb-4">
-                                    <MetaGroupTrigger
-                                        collapsed={pinnedCollapsed}
-                                        onClick={handleTogglePinned}
-                                        label="Pinned"
-                                        count={pinnedSessions.length}
-                                    />
-                                    <div
-                                        className={`grid transition-all duration-300 ease-[cubic-bezier(0.4,0,0.2,1)] ${pinnedCollapsed ? "grid-rows-[0fr] opacity-0" : "grid-rows-[1fr] opacity-100"}`}
-                                    >
-                                        <div className="overflow-hidden">
-                                            <nav
-                                                aria-label="Pinned"
-                                                className="mt-1 space-y-0.5 pb-0.5"
-                                            >
-                                                {pinnedSessions.map((s) => (
-                                                    <SessionRowMemo
-                                                        key={`${s.hostId ?? ""}\n${s.path}`}
-                                                        session={s}
-                                                        active={s.path === activeFile}
-                                                        isStreaming={runningFiles.has(s.path)}
-                                                        pinned
-                                                        archived={false}
-                                                        hostNameById={hostNameById}
-                                                        showHostBadges={showHostBadges}
-                                                        onSelect={onSelect}
-                                                        onRename={onRename}
-                                                        onDelete={onDelete}
-                                                        onTogglePin={onTogglePin}
-                                                        onToggleArchive={onToggleArchive}
-                                                        onPrefetch={onPrefetch}
-                                                    />
-                                                ))}
-                                            </nav>
-                                        </div>
-                                    </div>
-                                </div>
+                                <nav aria-label="Pinned sessions" className="mb-4 space-y-0.5">
+                                    {pinnedSessions.map((s) => (
+                                        <SessionRowMemo
+                                            key={`${s.hostId ?? ""}\n${s.path}`}
+                                            session={s}
+                                            active={s.path === activeFile}
+                                            isStreaming={runningFiles.has(s.path)}
+                                            pinned
+                                            archived={false}
+                                            hostNameById={hostNameById}
+                                            showHostBadges={showHostBadges}
+                                            onSelect={onSelect}
+                                            onRename={onRename}
+                                            onDelete={onDelete}
+                                            onTogglePin={onTogglePin}
+                                            onToggleArchive={onToggleArchive}
+                                            onPrefetch={onPrefetch}
+                                        />
+                                    ))}
+                                </nav>
                             )}
-                            <p className="px-2.5 pb-3 text-[13px] font-semibold tracking-wide text-phi-text-tertiary">
-                                Projects
-                            </p>
                             <div className="space-y-0.5">
                             {projectGroups.map((group) => (
                                 <GroupSection
