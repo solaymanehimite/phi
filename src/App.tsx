@@ -563,15 +563,16 @@ export default function App() {
             .sort(byModifiedDesc),
         [sessions.sessions, sessionFlags.archived],
     );
-    // Sidebar sections: every project (even empty) with its sessions across
-    // all run targets, newest first. Pinned / archived sessions are
-    // excluded — they live in their own groups.
+    // Sidebar sections only include projects with visible sessions. Pinned /
+    // archived sessions are excluded — they live in their own groups.
     const projectGroups = useMemo(
-        () => projectOptions.map((project) => ({
-            project,
-            sessions: sessionsForProject(sessions.sessions, project)
-                .filter((s) => !sessionFlags.pinned.has(s.path) && !sessionFlags.archived.has(s.path)),
-        })),
+        () => projectOptions
+            .map((project) => ({
+                project,
+                sessions: sessionsForProject(sessions.sessions, project)
+                    .filter((s) => !sessionFlags.pinned.has(s.path) && !sessionFlags.archived.has(s.path)),
+            }))
+            .filter((group) => group.sessions.length > 0),
         [projectOptions, sessions.sessions, sessionFlags.pinned, sessionFlags.archived],
     );
     const orphanCount = useMemo(() => {
