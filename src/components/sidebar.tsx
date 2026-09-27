@@ -11,6 +11,7 @@ import {
     IconSendFilled,
     IconSettingsFilled,
     IconTrashFilled,
+    IconX,
 } from "@tabler/icons-react";
 import { Orb } from "@aicss/react";
 import { memo, useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
@@ -156,8 +157,10 @@ export const Sidebar = memo(function Sidebar({
     const scrollUp = useCallback(() => scrollByPage(-1), [scrollByPage]);
     const scrollDown = useCallback(() => scrollByPage(1), [scrollByPage]);
 
+    const pinnedCollapsed = collapsed.has("pinned");
     const archivedCollapsed = collapsed.has("archived");
     const theme = useEffectiveTheme();
+    const handleTogglePinned = useCallback(() => onToggleGroup("pinned"), [onToggleGroup]);
     const handleToggleArchived = useCallback(() => onToggleGroup("archived"), [onToggleGroup]);
 
     return (
@@ -217,11 +220,16 @@ export const Sidebar = memo(function Sidebar({
                         <div>
                             {pinnedSessions.length > 0 && (
                                 <div className="mb-2">
-                                    <div className="flex h-8 items-center gap-2 px-2.5 text-[13px] font-medium text-phi-text-tertiary">
-                                        <IconPinnedFilled aria-hidden className="size-4 shrink-0" />
-                                        <span>Pinned</span>
-                                    </div>
-                                    <nav aria-label="Pinned sessions" className="space-y-0.5">
+                                    <MetaGroupTrigger
+                                        collapsed={pinnedCollapsed}
+                                        onClick={handleTogglePinned}
+                                        label="Pinned"
+                                        count={pinnedSessions.length}
+                                        icon={<IconPinnedFilled className="size-4 shrink-0" />}
+                                    />
+                                    <div className={`grid transition-all duration-300 ease-[cubic-bezier(0.4,0,0.2,1)] ${pinnedCollapsed ? "grid-rows-[0fr] opacity-0" : "grid-rows-[1fr] opacity-100"}`}>
+                                        <div className="overflow-hidden">
+                                            <nav aria-label="Pinned sessions" className="mt-1 space-y-0.5">
                                     {pinnedSessions.map((s) => (
                                         <SessionRowMemo
                                             key={`${s.hostId ?? ""}\n${s.path}`}
@@ -240,7 +248,9 @@ export const Sidebar = memo(function Sidebar({
                                             onPrefetch={onPrefetch}
                                         />
                                     ))}
-                                    </nav>
+                                            </nav>
+                                        </div>
+                                    </div>
                                 </div>
                             )}
                             <div className="space-y-0.5">
@@ -1070,8 +1080,8 @@ const SessionRow = memo(function SessionRow({
                 >
                     {pinned ? (
                         <span className="relative grid size-[15px] place-items-center">
-                            <IconPinnedFilled className="size-[15px] transition-transform duration-200 group-hover/archive:rotate-12" />
-                            <span className="pointer-events-none absolute -right-1 -top-1 text-[10px] leading-none opacity-0 transition-opacity duration-150 group-hover/archive:opacity-100">×</span>
+                            <IconPinnedFilled className="size-[15px] transition-[transform,opacity] duration-200 group-hover/archive:rotate-45 group-hover/archive:opacity-40" />
+                            <IconX aria-hidden className="pointer-events-none absolute size-[15px] opacity-0 transition-opacity duration-150 group-hover/archive:opacity-100" />
                         </span>
                     ) : (
                         <ArchiveBinIcon className="size-[15px] shrink-0 text-current" hoverOn="archive" />
