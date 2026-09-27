@@ -1060,7 +1060,7 @@ const SessionRow = memo(function SessionRow({
                     onClick={onTogglePin}
                     title={pinned ? "Unpin session" : "Pin session"}
                     aria-label={pinned ? "Unpin session" : "Pin session"}
-                    className="absolute left-1 top-1/2 grid size-6 -translate-y-1/2 place-items-center rounded-full text-phi-text-faint opacity-0 transition-colors hover:bg-phi-overlay-strong hover:text-phi-text-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-phi-accent/40 focus-visible:opacity-100 group-hover:opacity-100 group-focus-within:opacity-100 group/archive"
+                    className="absolute left-1 top-1/2 grid size-6 -translate-y-1/2 place-items-center rounded-full text-phi-text-faint transition-colors hover:bg-phi-overlay-strong hover:text-phi-text-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-phi-accent/40 group/archive"
                 >
                     {pinned ? (
                         <IconPinnedOff className="size-[15px]" />
