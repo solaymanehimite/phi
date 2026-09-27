@@ -107,7 +107,7 @@ export const ContextIndicator = memo(function ContextIndicator({
                 </svg>
                 <span
                     aria-hidden="true"
-                    className="min-w-[3ch] text-[12px] font-semibold tabular-nums text-phi-text-secondary"
+                    className="min-w-[3ch] font-sans text-[12px] font-semibold tabular-nums text-phi-text-secondary"
                 >
                     {percent == null ? "—" : `${percent.toFixed(1)}%`}
                 </span>
