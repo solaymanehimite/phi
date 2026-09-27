@@ -74,7 +74,7 @@ export const ContextIndicator = memo(function ContextIndicator({
                 onClick={handleOpen}
                 aria-label={label}
                 data-context-indicator="trigger"
-                className="inline-flex items-center justify-center gap-1 rounded-full p-1.5 text-phi-text-secondary transition-colors hover:bg-phi-overlay-hover hover:text-phi-text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-phi-accent/40"
+                className="inline-flex items-center justify-center gap-2 rounded-full p-1.5 text-phi-text-secondary transition-colors hover:bg-phi-overlay-hover hover:text-phi-text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-phi-accent/40"
             >
                 <svg
                     width="22"
@@ -107,7 +107,7 @@ export const ContextIndicator = memo(function ContextIndicator({
                 </svg>
                 <span
                     aria-hidden="true"
-                    className="min-w-[2.5ch] text-[10px] font-medium tabular-nums text-phi-text-tertiary"
+                    className="min-w-[3ch] text-[12px] font-semibold tabular-nums text-phi-text-secondary"
                 >
                     {percent == null ? "—" : `${percent.toFixed(0)}%`}
                 </span>

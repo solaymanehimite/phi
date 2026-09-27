@@ -216,7 +216,12 @@ export const Sidebar = memo(function Sidebar({
                     ) : (
                         <div>
                             {pinnedSessions.length > 0 && (
-                                <nav aria-label="Pinned sessions" className="mb-4 space-y-0.5">
+                                <div className="mb-2">
+                                    <div className="flex h-8 items-center gap-2 px-2.5 text-[13px] font-medium text-phi-text-tertiary">
+                                        <IconPinnedFilled aria-hidden className="size-4 shrink-0" />
+                                        <span>Pinned</span>
+                                    </div>
+                                    <nav aria-label="Pinned sessions" className="space-y-0.5">
                                     {pinnedSessions.map((s) => (
                                         <SessionRowMemo
                                             key={`${s.hostId ?? ""}\n${s.path}`}
@@ -235,7 +240,8 @@ export const Sidebar = memo(function Sidebar({
                                             onPrefetch={onPrefetch}
                                         />
                                     ))}
-                                </nav>
+                                    </nav>
+                                </div>
                             )}
                             <div className="space-y-0.5">
                             {projectGroups.map((group) => (
@@ -1060,12 +1066,15 @@ const SessionRow = memo(function SessionRow({
                     onClick={onTogglePin}
                     title={pinned ? "Unpin session" : "Pin session"}
                     aria-label={pinned ? "Unpin session" : "Pin session"}
-                    className="absolute left-1 top-1/2 grid size-6 -translate-y-1/2 place-items-center rounded-full text-phi-text-faint transition-colors hover:bg-phi-overlay-strong hover:text-phi-text-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-phi-accent/40 group/archive"
+                    className={`absolute left-1 top-1/2 grid size-6 -translate-y-1/2 place-items-center rounded-full text-phi-text-faint transition-colors hover:bg-phi-overlay-strong hover:text-phi-text-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-phi-accent/40 group/archive ${pinned ? "" : "opacity-0 group-hover:opacity-100 group-focus-within:opacity-100"}`}
                 >
                     {pinned ? (
-                        <IconPinnedOff className="size-[15px]" />
+                        <span className="relative grid size-[15px] place-items-center">
+                            <IconPinnedFilled className="size-[15px] transition-transform duration-200 group-hover/archive:rotate-12" />
+                            <span className="pointer-events-none absolute -right-1 -top-1 text-[10px] leading-none opacity-0 transition-opacity duration-150 group-hover/archive:opacity-100">×</span>
+                        </span>
                     ) : (
-                        <IconPinnedFilled className="size-[15px]" />
+                        <ArchiveBinIcon className="size-[15px] shrink-0 text-current" hoverOn="archive" />
                     )}
                 </button>
             )}
