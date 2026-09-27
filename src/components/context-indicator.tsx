@@ -109,7 +109,7 @@ export const ContextIndicator = memo(function ContextIndicator({
                     aria-hidden="true"
                     className="min-w-[3ch] text-[12px] font-semibold tabular-nums text-phi-text-secondary"
                 >
-                    {percent == null ? "—" : `${percent.toFixed(0)}%`}
+                    {percent == null ? "—" : `${percent.toFixed(1)}%`}
                 </span>
             </PopoverTrigger>
 
