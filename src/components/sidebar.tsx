@@ -11,7 +11,6 @@ import {
     IconSendFilled,
     IconSettingsFilled,
     IconTrashFilled,
-    IconX,
 } from "@tabler/icons-react";
 import { Orb } from "@aicss/react";
 import { memo, useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
@@ -1076,13 +1075,10 @@ const SessionRow = memo(function SessionRow({
                     onClick={onTogglePin}
                     title={pinned ? "Unpin session" : "Pin session"}
                     aria-label={pinned ? "Unpin session" : "Pin session"}
-                    className={`absolute left-1 top-1/2 grid size-6 -translate-y-1/2 place-items-center rounded-full text-phi-text-faint transition-colors hover:bg-phi-overlay-strong hover:text-phi-text-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-phi-accent/40 group/archive ${pinned ? "" : "opacity-0 group-hover:opacity-100 group-focus-within:opacity-100"}`}
+                    className="absolute left-1 top-1/2 grid size-6 -translate-y-1/2 place-items-center rounded-full text-phi-text-faint opacity-0 transition-colors hover:bg-phi-overlay-strong hover:text-phi-text-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-phi-accent/40 group-hover:opacity-100 group-focus-within:opacity-100 group/archive"
                 >
                     {pinned ? (
-                        <span className="relative grid size-[15px] place-items-center">
-                            <IconPinnedFilled className="size-[15px] transition-[transform,opacity] duration-200 group-hover/archive:rotate-45 group-hover/archive:opacity-40" />
-                            <IconX aria-hidden className="pointer-events-none absolute size-[15px] opacity-0 transition-opacity duration-150 group-hover/archive:opacity-100" />
-                        </span>
+                        <IconPinnedOff className="size-[15px]" />
                     ) : (
                         <ArchiveBinIcon className="size-[15px] shrink-0 text-current" hoverOn="archive" />
                     )}
