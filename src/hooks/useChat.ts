@@ -29,12 +29,8 @@ const emptyStream = emptyStreamState;
 /**
  * Keeps transient chat state per persisted session file. The selected file only
  * controls what is rendered. It never owns or cancels another file's stream.
- *
- * `getHostId` routes each file to its run target. Files unknown to the
- * resolver fall back to the active host, so callers should point the active
- * host at the session's target before operating on it.
  */
-export function useChat(opts?: { getHostId?: (file: string) => string | undefined }) {
+export function useChat() {
   const [activeFileState, setActiveFileState] = useState<string | null>(null);
   const activeFileRef = useRef<string | null>(null);
   const [dataState, setDataState] = useState<SessionMessagesResponse | null>(null);
@@ -175,7 +171,7 @@ export function useChat(opts?: { getHostId?: (file: string) => string | undefine
     const notices = noticesRef.current.get(file) ?? [];
     const sawAgent = seenAgentRef.current.has(file);
     try {
-      const response = await getMessages(file, hostFor(file));
+      const response = await getMessages(file);
       if (isLocalNoticeFallback(response, isSlash, sawAgent)) {
         updateCachedResponse(file, (current) => withNoticesAppended(current, notices));
       } else if (notices.length > 0) {
@@ -196,25 +192,12 @@ export function useChat(opts?: { getHostId?: (file: string) => string | undefine
     }
   }, [clearPendingStream, flushStream, markRunning, storeResponse, updateCachedResponse]);
 
-  // Stable host resolver: the getter identity changes every render, so it
-  // lives in a ref and hostFor stays referentially stable (downstream
-  // effects depend on chat callbacks).
-  const getHostIdRef = useRef(opts?.getHostId);
-  getHostIdRef.current = opts?.getHostId;
-  const hostFor = useCallback((file: string): string | undefined => {
-    try {
-      return getHostIdRef.current?.(file);
-    } catch {
-      return undefined;
-    }
-  }, []);
-
   const openFile = useCallback(async (file: string) => {
     setActiveFile(file);
     setFileLoading(file, true);
     setFileError(file, null);
     try {
-      const response = await getMessages(file, hostFor(file));
+      const response = await getMessages(file);
       storeResponse(file, response);
     } catch (error) {
       setFileError(file, error instanceof Error ? error.message : String(error));
@@ -256,7 +239,7 @@ export function useChat(opts?: { getHostId?: (file: string) => string | undefine
     if (file === activeFileRef.current) return;
     pendingPrefetchRef.current.add(file);
     try {
-      storeResponse(file, await getMessages(file, hostFor(file)));
+      storeResponse(file, await getMessages(file));
     } catch {
       // Hover prefetch is intentionally silent.
     } finally {
@@ -266,7 +249,7 @@ export function useChat(opts?: { getHostId?: (file: string) => string | undefine
 
   const revalidate = useCallback(async (file: string) => {
     try {
-      storeResponse(file, await getMessages(file, hostFor(file)));
+      storeResponse(file, await getMessages(file));
     } catch {
       // Cached history remains usable when a background refresh fails.
     }
@@ -316,7 +299,7 @@ export function useChat(opts?: { getHostId?: (file: string) => string | undefine
     const file = activeFileRef.current;
     if (!file) return;
     try {
-      storeResponse(file, await getMessages(file, hostFor(file)));
+      storeResponse(file, await getMessages(file));
     } catch {
       // Keep the visible transcript if a silent refresh fails.
     }
@@ -339,10 +322,10 @@ export function useChat(opts?: { getHostId?: (file: string) => string | undefine
     if (!file) return;
     // Keep the SSE reader attached. The targeted server abort settles the run,
     // which lets its normal cleanup persist the final aborted turn.
-    await abortPrompt(file, hostFor(file));
-  }, [hostFor]);
+    await abortPrompt(file);
+  }, []);
 
-  const continueStreaming = useCallback(async (file: string, cwd?: string, hostId?: string) => {
+  const continueStreaming = useCallback(async (file: string, cwd?: string) => {
     if (!file) return;
     if (runningFilesRef.current.has(file)) {
       setFileError(file, "A prompt is already running for this session");
@@ -350,7 +333,7 @@ export function useChat(opts?: { getHostId?: (file: string) => string | undefine
     }
     const controller = beginStream(file);
     try {
-      await streamContinue({ sessionFile: file, cwd, hostId: hostId ?? hostFor(file) }, (event) => applyStreamEvent(file, event), controller.signal);
+      await streamContinue({ sessionFile: file, cwd }, (event) => applyStreamEvent(file, event), controller.signal);
     } catch (error) {
       if ((error as Error).name !== "AbortError") { const message = error instanceof Error ? error.message : String(error); updateStream(file, (stream) => ({ ...stream, error: message })); setFileError(file, message); }
     } finally {
@@ -363,7 +346,6 @@ export function useChat(opts?: { getHostId?: (file: string) => string | undefine
     opts: {
       cwd?: string;
       sessionFile?: string;
-      hostId?: string;
       onNewFile?: (file: string, cwd: string, firstMessage: string) => void;
       images?: { type: "image"; data: string; mimeType: string }[];
     } = {},
@@ -374,11 +356,10 @@ export function useChat(opts?: { getHostId?: (file: string) => string | undefine
 
     let file = opts.sessionFile ?? activeFileRef.current;
     let cwd = opts.cwd;
-    const hostId = opts.hostId ?? (file ? hostFor(file) : undefined);
 
     if (!file) {
       try {
-        const created = await createSession(cwd, hostId);
+        const created = await createSession(cwd);
         file = created.file;
         cwd = cwd ?? (created as { cwd?: string }).cwd;
         setActiveFile(file);
@@ -394,7 +375,7 @@ export function useChat(opts?: { getHostId?: (file: string) => string | undefine
     if (!cwd) cwd = cached?.cwd ?? cached?.header?.cwd;
     if (!cwd) {
       try {
-        cached = await getMessages(file, hostId);
+        cached = await getMessages(file);
         storeResponse(file, cached);
         cwd = cached.cwd ?? cached.header?.cwd;
       } catch (error) {
@@ -445,7 +426,6 @@ export function useChat(opts?: { getHostId?: (file: string) => string | undefine
         { text: trimmed || " ", sessionFile: streamFile, cwd, images: opts.images },
         (event: SseEvent) => applyStreamEvent(streamFile, event),
         controller.signal,
-        hostId,
       );
     } catch (error) {
       if ((error as Error).name !== "AbortError") {
@@ -460,7 +440,6 @@ export function useChat(opts?: { getHostId?: (file: string) => string | undefine
     applyStreamEvent,
     beginStream,
     finalizeStream,
-    hostFor,
     setActiveFile,
     setFileError,
     storeResponse,

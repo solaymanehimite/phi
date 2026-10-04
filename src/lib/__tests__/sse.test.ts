@@ -1,6 +1,6 @@
 // Characterization tests: consolidated SSE transport.
 // Covers `postSse` in `src/lib/api.ts` (single owner for the prompt /
-// continue / compact streams, per docs/incremental-rewrite.md section 3):
+// continue / compact streams:
 // frame splitting across chunk boundaries, ping/blank-line skipping,
 // malformed JSON tolerance, trailing buffer flush, non-OK error parsing,
 // request shape, and the thin streamPrompt/streamContinue/streamCompact
@@ -92,17 +92,10 @@ describe("postSse errors", () => {
         expect((err as Error)?.message).toBe("HTTP 502");
     });
 
-    test("maps 401 to the host-token message", async () => {
-        const seen: { url?: string; init?: RequestInit } = {};
-        stubFetch(new Response(JSON.stringify({ error: "nope" }), { status: 401 }), seen);
-        let err: unknown;
-        try { await postSse("/prompt", {}, () => {}); } catch (e) { err = e; }
-        expect((err as Error)?.message).toBe("unauthorized — check host token");
-    });
 });
 
 describe("postSse request shape", () => {
-    test("POSTs JSON with no auth header for the local host", async () => {
+    test("POSTs JSON to the local sidecar", async () => {
         const seen: { url?: string; init?: RequestInit } = {};
         stubFetch(sseResponse([]), seen);
         const body = { text: "hi", sessionFile: "f" };

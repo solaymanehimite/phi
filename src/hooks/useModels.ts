@@ -13,12 +13,12 @@ export function useModels() {
   const [defaultModel, setDefaultModel] = useState<ModelInfo | null>(null);
   const [defaultThinkingLevel, setDefaultThinkingLevel] = useState<string | null>(null);
 
-  const refresh = useCallback(async (opts?: { silent?: boolean; cwd?: string; hostId?: string }) => {
+  const refresh = useCallback(async (opts?: { silent?: boolean; cwd?: string }) => {
     const silent = !!opts?.silent;
     if (!silent) setLoading(true);
     setError(null);
     try {
-      const data = await getModels(opts?.cwd, opts?.hostId);
+      const data = await getModels(opts?.cwd);
       setModels(Array.isArray(data.available) ? data.available : []);
       if (Array.isArray((data as any).providers)) setProviders((data as any).providers);
       setDefaultModel(data.default ?? null);
@@ -45,12 +45,12 @@ export function useModels() {
     [defaultModel],
   );
 
-  const setModel = useCallback(async (sessionFile: string, provider: string, modelId: string, hostId?: string) => {
-    return apiSetModel({ sessionFile, provider, modelId, hostId });
+  const setModel = useCallback(async (sessionFile: string, provider: string, modelId: string) => {
+    return apiSetModel({ sessionFile, provider, modelId });
   }, []);
 
-  const setThinkingLevel = useCallback(async (sessionFile: string, level: ThinkingLevel, hostId?: string) => {
-    return apiSetThinkingLevel(sessionFile, level, hostId);
+  const setThinkingLevel = useCallback(async (sessionFile: string, level: ThinkingLevel) => {
+    return apiSetThinkingLevel(sessionFile, level);
   }, []);
 
   const switchModel = useCallback(

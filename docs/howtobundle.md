@@ -159,7 +159,6 @@ CI: run `build:sidecar` *on each runner triple* before `tauri build` (GitHub Act
 
 * **Forgot triple suffix:** `externalBin: ["binaries/server"]` requires `server-aarch64-apple-darwin`, not `server`. Build will error `binary not found`.
 * **Hardcoded 3001 in prod:** Will fail if port occupied. Always pass dynamic port as `args[0]`.
-* **CORS:** Sidecar in prod must allow `tauri://localhost` / `https://tauri.localhost` origin. Dev uses Vite proxy so no CORS. Add `cors({ origin: [/tauri\.localhost/, /localhost:\d+/] })`.
 * **Binary size:** `pkg` binary is ~70–90MB (Node runtime embedded). This is expected. SEA can be smaller but more complex.
 * **Watch `server/`:** Do not set Vite `watch.ignored` to `server/` — dev needs restart. `bun --watch` already watches it.
 * **Auth:** Sidecar reads `~/.pi/agent/auth.json` directly — no env forwarding needed. Ensure bundled app has filesystem permission to `home` (Tauri default allows).

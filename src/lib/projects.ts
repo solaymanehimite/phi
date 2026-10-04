@@ -1,37 +1,15 @@
-import { LOCAL_HOST_ID } from "../hooks/useHosts";
 import type { SessionInfo } from "../types/session";
-import { hostOfSession } from "./hosts";
 
-/**
- * A user-curated project: a name with one workspace path per run target.
- * The same project can be set up on many machines; each binding maps a
- * host id to that host's absolute workspace path. Sessions join a project
- * when their (host, cwd) matches one of its bindings.
- */
+/** A user-curated project bound to one local workspace path. */
 export type Project = {
     id: string;
     name: string;
-    /** Run-target bindings: host id -> absolute workspace path on that host. */
-    targets: Record<string, string>;
+    path: string;
     createdAt: number;
 };
 
-/** Legacy shape (pre targets): a single local path. Migrated on load. */
-type LegacyProject = {
-    id?: string;
-    name?: string;
-    path: string;
-    createdAt?: number;
-};
-
-/**
- * A project as displayed: either an explicit user-curated entry or an
- * implicit one derived from a single (host, session directory) pair with
- * no explicit binding. Implicit projects take the folder name as their name.
- */
-export type ProjectOption =
-    | { id: string; name: string; implicit: false; targets: Record<string, string> }
-    | { id: string; name: string; implicit: true; hostId: string; path: string };
+/** Explicit user projects plus implicit entries derived from local Sessions. */
+export type ProjectOption = Project & { implicit: boolean };
 
 export type ProjectGroup = {
     project: ProjectOption;
@@ -39,42 +17,32 @@ export type ProjectGroup = {
 };
 
 export function toProjectOption(project: Project): ProjectOption {
-    return {
-        id: project.id,
-        name: project.name,
-        implicit: false,
-        targets: { ...project.targets },
-    };
+    return { ...project, implicit: false };
 }
 
-/** Migrate stored projects (including the legacy single-path shape). */
+/** Read persisted local Projects. */
 export function sanitizeProjects(value: unknown): Project[] {
     if (!Array.isArray(value)) return [];
     const out: Project[] = [];
     const seenIds = new Set<string>();
     for (const item of value) {
         if (!item || typeof item !== "object") continue;
-        const p = item as Partial<Project> & LegacyProject;
-        const id = typeof p.id === "string" && p.id ? p.id : createProjectId();
+        const raw = item as { id?: unknown; name?: unknown; path?: unknown; createdAt?: unknown; targets?: { local?: unknown } };
+        const id = typeof raw.id === "string" && raw.id ? raw.id : createProjectId();
         if (seenIds.has(id)) continue;
+        const legacyLocalPath = raw.targets?.local;
+        const path = typeof raw.path === "string" && raw.path.trim()
+            ? raw.path.trim()
+            : typeof legacyLocalPath === "string" && legacyLocalPath.trim()
+                ? legacyLocalPath.trim()
+                : undefined;
+        if (!path) continue;
         seenIds.add(id);
-        const targets: Record<string, string> = {};
-        if (p.targets && typeof p.targets === "object") {
-            for (const [hostId, path] of Object.entries(p.targets)) {
-                if (typeof path === "string" && path.trim()) targets[hostId] = path.trim();
-            }
-        }
-        // Legacy single-path projects bind to the local host.
-        if (Object.keys(targets).length === 0 && typeof p.path === "string" && p.path.trim()) {
-            targets[LOCAL_HOST_ID] = p.path.trim();
-        }
-        if (Object.keys(targets).length === 0) continue;
-        const firstPath = Object.values(targets)[0];
         out.push({
             id,
-            name: typeof p.name === "string" && p.name.trim() ? p.name.trim() : firstPath,
-            targets,
-            createdAt: typeof p.createdAt === "number" ? p.createdAt : Date.now(),
+            name: typeof raw.name === "string" && raw.name.trim() ? raw.name.trim() : path,
+            path,
+            createdAt: typeof raw.createdAt === "number" ? raw.createdAt : Date.now(),
         });
     }
     return out;
@@ -85,59 +53,29 @@ export function implicitProjectName(cwd: string, homeCwd?: string): string {
     return basenameOfPath(cwd) || cwd;
 }
 
-/**
- * Merge explicit projects with implicit entries for (host, directory) pairs
- * that have no explicit binding. Explicit projects keep their stored order
- * first; implicit entries follow in session-recency order. Non-absolute cwds
- * (e.g. "(unknown)") are skipped — those sessions stay reachable via search.
- */
-export function resolveProjectOptions(
-    explicit: Project[],
-    bindings: Array<{ hostId: string; cwd: string }>,
-    homeCwd?: string,
-): ProjectOption[] {
-    const covered = new Set<string>();
-    const out: ProjectOption[] = [];
-    for (const project of explicit) {
-        for (const [hostId, path] of Object.entries(project.targets)) {
-            covered.add(`${hostId}\n${path}`);
-        }
-        out.push(toProjectOption(project));
-    }
-    for (const { hostId, cwd } of bindings) {
-        if (covered.has(`${hostId}\n${cwd}`)) continue;
-        covered.add(`${hostId}\n${cwd}`);
-        if (!cwd.startsWith("/")) continue;
+/** Merge explicit projects with unclaimed local Session workspaces. */
+export function resolveProjectOptions(explicit: Project[], cwds: string[], homeCwd?: string): ProjectOption[] {
+    const covered = new Set(explicit.map((project) => project.path));
+    const out = explicit.map(toProjectOption);
+    for (const cwd of cwds) {
+        if (!cwd.startsWith("/") || covered.has(cwd)) continue;
+        covered.add(cwd);
         out.push({
-            id: `implicit:${hostId}:${cwd}`,
+            id: `implicit:${cwd}`,
             name: implicitProjectName(cwd, homeCwd),
-            implicit: true,
-            hostId,
             path: cwd,
+            createdAt: 0,
+            implicit: true,
         });
     }
     return out;
 }
 
-/** Workspace path of a project option on a given host, if bound. */
-export function projectPathFor(option: ProjectOption, hostId: string): string | null {
-    if (option.implicit) return option.hostId === hostId ? option.path : null;
-    return option.targets[hostId] ?? null;
-}
-
-/** Host ids a project option can run on. */
-export function boundHostIds(option: ProjectOption): string[] {
-    if (option.implicit) return [option.hostId];
-    return Object.keys(option.targets);
-}
-
 export function createProjectId(): string {
     try {
-        if (typeof crypto !== "undefined" && "randomUUID" in crypto) {
-            return crypto.randomUUID();
-        }
+        if (typeof crypto !== "undefined" && "randomUUID" in crypto) return crypto.randomUUID();
     } catch {
-        // fall through to manual id
+        // Fall through to the portable id below.
     }
     return `proj_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
 }
@@ -146,35 +84,26 @@ export function normalizeProjectPath(path: string, homeCwd?: string): string {
     let next = path.trim();
     if (!next) return "";
     if (next === "~" && homeCwd) return homeCwd;
-    if (next.startsWith("~/") && homeCwd) {
-        next = `${homeCwd}/${next.slice(2)}`;
-    }
-    // strip trailing slashes (keep root)
-    while (next.length > 1 && next.endsWith("/")) {
-        next = next.slice(0, -1);
-    }
+    if (next.startsWith("~/") && homeCwd) next = `${homeCwd}/${next.slice(2)}`;
+    while (next.length > 1 && next.endsWith("/")) next = next.slice(0, -1);
     return next;
 }
 
 export function basenameOfPath(path: string): string {
     if (!path) return "";
     const trimmed = path.length > 1 && path.endsWith("/") ? path.slice(0, -1) : path;
-    const parts = trimmed.split("/").filter(Boolean);
-    return parts.pop() || trimmed;
+    return trimmed.split("/").filter(Boolean).pop() || trimmed;
 }
 
 export function formatProjectPath(path: string): string {
     if (!path) return "";
-    const m = path.match(/^\/home\/[^/]+/);
-    return m ? path.replace(m[0], "~") : path;
+    const match = path.match(/^\/home\/[^/]+/);
+    return match ? path.replace(match[0], "~") : path;
 }
 
-/** Sessions belonging to a project option, newest first. */
+/** Sessions belonging to a local project, newest first. */
 export function sessionsForProject(sessions: SessionInfo[], option: ProjectOption): SessionInfo[] {
-    const list = sessions.filter((s) => {
-        const hostId = hostOfSession(s);
-        if (option.implicit) return hostId === option.hostId && s.cwd === option.path;
-        return option.targets[hostId] === s.cwd;
-    });
-    return list.sort((a, b) => new Date(b.modified).getTime() - new Date(a.modified).getTime());
+    return sessions
+        .filter((session) => session.cwd === option.path)
+        .sort((a, b) => new Date(b.modified).getTime() - new Date(a.modified).getTime());
 }

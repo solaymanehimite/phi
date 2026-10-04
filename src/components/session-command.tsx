@@ -10,7 +10,6 @@ import {
 } from "react";
 import type { SessionGroup } from "../hooks/useSessions";
 import type { SessionInfo } from "../types/session";
-import { TargetIcon } from "./target-picker";
 import { Button } from "./ui/button";
 import { EmptyState } from "./ui/empty-state";
 import { MenuLabel } from "./ui/menu";
@@ -47,13 +46,13 @@ export function SearchSessionsButton({
 export type CommandAction = {
     id: string;
     label: string;
-    /** Small hint shown on the right (e.g. shortcut or target cwd). */
+    /** Small hint shown on the right (e.g. shortcut or workspace path). */
     hint?: string;
     keywords?: string[];
     icon?: ReactNode;
 };
 
-/** Flattened project binding for palette lookup: one row per (project, host) path. */
+/** Flattened Project record for palette lookup. */
 export type CommandProject = {
     path: string;
     name: string;
@@ -62,8 +61,6 @@ export type CommandProject = {
 type SessionCommandProps = {
     groups: SessionGroup[];
     projects?: CommandProject[];
-    hostNameById?: Record<string, string>;
-    showHostBadges?: boolean;
     loading: boolean;
     error: string | null;
     actions: CommandAction[];
@@ -84,8 +81,6 @@ function sessionTitle(session: SessionInfo): string {
 function groupTitle(
     group: SessionGroup,
     projects?: CommandProject[],
-    hostNameById?: Record<string, string>,
-    showHostBadges?: boolean,
 ): string {
     const project = projects?.find((p) => p.path === group.cwd);
     const base = project?.name
@@ -97,10 +92,6 @@ function groupTitle(
                     : group.displayCwd;
                 return trimmed.split("/").pop() || trimmed;
             })()));
-    if (showHostBadges && hostNameById) {
-        const hostName = hostNameById[group.hostId] ?? group.hostId;
-        return `${base} — ${hostName}`;
-    }
     return base;
 }
 
@@ -164,8 +155,6 @@ const PaletteDialog = memo(function PaletteDialog({
     onOpenChange,
     groups,
     projects,
-    hostNameById,
-    showHostBadges,
     loading,
     error,
     actions,
@@ -176,8 +165,6 @@ const PaletteDialog = memo(function PaletteDialog({
     onOpenChange: (open: boolean) => void;
     groups: SessionGroup[];
     projects?: CommandProject[];
-    hostNameById?: Record<string, string>;
-    showHostBadges?: boolean;
     loading: boolean;
     error: string | null;
     actions: CommandAction[];
@@ -286,16 +273,15 @@ const PaletteDialog = memo(function PaletteDialog({
                         <ActionGroup actions={filteredActions} onAction={onAction} />
                         {filteredGroups.map(({ group, sessions }) => (
                             <Command.Group
-                                key={`${group.hostId}\n${group.cwd}`}
-                                value={`${group.hostId}\n${group.cwd}`}
-                                heading={<MenuLabel>{groupTitle(group, projects, hostNameById, showHostBadges)}</MenuLabel>}
+                                key={group.cwd}
+                                value={group.cwd}
+                                heading={<MenuLabel>{groupTitle(group, projects)}</MenuLabel>}
                             >
                                 {sessions.map((session) => {
                                     const title = sessionTitle(session);
-                                    const sessionHostId = session.hostId || "local";
                                     return (
                                         <Command.Item
-                                            key={`${sessionHostId}\n${session.path}`}
+                                            key={session.path}
                                             value={session.path}
                                             keywords={[title]}
                                             onSelect={() => onSelect(session.path)}
@@ -303,11 +289,6 @@ const PaletteDialog = memo(function PaletteDialog({
                                         >
                                             <IconMessageCircleFilled className="size-4 shrink-0 text-phi-text-muted" />
                                             <span className="min-w-0 flex-1 truncate">{title}</span>
-                                            {showHostBadges && (
-                                                <span title={`Runs on ${hostNameById?.[sessionHostId] ?? sessionHostId}`} className="inline-flex shrink-0 items-center text-phi-text-faint">
-                                                    <TargetIcon hostId={sessionHostId} className="size-3.5" />
-                                                </span>
-                                            )}
                                         </Command.Item>
                                     );
                                 })}
@@ -323,8 +304,6 @@ const PaletteDialog = memo(function PaletteDialog({
 export function SessionCommand({
     groups,
     projects,
-    hostNameById,
-    showHostBadges,
     loading,
     error,
     actions,
@@ -379,8 +358,6 @@ export function SessionCommand({
                 onOpenChange={handleOpenChange}
                 groups={groups}
                 projects={projects}
-                hostNameById={hostNameById}
-                showHostBadges={showHostBadges}
                 loading={loading}
                 error={error}
                 actions={actions}

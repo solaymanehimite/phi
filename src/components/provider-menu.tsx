@@ -18,7 +18,7 @@ import { EmptyState } from "./ui/empty-state";
 import { Input } from "./ui/input";
 import { ProviderLogo } from "./provider-logo";
 
-// Same treatment as the popover forms (host creator, project creator).
+// Same treatment as the Project creation popover.
 const providerInputClass =
     "w-full !border-0 !bg-phi-overlay-strong !px-3 !text-[13px] placeholder:!text-phi-text-tertiary focus-visible:ring-2 focus-visible:ring-phi-accent/40";
 

@@ -3,7 +3,7 @@ import { useTheme, useEffectiveTheme, type Theme } from "../hooks/useTheme";
 import { useCustomThemes, setActiveCustomThemeId, clearActiveCustomTheme } from "../hooks/useCustomThemes";
 import { formatThemeForAppCss } from "../lib/custom-themes";
 import type { CustomTheme } from "../lib/custom-themes";
-import { IconBox, IconCheckFilled, IconChevronDownFilled, IconCloudFilled, IconCode, IconDotsFilled, IconKeyFilled, IconPaletteFilled, IconPencil, IconPencilFilled, IconPlus, IconTrash, IconTrashFilled } from "@tabler/icons-react";
+import { IconBox, IconChevronDownFilled, IconCode, IconKeyFilled, IconPaletteFilled, IconPencil, IconPlus, IconTrash } from "@tabler/icons-react";
 import { useClose } from "@headlessui/react";
 import { Alert } from "./ui/alert";
 import { Button, buttonClass } from "./ui/button";
@@ -15,20 +15,17 @@ import { Popover, PopoverContent, PopoverTrigger } from "./ui/popover";
 import { Highlight, type PrismTheme } from "prism-react-renderer";
 import { CODE_THEMES, setCodeTheme, useCodeTheme, type CodeThemeId } from "./code-theme";
 import { ThemeEditorToggle } from "./dev/ThemeEditor";
-import { LocalHomeIcon, RemoteCloudIcon } from "./target-picker";
 import { ProviderLogo } from "./provider-logo";
 import { Switch } from "./ui/switch";
 import { listProviders, deleteProvider, testProvider, listPiAuth, listSkills, toggleSkill, type ProviderRow, type PiAuthRow, type SkillRow } from "../lib/api";
-import { LOCAL_HOST_ID, useHosts, type NewHostInput } from "../hooks/useHosts";
 
 
-export type SettingsSection = "appearance" | "providers" | "hosts" | "skills";
+export type SettingsSection = "appearance" | "providers" | "skills";
 
 const sections: { id: SettingsSection; label: string; description: string; icon: ComponentType<{ className?: string }> }[] = [
     { id: "appearance", label: "Appearance", description: "Theme and colors", icon: IconPaletteFilled },
     { id: "skills", label: "Skills", description: "Agent skills", icon: IconBox },
     { id: "providers", label: "Providers", description: "Providers, models, and API keys", icon: IconKeyFilled },
-    { id: "hosts", label: "Run targets", description: "Local and remote sidecars", icon: IconCloudFilled },
 ];
 
 export function SettingsPanel({
@@ -76,7 +73,7 @@ export function SettingsPanel({
                         <h1 className="text-[20px] font-semibold tracking-[-0.02em] text-phi-text-primary">{active.label}</h1>
                         <p className="mt-1 text-[12px] text-phi-text-muted">{active.description}</p>
                     </header>
-                    {section === "appearance" ? <AppearanceTab /> : section === "skills" ? <SkillsTab cwd={cwd} /> : section === "hosts" ? <HostsTab /> : <ProvidersTab onChanged={onProvidersChanged} onAddProvider={onAddProvider} providersVersion={providersVersion} />}
+                    {section === "appearance" ? <AppearanceTab /> : section === "skills" ? <SkillsTab cwd={cwd} /> : <ProvidersTab onChanged={onProvidersChanged} onAddProvider={onAddProvider} providersVersion={providersVersion} />}
                 </div>
             </div>
         </div>
@@ -489,150 +486,6 @@ function SkillsTab({ cwd }: { cwd?: string }) {
                         </label>
                     ))}
                 </ListGroup>
-            )}
-        </div>
-    );
-}
-
-function HostName({ name, isCurrent }: { name: string; isCurrent: boolean }) {
-    return (
-        <div className={`flex min-w-0 items-center transition-all duration-200 ease-out motion-reduce:transition-none ${isCurrent ? "gap-1.5" : "gap-0"}`}>
-            <span className={`shrink-0 overflow-hidden transition-all duration-200 ease-out motion-reduce:transition-none ${isCurrent ? "w-3.5 opacity-100" : "w-0 opacity-0"}`}>
-                <IconCheckFilled className="size-3.5 text-phi-thinking-low" />
-            </span>
-            <span className={`min-w-0 flex-1 truncate text-[13px] font-medium transition-colors duration-200 motion-reduce:transition-none ${isCurrent ? "text-phi-thinking-low" : "text-phi-text-primary"}`}>
-                {name}
-            </span>
-        </div>
-    );
-}
-
-function HostFormBody({ form, setForm, saveLabel, onCancel, onSave }: {
-    form: NewHostInput;
-    setForm: (next: (prev: NewHostInput) => NewHostInput) => void;
-    saveLabel: string;
-    onCancel: () => void;
-    onSave: () => void;
-}) {
-    const canSubmit = form.name.trim().length > 0 && form.url.trim().length > 0;
-    // Same treatment as the popover forms (host creator, project creator).
-    const inputClass =
-        "w-full !border-0 !bg-phi-overlay-strong !px-3 !text-[13px] placeholder:!text-phi-text-tertiary focus-visible:ring-2 focus-visible:ring-phi-accent/40";
-    return (
-        <div className="min-w-0 flex-1 space-y-2">
-            <Input autoFocus placeholder="Name" aria-label="Run target name" value={form.name} onChange={(e) => setForm((p) => ({ ...p, name: e.target.value }))} variant="default" className={inputClass} />
-            <Input placeholder="URL https://192.168.1.10:3001" aria-label="Run target URL" value={form.url} onChange={(e) => setForm((p) => ({ ...p, url: e.target.value }))} variant="default" className={inputClass} />
-            <Input placeholder="Token (optional)" aria-label="Run target token" type="password" value={form.token ?? ""} onChange={(e) => setForm((p) => ({ ...p, token: e.target.value }))} variant="default" className={inputClass} />
-            <div className="flex items-center justify-end gap-1.5 pt-1">
-                <Button onClick={onCancel} variant="ghost" size="xs" className="!text-[12px]">Cancel</Button>
-                <Button onClick={onSave} disabled={!canSubmit} variant="primary" size="xs" className="!text-[12px]">{saveLabel}</Button>
-            </div>
-        </div>
-    );
-}
-
-function HostsTab() {
-    const { hosts, activeHostId, setActiveHostId, addHost, updateHost, removeHost } = useHosts();
-    const [error, setError] = useState<string | null>(null);
-    const [editingId, setEditingId] = useState<string | null>(null);
-    const [form, setForm] = useState<NewHostInput>({ name: "", url: "", token: "" });
-    const [showForm, setShowForm] = useState(false);
-
-    const startAdd = useCallback(() => {
-        setError(null);
-        setEditingId(null);
-        setForm({ name: "", url: "", token: "" });
-        setShowForm(true);
-    }, []);
-
-    const startEdit = useCallback((id: string, current: { name: string; url: string; token: string }) => {
-        setError(null);
-        setEditingId(id);
-        setForm({ ...current });
-        setShowForm(true);
-    }, []);
-
-    const handleCancel = useCallback(() => {
-        setShowForm(false);
-        setEditingId(null);
-        setError(null);
-    }, []);
-
-    const handleSave = useCallback(() => {
-        if (!form.name.trim() || !form.url.trim()) {
-            setError("Name and URL are required");
-            return;
-        }
-        try {
-            if (editingId) updateHost(editingId, form);
-            else addHost(form);
-            setError(null);
-            setShowForm(false);
-            setEditingId(null);
-            setForm({ name: "", url: "", token: "" });
-        } catch (e) {
-            setError(e instanceof Error ? e.message : String(e));
-        }
-    }, [addHost, editingId, form, updateHost]);
-
-    const handleDelete = useCallback((id: string, name: string) => {
-        if (!confirm(`Remove run target "${name}"?`)) return;
-        removeHost(id);
-    }, [removeHost]);
-
-    return (
-        <div className="space-y-4">
-            {error && <Alert variant="error">{error}</Alert>}
-
-            <ListGroup>
-                <ListRow>
-                        <span aria-hidden="true" className="grid size-6 shrink-0 place-items-center text-phi-text-tertiary"><LocalHomeIcon className="size-5 shrink-0" /></span>
-                        <button type="button" onClick={() => setActiveHostId(LOCAL_HOST_ID)} title="Switch to the local sidecar" className="min-w-0 flex-1 rounded text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-phi-accent/40">
-                            <HostName name="Local" isCurrent={activeHostId === LOCAL_HOST_ID} />
-                            <div className="mt-0.5 truncate text-[12px] text-phi-text-muted">Local sidecar</div>
-                        </button>
-                        <span className="shrink-0 text-[13px] text-phi-text-muted">{activeHostId === LOCAL_HOST_ID ? "Active" : ""}</span>
-                </ListRow>
-                    {hosts.map((host) => (
-                        editingId === host.id && showForm ? (
-                            <ListRow key={host.id}>
-                                <HostFormBody form={form} setForm={setForm} saveLabel="Save changes" onCancel={handleCancel} onSave={handleSave} />
-                            </ListRow>
-                        ) : (
-                        <ListRow key={host.id}>
-                            <span aria-hidden="true" className="grid size-6 shrink-0 place-items-center text-phi-text-tertiary"><RemoteCloudIcon className="size-5 shrink-0" /></span>
-                            <button type="button" onClick={() => setActiveHostId(host.id)} title={`Switch to ${host.name}`} className="min-w-0 flex-1 rounded pr-8 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-phi-accent/40">
-                                <HostName name={host.name} isCurrent={activeHostId === host.id} />
-                                <div className="mt-0.5 truncate font-mono text-[12px] text-phi-text-muted">{host.url}</div>
-                            </button>
-                            <DropdownMenu className="absolute right-2 top-2 shrink-0">
-                                <DropdownMenuTrigger aria-label={`Actions for ${host.name}`}>
-                                    <IconDotsFilled className="size-3.5" />
-                                </DropdownMenuTrigger>
-                                <DropdownMenuContent>
-                                    <DropdownMenuItem icon={<IconPencilFilled className="size-[15px]" />} onClick={() => startEdit(host.id, { name: host.name, url: host.url, token: host.token })}>Edit</DropdownMenuItem>
-                                    <DropdownMenuItem icon={<IconTrashFilled className="size-[15px]" />} onClick={() => handleDelete(host.id, host.name)}>Delete</DropdownMenuItem>
-                                </DropdownMenuContent>
-                            </DropdownMenu>
-                        </ListRow>
-                        )
-                    ))}
-                    {!showForm && (
-                        <button
-                            onClick={startAdd}
-                            className="flex min-h-[60px] w-full items-center gap-3 border-t border-phi-border px-6 py-3 text-left text-[13px] font-medium text-phi-text-muted hover:bg-phi-overlay-hover hover:text-phi-text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-phi-accent/40"
-                        >
-                            <IconPlus className="size-4 shrink-0" />
-                            Add run target
-                        </button>
-                    )}
-                </ListGroup>
-
-            {showForm && !editingId && (
-                <div className="space-y-2 rounded-lg border border-phi-border bg-phi-bg-surface p-3">
-                    <h4 className="text-[12px] font-semibold text-phi-text-primary">New run target</h4>
-                    <HostFormBody form={form} setForm={setForm} saveLabel="Add run target" onCancel={handleCancel} onSave={handleSave} />
-                </div>
             )}
         </div>
     );

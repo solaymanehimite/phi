@@ -26,7 +26,6 @@ import {
 } from "./ui/dropdown-menu";
 import { GroupCollapsibleTrigger } from "./ui/collapsible";
 import { NavItem } from "./ui/nav-item";
-import { hostOfSession } from "../lib/hosts";
 import { useEffectiveTheme } from "../hooks/useTheme";
 import { brandingUrl } from "../lib/themed-assets";
 import { formatProjectPath, type ProjectGroup } from "../lib/projects";
@@ -35,10 +34,6 @@ import { useHasDraft } from "../hooks/useHasDraft";
 
 type SidebarProps = {
     projectGroups: ProjectGroup[];
-    /** Host id -> display name, for run-target badges. */
-    hostNameById: Record<string, string>;
-    /** Show run-target badges. Hidden for single-host setups. */
-    showHostBadges: boolean;
     /** Pinned sessions — shown in their own group above Projects. */
     pinnedSessions: SessionInfo[];
     /** Archived sessions — shown in the footer group above Settings. */
@@ -91,8 +86,6 @@ function titleFor(s: { name?: string; firstMessage: string }): string {
 
 export const Sidebar = memo(function Sidebar({
     projectGroups,
-    hostNameById,
-    showHostBadges,
     pinnedSessions,
     archivedSessions,
     orphanCount = 0,
@@ -156,10 +149,8 @@ export const Sidebar = memo(function Sidebar({
     const scrollUp = useCallback(() => scrollByPage(-1), [scrollByPage]);
     const scrollDown = useCallback(() => scrollByPage(1), [scrollByPage]);
 
-    const pinnedCollapsed = collapsed.has("pinned");
     const archivedCollapsed = collapsed.has("archived");
     const theme = useEffectiveTheme();
-    const handleTogglePinned = useCallback(() => onToggleGroup("pinned"), [onToggleGroup]);
     const handleToggleArchived = useCallback(() => onToggleGroup("archived"), [onToggleGroup]);
 
     return (
@@ -219,26 +210,20 @@ export const Sidebar = memo(function Sidebar({
                         <div>
                             {pinnedSessions.length > 0 && (
                                 <div className="mb-2">
-                                    <MetaGroupTrigger
-                                        collapsed={pinnedCollapsed}
-                                        onClick={handleTogglePinned}
-                                        label="Pinned"
-                                        count={pinnedSessions.length}
-                                        icon={<IconPinnedFilled className="size-4 shrink-0" />}
-                                    />
-                                    <div className={`grid transition-all duration-300 ease-[cubic-bezier(0.4,0,0.2,1)] ${pinnedCollapsed ? "grid-rows-[0fr] opacity-0" : "grid-rows-[1fr] opacity-100"}`}>
+                                    <div className="flex h-8 w-full items-center px-2.5 text-[13px] font-medium text-phi-text-tertiary">
+                                        <span className="min-w-0 truncate">Pinned</span>
+                                    </div>
+                                    <div className="grid grid-rows-[1fr] opacity-100">
                                         <div className="overflow-hidden">
                                             <nav aria-label="Pinned sessions" className="mt-1 space-y-0.5">
                                     {pinnedSessions.map((s) => (
                                         <SessionRowMemo
-                                            key={`${s.hostId ?? ""}\n${s.path}`}
+                                            key={s.path}
                                             session={s}
                                             active={s.path === activeFile}
                                             isStreaming={runningFiles.has(s.path)}
                                             pinned
                                             archived={false}
-                                            hostNameById={hostNameById}
-                                            showHostBadges={showHostBadges}
                                             onSelect={onSelect}
                                             onRename={onRename}
                                             onDelete={onDelete}
@@ -260,8 +245,6 @@ export const Sidebar = memo(function Sidebar({
                                     collapsed={collapsed.has(group.project.id)}
                                     activeFile={activeFile}
                                     runningFiles={runningFiles}
-                                    hostNameById={hostNameById}
-                                    showHostBadges={showHostBadges}
                                     onToggleGroup={onToggleGroup}
                                     onSelect={onSelect}
                                     onRename={onRename}
@@ -328,8 +311,6 @@ export const Sidebar = memo(function Sidebar({
                             sessions={archivedSessions}
                             activeFile={activeFile}
                             runningFiles={runningFiles}
-                            hostNameById={hostNameById}
-                            showHostBadges={showHostBadges}
                             onSelect={onSelect}
                             onRename={onRename}
                             onDelete={onDelete}
@@ -425,9 +406,9 @@ const SearchLensIcon = memo(function SearchLensIcon({
     );
 });
 
-// Group header for the Pinned / Archived meta-groups. Same row treatment as
-// GroupCollapsibleTrigger but with a fixed icon (pin / archive) plus a
-// collapse chevron instead of the folder open/closed pair.
+// Group header for the Archived meta-group. Same row treatment as
+// GroupCollapsibleTrigger but with a fixed archive icon plus a collapse
+// chevron instead of the folder open/closed pair.
 const MetaGroupTrigger = memo(function MetaGroupTrigger({
     collapsed,
     onClick,
@@ -468,8 +449,6 @@ const ArchivedList = memo(function ArchivedList({
     sessions,
     activeFile,
     runningFiles,
-    hostNameById,
-    showHostBadges,
     onSelect,
     onRename,
     onDelete,
@@ -481,8 +460,6 @@ const ArchivedList = memo(function ArchivedList({
     sessions: SessionInfo[];
     activeFile: string | null;
     runningFiles: ReadonlySet<string>;
-    hostNameById: Record<string, string>;
-    showHostBadges: boolean;
     onSelect: (file: string) => void;
     onRename: (file: string, name: string) => Promise<void>;
     onDelete: (file: string) => Promise<void>;
@@ -548,14 +525,12 @@ const ArchivedList = memo(function ArchivedList({
                     >
                         {sessions.map((s) => (
                             <SessionRowMemo
-                                key={`${s.hostId ?? ""}\n${s.path}`}
+                                key={s.path}
                                 session={s}
                                 active={s.path === activeFile}
                                 isStreaming={runningFiles.has(s.path)}
                                 pinned={false}
                                 archived
-                                hostNameById={hostNameById}
-                                showHostBadges={showHostBadges}
                                 onSelect={onSelect}
                                 onRename={onRename}
                                 onDelete={onDelete}
@@ -645,8 +620,6 @@ const GroupSection = memo(function GroupSection({
     collapsed,
     activeFile,
     runningFiles,
-    hostNameById,
-    showHostBadges,
     onToggleGroup,
     onSelect,
     onRename,
@@ -659,8 +632,6 @@ const GroupSection = memo(function GroupSection({
     collapsed: boolean;
     activeFile: string | null;
     runningFiles: ReadonlySet<string>;
-    hostNameById: Record<string, string>;
-    showHostBadges: boolean;
     onToggleGroup: (key: string) => void;
     onSelect: (file: string) => void;
     onRename: (file: string, name: string) => Promise<void>;
@@ -674,9 +645,7 @@ const GroupSection = memo(function GroupSection({
         [onToggleGroup, group.project.id],
     );
     const { project } = group;
-    const headerTitle = project.implicit
-        ? `${project.name} — ${formatProjectPath(project.path)} on ${hostNameById[project.hostId] ?? project.hostId}`
-        : `${project.name} — runs on ${Object.keys(project.targets).map((id) => hostNameById[id] ?? id).join(", ")}`;
+    const headerTitle = `${project.name} — ${formatProjectPath(project.path)}`;
 
     return (
         <div>
@@ -703,14 +672,12 @@ const GroupSection = memo(function GroupSection({
                         >
                             {group.sessions.map((s) => (
                                 <SessionRowMemo
-                                    key={`${s.hostId ?? ""}\n${s.path}`}
+                                    key={s.path}
                                     session={s}
                                     active={s.path === activeFile}
                                     isStreaming={runningFiles.has(s.path)}
                                     pinned={false}
                                     archived={false}
-                                    hostNameById={hostNameById}
-                                    showHostBadges={showHostBadges}
                                     onSelect={onSelect}
                                     onRename={onRename}
                                     onDelete={onDelete}
@@ -740,8 +707,6 @@ const SessionRowMemo = memo(function SessionRowMemo({
     isStreaming,
     pinned,
     archived,
-    hostNameById,
-    showHostBadges,
     onSelect,
     onRename,
     onDelete,
@@ -754,8 +719,6 @@ const SessionRowMemo = memo(function SessionRowMemo({
     isStreaming?: boolean;
     pinned: boolean;
     archived: boolean;
-    hostNameById: Record<string, string>;
-    showHostBadges: boolean;
     onSelect: (file: string) => void;
     onRename: (file: string, name: string) => Promise<void>;
     onDelete: (file: string) => Promise<void>;
@@ -798,17 +761,12 @@ const SessionRowMemo = memo(function SessionRowMemo({
         [onPrefetch, session.path],
     );
     const hasDraft = useHasDraft(session.path);
-    const sessionHostId = hostOfSession(session);
-    const hostName = showHostBadges ? (hostNameById[sessionHostId] ?? sessionHostId) : null;
-
     return (
         <SessionRow
             active={active}
             title={title}
             time={time}
             hasDraft={hasDraft}
-            hostName={hostName}
-            hostId={sessionHostId}
             pinned={pinned}
             archived={archived}
             onClick={handleSelect}
@@ -975,8 +933,6 @@ const SessionRow = memo(function SessionRow({
     title,
     time,
     hasDraft,
-    hostName,
-    hostId,
     pinned,
     archived,
     onClick,
@@ -991,9 +947,6 @@ const SessionRow = memo(function SessionRow({
     title: string;
     time: string;
     hasDraft?: boolean;
-    /** Run-target display name. Null hides the badge (single-host setups). */
-    hostName: string | null;
-    hostId: string;
     pinned: boolean;
     archived: boolean;
     onClick: () => void;

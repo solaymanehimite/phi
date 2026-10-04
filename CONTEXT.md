@@ -12,13 +12,9 @@ _Avoid_: chat, thread, history
 The decoded cwd a session is bound to (e.g., `~/projects/foo`). A session never changes workspace.
 _Avoid_: directory, folder, cwd (in UI copy)
 
-### Run target
-A machine that can execute sessions: the local sidecar or a remote host (sidecar URL + token, stored app-local). A session lives on exactly one run target and never moves; continuing a session runs where it started.
-_Avoid_: host (in UI copy), server, machine (in UI copy)
-
 ### Project
-A user-curated `{ name, targets }` with one workspace path per run target it is set up on, stored app-local in localStorage. Sessions join a project when their (run target, cwd) matches one of its bindings; the sidebar lists projects by name, not raw paths. A session directory with no binding appears as an implicit project using its folder name. The sidebar aggregates every run target; execution follows selection.
-_Avoid_: workspace (a project points at one per target; it isn't one), directory, folder
+A user-curated `{ name, path }` stored app-local in localStorage. Sessions join a Project when their workspace matches its path; the sidebar lists Projects by name, not raw paths. A Session workspace with no Project appears as an implicit Project using its folder name.
+_Avoid_: workspace (a Project points at one; it is not one), directory, folder
 
 ### Abort
 An intentional user stop of an in-flight turn via Stop.

@@ -11,6 +11,9 @@ node_modules
 dist
 dist-electron
 release
+# Release recommendations live under docs/release, not build artifacts.
+!docs/release/
+!docs/release/**/*.md
 dist-ssr
 *.local
 

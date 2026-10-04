@@ -1,4 +1,3 @@
-import cors from "cors";
 import express from "express";
 import { execFile as execFileCb } from "node:child_process";
 import { createHash } from "node:crypto";
@@ -32,37 +31,12 @@ registerBunOAuthFlows();
 // ---- config ----
 const rawPort = process.argv[2] ?? process.env.PORT ?? "3001";
 const PORT = Number.parseInt(String(rawPort), 10) || 3001;
-const HOST = process.env.PHI_HOST ?? "127.0.0.1";
-const PHI_TOKEN = process.env.PHI_TOKEN || "";
+const HOST = "127.0.0.1";
 const PHI_SYSTEM_PROMPT_APPEND = "When writing reasoning or thinking, use plain text only. Do not use Markdown formatting.";
 
 const app = express();
-// Behind Caddy/Nginx on a VPS, client IPs come via X-Forwarded-For.
-app.set("trust proxy", 1);
 app.disable("x-powered-by");
-// Explicit preflight config so browsers/Electron reliably allow the
-// Authorization header when the sidecar is reached over the network.
-app.use(
-    cors({
-        methods: ["GET", "HEAD", "PUT", "PATCH", "POST", "DELETE", "OPTIONS"],
-        allowedHeaders: ["Content-Type", "Authorization"],
-    }),
-);
 app.use(express.json({ limit: "10mb" }));
-
-// ---- token auth ----
-// When PHI_TOKEN is set, every /api/* request except /api/health must carry
-// it as `Authorization: Bearer <token>` (query `?token=` is also accepted
-// for fetch/SSE simplicity). Without PHI_TOKEN, behavior is unchanged.
-app.use("/api", (req, res, next) => {
-    if (!PHI_TOKEN) return next();
-    if (req.path === "/health") return next();
-    const header = req.headers.authorization;
-    const bearer = header?.startsWith("Bearer ") ? header.slice("Bearer ".length) : undefined;
-    const query = typeof req.query.token === "string" ? req.query.token : undefined;
-    if (bearer === PHI_TOKEN || query === PHI_TOKEN) return next();
-    res.status(401).json({ error: "unauthorized" });
-});
 
 class ApiError extends Error {
     public code?: string;
@@ -2096,7 +2070,6 @@ app.use("/api", (_req, res) => {
 app.listen(PORT, HOST, () => {
     console.log(`[phi sidecar] listening on http://${HOST}:${PORT}`);
     console.log(`[phi sidecar] agentDir=${getAgentDir()} cwd=${process.cwd()}`);
-    if (PHI_TOKEN) console.log("[phi sidecar] token auth enabled");
     if (String(rawPort) !== String(PORT)) {
         console.log(`[phi sidecar] note: PORT env/arg ${rawPort} parsed to ${PORT}`);
     }
