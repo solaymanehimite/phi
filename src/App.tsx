@@ -1327,9 +1327,9 @@ export default function App() {
                                         />
                                     )}
                                     <div className={`relative isolate flex min-h-0 flex-1 flex-col ${chat.activeFile ? "" : "justify-center"}`}>
-                                    {!chat.activeFile ? <div aria-hidden="true" className="phi-new-chat-pattern pointer-events-none absolute inset-0 z-0" /> : null}
+                                    {!chat.activeFile ? <div aria-hidden="true" className="phi-new-chat-bottom-gradient pointer-events-none absolute inset-x-0 bottom-0 z-0" /> : null}
                                     {!chat.activeFile ? (
-                                        <div className="mx-auto w-full max-w-4xl shrink-0 px-6">
+                                        <div className="relative z-10 mx-auto w-full max-w-4xl shrink-0 px-6">
                                             <div className="flex flex-col items-center text-center">
                                                 <h1 className="w-full max-w-2xl text-balance text-center text-[26px] leading-[1.2] tracking-tight text-phi-text-primary sm:text-[32px]">
                                                     What are we building in{" "}
@@ -1369,7 +1369,7 @@ export default function App() {
                                         />
                                     )}
 
-                                    <div className={`w-full shrink-0 px-4 pb-4 sm:px-7 sm:pb-5 ${chat.activeFile ? "phi-composer-dock-active" : "pt-5 phi-composer-dock-new"}`}>
+                                    <div className={`relative z-10 w-full shrink-0 px-4 pb-4 sm:px-7 sm:pb-5 ${chat.activeFile ? "phi-composer-dock-active" : "pt-5 phi-composer-dock-new"}`}>
                                         {(modelError) && (
                                             <div className="mx-auto mb-2 w-full max-w-4xl">
                                                 <Alert variant="error" className="flex items-center justify-between gap-2 !text-[12.5px]">

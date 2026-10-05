@@ -14,14 +14,21 @@ const THINKING_COLORS: Record<ThinkingLevel, string> = {
 };
 
 function availableLevelsFor(model: ModelInfo | null | undefined): ThinkingLevel[] {
+    // Keep the loading/unknown-model state usable, but never invent effort
+    // levels once a model has been resolved. This mirrors the server's
+    // supportedThinkingLevels rules: regular levels are supported by default,
+    // while xhigh/max need an explicit mapping.
     if (!model) return THINKING_LEVELS;
+    if (!model.reasoning) return [];
+
     const map = model.thinkingLevelMap as
         Record<string, string | null> | null | undefined;
-    if (!map || typeof map !== "object" || Object.keys(map).length === 0) {
-        return THINKING_LEVELS;
-    }
-    const levels = THINKING_LEVELS.filter((lvl) => map[lvl] !== null);
-    return levels.length ? levels : THINKING_LEVELS;
+    return THINKING_LEVELS.filter((level) => {
+        const mapped = map?.[level];
+        if (mapped === null) return false;
+        if (level === "xhigh" || level === "max") return mapped !== undefined;
+        return true;
+    });
 }
 
 type ThinkingEffortSelectorProps = {
@@ -87,6 +94,10 @@ export const ThinkingEffortSelector = memo(function ThinkingEffortSelector({
         },
         [disabled, onChange],
     );
+
+    // Non-reasoning models only support the off state, which is intentionally
+    // not represented by this effort slider.
+    if (availableLevels.length === 0) return null;
 
     return (
         <Popover className="relative">
