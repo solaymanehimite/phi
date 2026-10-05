@@ -13,7 +13,7 @@ import {
     IconTrashFilled,
 } from "@tabler/icons-react";
 import { Orb } from "@aicss/react";
-import { memo, useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type MouseEvent, type ReactNode } from "react";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
 import { Alert } from "./ui/alert";
@@ -41,7 +41,9 @@ type SidebarProps = {
     /** Sessions whose cwd matches no project — hidden from the sidebar, still searchable via Cmd+K. */
     orphanCount?: number;
     activeFile: string | null;
+    selectedFiles: ReadonlySet<string>;
     onSelect: (file: string) => void;
+    onToggleSelection: (file: string) => void;
     onNewChat: () => void;
     onOpenSearch: () => void;
     onOpenSettings?: () => void;
@@ -90,7 +92,9 @@ export const Sidebar = memo(function Sidebar({
     archivedSessions,
     orphanCount = 0,
     activeFile,
+    selectedFiles,
     onSelect,
+    onToggleSelection,
     onNewChat,
     onOpenSearch,
     onOpenSettings,
@@ -221,10 +225,12 @@ export const Sidebar = memo(function Sidebar({
                                             key={s.path}
                                             session={s}
                                             active={s.path === activeFile}
+                                            selected={selectedFiles.has(s.path)}
                                             isStreaming={runningFiles.has(s.path)}
                                             pinned
                                             archived={false}
                                             onSelect={onSelect}
+                                            onToggleSelection={onToggleSelection}
                                             onRename={onRename}
                                             onDelete={onDelete}
                                             onTogglePin={onTogglePin}
@@ -244,9 +250,11 @@ export const Sidebar = memo(function Sidebar({
                                     group={group}
                                     collapsed={collapsed.has(group.project.id)}
                                     activeFile={activeFile}
+                                    selectedFiles={selectedFiles}
                                     runningFiles={runningFiles}
                                     onToggleGroup={onToggleGroup}
                                     onSelect={onSelect}
+                                    onToggleSelection={onToggleSelection}
                                     onRename={onRename}
                                     onDelete={onDelete}
                                     onTogglePin={onTogglePin}
@@ -310,8 +318,10 @@ export const Sidebar = memo(function Sidebar({
                             collapsed={archivedCollapsed}
                             sessions={archivedSessions}
                             activeFile={activeFile}
+                            selectedFiles={selectedFiles}
                             runningFiles={runningFiles}
                             onSelect={onSelect}
+                            onToggleSelection={onToggleSelection}
                             onRename={onRename}
                             onDelete={onDelete}
                             onTogglePin={onTogglePin}
@@ -448,8 +458,10 @@ const ArchivedList = memo(function ArchivedList({
     collapsed,
     sessions,
     activeFile,
+    selectedFiles,
     runningFiles,
     onSelect,
+    onToggleSelection,
     onRename,
     onDelete,
     onTogglePin,
@@ -459,8 +471,10 @@ const ArchivedList = memo(function ArchivedList({
     collapsed: boolean;
     sessions: SessionInfo[];
     activeFile: string | null;
+    selectedFiles: ReadonlySet<string>;
     runningFiles: ReadonlySet<string>;
     onSelect: (file: string) => void;
+    onToggleSelection: (file: string) => void;
     onRename: (file: string, name: string) => Promise<void>;
     onDelete: (file: string) => Promise<void>;
     onTogglePin: (file: string) => void;
@@ -528,10 +542,12 @@ const ArchivedList = memo(function ArchivedList({
                                 key={s.path}
                                 session={s}
                                 active={s.path === activeFile}
+                                selected={selectedFiles.has(s.path)}
                                 isStreaming={runningFiles.has(s.path)}
                                 pinned={false}
                                 archived
                                 onSelect={onSelect}
+                                onToggleSelection={onToggleSelection}
                                 onRename={onRename}
                                 onDelete={onDelete}
                                 onTogglePin={onTogglePin}
@@ -619,9 +635,11 @@ const GroupSection = memo(function GroupSection({
     group,
     collapsed,
     activeFile,
+    selectedFiles,
     runningFiles,
     onToggleGroup,
     onSelect,
+    onToggleSelection,
     onRename,
     onDelete,
     onTogglePin,
@@ -631,9 +649,11 @@ const GroupSection = memo(function GroupSection({
     group: ProjectGroup;
     collapsed: boolean;
     activeFile: string | null;
+    selectedFiles: ReadonlySet<string>;
     runningFiles: ReadonlySet<string>;
     onToggleGroup: (key: string) => void;
     onSelect: (file: string) => void;
+    onToggleSelection: (file: string) => void;
     onRename: (file: string, name: string) => Promise<void>;
     onDelete: (file: string) => Promise<void>;
     onTogglePin: (file: string) => void;
@@ -675,10 +695,12 @@ const GroupSection = memo(function GroupSection({
                                     key={s.path}
                                     session={s}
                                     active={s.path === activeFile}
+                                    selected={selectedFiles.has(s.path)}
                                     isStreaming={runningFiles.has(s.path)}
                                     pinned={false}
                                     archived={false}
                                     onSelect={onSelect}
+                                    onToggleSelection={onToggleSelection}
                                     onRename={onRename}
                                     onDelete={onDelete}
                                     onTogglePin={onTogglePin}
@@ -704,10 +726,12 @@ const GroupSection = memo(function GroupSection({
 const SessionRowMemo = memo(function SessionRowMemo({
     session,
     active,
+    selected,
     isStreaming,
     pinned,
     archived,
     onSelect,
+    onToggleSelection,
     onRename,
     onDelete,
     onTogglePin,
@@ -716,10 +740,12 @@ const SessionRowMemo = memo(function SessionRowMemo({
 }: {
     session: SessionInfo;
     active: boolean;
+    selected: boolean;
     isStreaming?: boolean;
     pinned: boolean;
     archived: boolean;
     onSelect: (file: string) => void;
+    onToggleSelection: (file: string) => void;
     onRename: (file: string, name: string) => Promise<void>;
     onDelete: (file: string) => Promise<void>;
     onTogglePin: (file: string) => void;
@@ -737,8 +763,15 @@ const SessionRowMemo = memo(function SessionRowMemo({
         [session.modified],
     );
     const handleSelect = useCallback(
-        () => onSelect(session.path),
-        [onSelect, session.path],
+        (event: MouseEvent<HTMLButtonElement>) => {
+            if (event.ctrlKey || event.metaKey) {
+                event.preventDefault();
+                onToggleSelection(session.path);
+                return;
+            }
+            onSelect(session.path);
+        },
+        [onSelect, onToggleSelection, session.path],
     );
     const handleRename = useCallback(
         (name: string) => onRename(session.path, name),
@@ -764,6 +797,7 @@ const SessionRowMemo = memo(function SessionRowMemo({
     return (
         <SessionRow
             active={active}
+            selected={selected}
             title={title}
             time={time}
             hasDraft={hasDraft}
@@ -930,6 +964,7 @@ function MarqueeTitle({ title }: { title: string }) {
 
 const SessionRow = memo(function SessionRow({
     active,
+    selected,
     title,
     time,
     hasDraft,
@@ -944,12 +979,13 @@ const SessionRow = memo(function SessionRow({
     onPrefetch,
 }: {
     active: boolean;
+    selected: boolean;
     title: string;
     time: string;
     hasDraft?: boolean;
     pinned: boolean;
     archived: boolean;
-    onClick: () => void;
+    onClick: (event: MouseEvent<HTMLButtonElement>) => void;
     onRename: (name: string) => Promise<void>;
     onDelete: () => Promise<void>;
     onTogglePin: () => void;
@@ -1012,7 +1048,7 @@ const SessionRow = memo(function SessionRow({
         <div
             onMouseEnter={onPrefetch}
             onFocusCapture={onPrefetch}
-            className={`session-row group relative flex h-8 w-full items-center gap-1 rounded-lg pl-7 pr-1 text-left text-[13px] ${active ? "bg-phi-overlay-active text-phi-text-primary" : "text-phi-text-tertiary hover:bg-phi-overlay-hover hover:text-phi-text-secondary"}`}
+            className={`session-row group relative flex h-8 w-full items-center gap-1 rounded-lg pl-7 pr-1 text-left text-[13px] ${selected ? "bg-phi-accent/12 text-phi-text-primary outline outline-1 -outline-offset-1 outline-phi-accent/80" : active ? "bg-phi-overlay-active text-phi-text-primary" : "text-phi-text-tertiary hover:bg-phi-overlay-hover hover:text-phi-text-secondary"}`}
         >
             {isStreaming && (
                 <span

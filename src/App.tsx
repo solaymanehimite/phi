@@ -232,6 +232,7 @@ export default function App() {
     const [newTabProjects, setNewTabProjects] = useState<Record<string, string | null>>({});
     // single inline notice per session — interrupts clear on next send, never stack
     const [inlineErrors, setInlineErrors] = useState<Record<string, InlineError>>({});
+    const [selectedFiles, setSelectedFiles] = useState<Set<string>>(new Set());
     const streamSonners = useSonners();
 
     // quit guard
@@ -650,7 +651,16 @@ export default function App() {
         });
     }, []);
 
+    const handleToggleSelection = useCallback((file: string) => {
+        setSelectedFiles((current) => {
+            const next = new Set(current);
+            next.has(file) ? next.delete(file) : next.add(file);
+            return next;
+        });
+    }, []);
+
     const handleSelect = useCallback(async (file: string) => {
+        setSelectedFiles(new Set());
         setSettingsActive(false);
         setUiDemoActive(false);
         openSessionTab(file);
@@ -893,6 +903,12 @@ export default function App() {
     }, [sessions.rename, chat.activeFile, chat.refreshSilent, chat.invalidateCache]);
 
     const handleDelete = useCallback(async (file: string) => {
+        setSelectedFiles((current) => {
+            if (!current.has(file)) return current;
+            const next = new Set(current);
+            next.delete(file);
+            return next;
+        });
         await sessions.remove(file);
         sessionFlags.removeFile(file);
         if (openTabIdsRef.current.includes(file)) handleCloseTab(file);
@@ -901,6 +917,27 @@ export default function App() {
         clearQueueFor(file);
         setInlineFor(file, null);
     }, [sessions.remove, sessionFlags.removeFile, handleCloseTab, chat.removeFile, chat.invalidateCache, setInlineFor]);
+
+    const handleDeleteSelected = useCallback(async () => {
+        const files = [...selectedFiles];
+        if (files.length === 0) return;
+        setSelectedFiles(new Set());
+        for (const file of files) {
+            try { await handleDelete(file); }
+            catch (error) { console.warn("Failed to delete selected session", error); }
+        }
+    }, [handleDelete, selectedFiles]);
+
+    useEffect(() => {
+        const handleKeyDown = (event: KeyboardEvent) => {
+            const target = event.target as HTMLElement | null;
+            if (event.key !== "Backspace" || selectedFiles.size === 0 || target?.isContentEditable || ["INPUT", "TEXTAREA", "SELECT"].includes(target?.tagName ?? "")) return;
+            event.preventDefault();
+            void handleDeleteSelected();
+        };
+        window.addEventListener("keydown", handleKeyDown);
+        return () => window.removeEventListener("keydown", handleKeyDown);
+    }, [handleDeleteSelected, selectedFiles.size]);
 
     const handleDeleteCurrent = useCallback(async () => {
         const f = chat.activeFile;
@@ -1264,7 +1301,9 @@ export default function App() {
                                 archivedSessions={archivedSessions}
                                 orphanCount={orphanCount}
                                 activeFile={settingsActive ? SETTINGS_TAB_ID : uiDemoActive ? UI_DEMO_TAB_ID : chat.activeFile}
+                                selectedFiles={selectedFiles}
                                 onSelect={handleSelect}
+                                onToggleSelection={handleToggleSelection}
                                 onNewChat={handleNewChat}
                                 onOpenSearch={openSearch}
                                 onOpenSettings={openSettingsTab}

@@ -3,7 +3,7 @@ import { useTheme, useEffectiveTheme, type Theme } from "../hooks/useTheme";
 import { useCustomThemes, setActiveCustomThemeId, clearActiveCustomTheme } from "../hooks/useCustomThemes";
 import { formatThemeForAppCss } from "../lib/custom-themes";
 import type { CustomTheme } from "../lib/custom-themes";
-import { IconBox, IconChevronDownFilled, IconCode, IconKeyFilled, IconPaletteFilled, IconPencil, IconPlus, IconTrash } from "@tabler/icons-react";
+import { IconBox, IconCheckFilled, IconChevronDownFilled, IconCode, IconKeyFilled, IconPaletteFilled, IconPencil, IconPlus, IconTrash } from "@tabler/icons-react";
 import { useClose } from "@headlessui/react";
 import { Alert } from "./ui/alert";
 import { Button, buttonClass } from "./ui/button";
