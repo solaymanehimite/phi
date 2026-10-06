@@ -153,8 +153,10 @@ export const Sidebar = memo(function Sidebar({
     const scrollUp = useCallback(() => scrollByPage(-1), [scrollByPage]);
     const scrollDown = useCallback(() => scrollByPage(1), [scrollByPage]);
 
+    const pinnedCollapsed = collapsed.has("pinned");
     const archivedCollapsed = collapsed.has("archived");
     const theme = useEffectiveTheme();
+    const handleTogglePinned = useCallback(() => onToggleGroup("pinned"), [onToggleGroup]);
     const handleToggleArchived = useCallback(() => onToggleGroup("archived"), [onToggleGroup]);
 
     return (
@@ -173,12 +175,12 @@ export const Sidebar = memo(function Sidebar({
             </div>
 
             <div className="shrink-0 space-y-0.5 px-2 pt-2">
-                <Button className="w-full justify-start" onClick={onNewChat}>
+                <Button className="w-full justify-start text-phi-text-secondary hover:text-phi-text-secondary" onClick={onNewChat}>
                     <IconPlusFilled className="size-4" />
                     New chat
                 </Button>
                 <Button
-                    className="group w-full justify-start"
+                    className="group w-full justify-start text-phi-text-secondary hover:text-phi-text-secondary"
                     onClick={onOpenSearch}
                     onMouseEnter={() => searchLensPlay.current?.()}
                     aria-keyshortcuts="Meta+K Control+K"
@@ -214,10 +216,17 @@ export const Sidebar = memo(function Sidebar({
                         <div>
                             {pinnedSessions.length > 0 && (
                                 <div className="mb-2">
-                                    <div className="flex h-8 w-full items-center px-2.5 text-[13px] font-medium text-phi-text-tertiary">
-                                        <span className="min-w-0 truncate">Pinned</span>
-                                    </div>
-                                    <div className="grid grid-rows-[1fr] opacity-100">
+                                    <GroupCollapsibleTrigger
+                                        collapsed={pinnedCollapsed}
+                                        onClick={handleTogglePinned}
+                                        aria-expanded={!pinnedCollapsed}
+                                        aria-label={`${pinnedSessions.length} pinned session${pinnedSessions.length === 1 ? "" : "s"}`}
+                                    >
+                                        <span className="min-w-0 max-w-[calc(100%_-_1.25rem)] truncate">Pinned</span>
+                                    </GroupCollapsibleTrigger>
+                                    <div
+                                        className={`grid transition-all duration-300 ease-[cubic-bezier(0.4,0,0.2,1)] ${pinnedCollapsed ? "grid-rows-[0fr] opacity-0" : "grid-rows-[1fr] opacity-100"}`}
+                                    >
                                         <div className="overflow-hidden">
                                             <nav aria-label="Pinned sessions" className="mt-1 space-y-0.5">
                                     {pinnedSessions.map((s) => (
@@ -238,7 +247,7 @@ export const Sidebar = memo(function Sidebar({
                                             onPrefetch={onPrefetch}
                                         />
                                     ))}
-                                            </nav>
+                                                    </nav>
                                         </div>
                                     </div>
                                 </div>
@@ -668,7 +677,7 @@ const GroupSection = memo(function GroupSection({
     const headerTitle = `${project.name} — ${formatProjectPath(project.path)}`;
 
     return (
-        <div>
+        <div className="mb-2">
             <GroupCollapsibleTrigger
                 collapsed={collapsed}
                 onClick={handleToggle}
@@ -676,7 +685,7 @@ const GroupSection = memo(function GroupSection({
                 aria-label={`${project.name}, ${group.sessions.length} session${group.sessions.length === 1 ? "" : "s"}`}
                 title={headerTitle}
             >
-                <span className="min-w-0 flex-1 truncate text-current">
+                <span className="min-w-0 max-w-[calc(100%_-_1.25rem)] truncate text-current">
                     {project.name}
                 </span>
             </GroupCollapsibleTrigger>
@@ -1048,33 +1057,16 @@ const SessionRow = memo(function SessionRow({
         <div
             onMouseEnter={onPrefetch}
             onFocusCapture={onPrefetch}
-            className={`session-row group relative flex h-8 w-full items-center gap-1 rounded-lg pl-7 pr-1 text-left text-[13px] ${selected ? "bg-phi-accent/12 text-phi-text-primary outline outline-1 -outline-offset-1 outline-phi-accent/80" : active ? "bg-phi-overlay-active text-phi-text-primary" : "text-phi-text-tertiary hover:bg-phi-overlay-hover hover:text-phi-text-secondary"}`}
+            className={`session-row group relative flex h-8 w-full items-center gap-1 rounded-lg px-1 text-left text-[13px] ${selected ? "bg-phi-accent/12 text-phi-text-primary outline outline-1 -outline-offset-1 outline-phi-accent/80" : active ? "bg-phi-overlay-active text-phi-text-primary" : "text-phi-text-secondary hover:bg-phi-overlay-hover hover:text-phi-text-secondary"}`}
         >
-            {isStreaming && (
-                <span
-                    aria-hidden
-                    className={`pointer-events-none absolute left-1 top-1/2 grid size-6 -translate-y-1/2 place-items-center transition-none ${renaming ? "" : "group-hover:opacity-0 group-focus-within:opacity-0"}`}
-                >
-                    <Orb variant="S3" size={14} />
-                </span>
-            )}
-            {!renaming && (
-                <button
-                    type="button"
-                    onClick={onTogglePin}
-                    title={pinned ? "Unpin session" : "Pin session"}
-                    aria-label={pinned ? "Unpin session" : "Pin session"}
-                    className="absolute left-1 top-1/2 grid size-6 -translate-y-1/2 place-items-center rounded-full text-phi-text-faint opacity-0 transition-colors hover:bg-phi-overlay-strong hover:text-phi-text-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-phi-accent/40 group-hover:opacity-100 group-focus-within:opacity-100 group/archive"
-                >
-                    {pinned ? (
-                        <IconPinnedOff className="size-[15px]" />
-                    ) : (
-                        <ArchiveBinIcon className="size-[15px] shrink-0 text-current" hoverOn="archive" />
-                    )}
-                </button>
-            )}
+            <span
+                aria-hidden
+                className={`pointer-events-none grid h-6 shrink-0 place-items-center overflow-hidden transition-[width,opacity] duration-300 ease-out motion-reduce:transition-none ${isStreaming ? "w-6 opacity-100" : "w-0 opacity-0"}`}
+            >
+                <Orb variant="S3" size={14} />
+            </span>
             {renaming ? (
-                <div className="flex min-w-0 flex-1 items-center truncate rounded-lg px-1.5 py-1 pr-8">
+                <div className="flex min-w-0 flex-1 items-center truncate rounded-lg px-1.5 py-1 pr-14">
                     <Input
                         autoFocus
                         value={draft}
@@ -1088,7 +1080,7 @@ const SessionRow = memo(function SessionRow({
                 <button
                     type="button"
                     onClick={onClick}
-                    className="flex min-w-0 flex-1 items-center truncate rounded-lg px-1.5 py-1 pr-8 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-phi-accent/40"
+                    className="flex min-w-0 flex-1 items-center truncate rounded-lg px-1.5 py-1 pr-14 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-phi-accent/40"
                 >
                     <MarqueeTitle title={title} />
                     {hasDraft && (
@@ -1105,14 +1097,30 @@ const SessionRow = memo(function SessionRow({
                 {time}
             </span>
 
-            <div className="absolute right-1 top-1/2 z-10 -translate-y-1/2">
-                <DropdownMenu>
-                    <DropdownMenuTrigger
-                        aria-label="Session actions"
-                        className="pointer-events-none group-hover:pointer-events-auto"
+            {!renaming && (
+                <div className="absolute right-1 top-1/2 z-10 flex -translate-y-1/2 items-center gap-0.5">
+                    <button
+                        type="button"
+                        onClick={archived ? onToggleArchive : onTogglePin}
+                        title={archived ? "Unarchive session" : pinned ? "Unpin session" : "Pin session"}
+                        aria-label={archived ? "Unarchive session" : pinned ? "Unpin session" : "Pin session"}
+                        className="pointer-events-none grid size-6 place-items-center rounded-full text-phi-text-faint opacity-0 transition-colors hover:bg-phi-overlay-strong hover:text-phi-text-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-phi-accent/40 group-hover:pointer-events-auto group-hover:opacity-100 group-focus-within:pointer-events-auto group-focus-within:opacity-100"
                     >
-                        <IconDotsFilled className="size-3.5" />
-                    </DropdownMenuTrigger>
+                        {archived ? (
+                            <IconArchiveOff className="size-[15px]" />
+                        ) : pinned ? (
+                            <IconPinnedOff className="size-[15px]" />
+                        ) : (
+                            <IconPinnedFilled className="size-[15px]" />
+                        )}
+                    </button>
+                    <DropdownMenu>
+                        <DropdownMenuTrigger
+                            aria-label="Session actions"
+                            className="pointer-events-none group-hover:pointer-events-auto group-focus-within:pointer-events-auto"
+                        >
+                            <IconDotsFilled className="size-3.5" />
+                        </DropdownMenuTrigger>
                     <DropdownMenuContent>
                         {!archived && (
                             <DropdownMenuItem
@@ -1144,8 +1152,9 @@ const SessionRow = memo(function SessionRow({
                             {deleteConfirming ? "Confirm?" : "Delete"}
                         </DropdownMenuItem>
                     </DropdownMenuContent>
-                </DropdownMenu>
-            </div>
+                    </DropdownMenu>
+                </div>
+            )}
         </div>
     );
 });

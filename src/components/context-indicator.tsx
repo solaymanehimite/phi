@@ -74,7 +74,7 @@ export const ContextIndicator = memo(function ContextIndicator({
                 onClick={handleOpen}
                 aria-label={label}
                 data-context-indicator="trigger"
-                className="inline-flex items-center justify-center gap-2 rounded-full p-1.5 text-phi-text-secondary transition-colors hover:bg-phi-overlay-hover hover:text-phi-text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-phi-accent/40"
+                className="inline-flex items-center justify-center gap-2 rounded-full p-1.5 pr-3 text-phi-text-secondary transition-colors hover:bg-phi-overlay-hover hover:text-phi-text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-phi-accent/40"
             >
                 <svg
                     width="22"
