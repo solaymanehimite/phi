@@ -6,6 +6,7 @@ import {
     IconClockFilled,
     IconDotsFilled,
     IconFilterFilled,
+    IconFolderFilled,
     IconPencilFilled,
     IconPinnedFilled,
     IconPinnedOff,
@@ -38,9 +39,9 @@ import { ProviderLogo } from "./provider-logo";
 type SidebarProps = {
     projectGroups: ProjectGroup[];
     projects: ProjectOption[];
-    /** Pinned sessions — surfaced in the In work queue. */
+    /** Pinned sessions sort first in the All view and keep their marker in Projects. */
     pinnedSessions: SessionInfo[];
-    /** Archived sessions — shown in the footer group above Settings. */
+    /** Archived sessions appear when the archive control is active. */
     archivedSessions: SessionInfo[];
     /** Sessions whose cwd matches no project — hidden from the sidebar, still searchable via Cmd+K. */
     orphanCount?: number;
@@ -119,6 +120,7 @@ export const Sidebar = memo(function Sidebar({
     const [canScrollUp, setCanScrollUp] = useState(false);
     const [canScrollDown, setCanScrollDown] = useState(false);
     const [showArchived, setShowArchived] = useState(false);
+    const [sessionFilter, setSessionFilter] = useState<"all" | "projects">("all");
 
     const updateScrollEdges = useCallback(() => {
         const el = scrollRef.current;
@@ -142,7 +144,7 @@ export const Sidebar = memo(function Sidebar({
             window.removeEventListener("resize", updateScrollEdges);
             ro.disconnect();
         };
-    }, [projectGroups, pinnedSessions, archivedSessions, collapsed, loading, showArchived, updateScrollEdges]);
+    }, [projectGroups, pinnedSessions, archivedSessions, collapsed, loading, showArchived, sessionFilter, updateScrollEdges]);
 
     const scrollByPage = useCallback((direction: 1 | -1) => {
         const el = scrollRef.current;
@@ -159,17 +161,15 @@ export const Sidebar = memo(function Sidebar({
     const scrollUp = useCallback(() => scrollByPage(-1), [scrollByPage]);
     const scrollDown = useCallback(() => scrollByPage(1), [scrollByPage]);
 
-    const archivedCollapsed = collapsed.has("archived");
     const theme = useEffectiveTheme();
-    const handleToggleArchived = useCallback(() => onToggleGroup("archived"), [onToggleGroup]);
     const projectNames = useMemo(() => new Map(projects.map((project) => [project.path, project.name])), [projects]);
+    const pinnedPaths = useMemo(() => new Set(pinnedSessions.map((session) => session.path)), [pinnedSessions]);
     const sessionRows = useMemo(() => {
         const byPath = new Map<string, SessionInfo>();
         for (const session of pinnedSessions) byPath.set(session.path, session);
         for (const group of projectGroups) {
             for (const session of group.sessions) byPath.set(session.path, session);
         }
-        const pinnedPaths = new Set(pinnedSessions.map((session) => session.path));
         return [...byPath.values()]
             .map((session) => ({
                 session,
@@ -177,7 +177,22 @@ export const Sidebar = memo(function Sidebar({
                 pinned: pinnedPaths.has(session.path),
             }))
             .sort((a, b) => Number(b.pinned) - Number(a.pinned) || new Date(b.session.modified).getTime() - new Date(a.session.modified).getTime());
-    }, [pinnedSessions, projectGroups, projectNames]);
+    }, [pinnedSessions, projectGroups, projectNames, pinnedPaths]);
+    const groupedProjectRows = useMemo(
+        () => projectGroups.map((group) => {
+            const sessionsByPath = new Map(group.sessions.map((session) => [session.path, session]));
+            for (const session of pinnedSessions) {
+                if (session.cwd === group.project.path) sessionsByPath.set(session.path, session);
+            }
+            return {
+                ...group,
+                sessions: [...sessionsByPath.values()].sort(
+                    (a, b) => new Date(b.modified).getTime() - new Date(a.modified).getTime(),
+                ),
+            };
+        }),
+        [pinnedSessions, projectGroups],
+    );
     const archivedRows = useMemo(
         () => [...archivedSessions]
             .sort((a, b) => new Date(b.modified).getTime() - new Date(a.modified).getTime())
@@ -200,7 +215,7 @@ export const Sidebar = memo(function Sidebar({
                 />
             </div>
 
-            <div className="mt-5 flex shrink-0 items-center px-3 pb-2">
+            <div className="mt-5 flex shrink-0 items-center px-2 pb-2">
                 <Button variant="icon" className="!size-7" aria-label="New session" title="New session" onClick={onNewChat}>
                     <IconPlusFilled className="size-4" />
                 </Button>
@@ -226,9 +241,29 @@ export const Sidebar = memo(function Sidebar({
                     >
                         {showArchived ? <IconArchiveOff className="size-4" /> : <IconArchiveFilled className="size-4" />}
                     </Button>
-                    <Button variant="icon" className="!size-7" aria-label="Filter sessions" title="Filter sessions">
-                        <IconFilterFilled className="size-4" />
-                    </Button>
+                    <DropdownMenu>
+                        <DropdownMenuTrigger
+                            aria-label="Filter sessions"
+                            title="Filter sessions"
+                            className={`!size-7 !rounded-lg !opacity-100 ${sessionFilter === "projects" ? "bg-phi-overlay-active text-phi-text-primary" : ""}`}
+                        >
+                            <IconFilterFilled className="size-4" />
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent className="w-32">
+                            <DropdownMenuItem
+                                icon={<IconCheckFilled className={`size-3.5 ${sessionFilter === "all" ? "" : "invisible"}`} />}
+                                onClick={() => setSessionFilter("all")}
+                            >
+                                All
+                            </DropdownMenuItem>
+                            <DropdownMenuItem
+                                icon={<IconCheckFilled className={`size-3.5 ${sessionFilter === "projects" ? "" : "invisible"}`} />}
+                                onClick={() => setSessionFilter("projects")}
+                            >
+                                Projects
+                            </DropdownMenuItem>
+                        </DropdownMenuContent>
+                    </DropdownMenu>
                 </div>
             </div>
 
@@ -275,6 +310,35 @@ export const Sidebar = memo(function Sidebar({
                                     ))}
                                 </nav>
                             </section>
+                        )
+                    ) : sessionFilter === "projects" ? (
+                        groupedProjectRows.length === 0 ? (
+                            <EmptyState
+                                title="No projects yet"
+                                description="Sessions appear here when they belong to a project."
+                            />
+                        ) : (
+                            <div className="pb-3">
+                                {groupedProjectRows.map((group) => (
+                                    <GroupSection
+                                        key={group.project.id}
+                                        group={group}
+                                        collapsed={collapsed.has(group.project.id)}
+                                        pinnedPaths={pinnedPaths}
+                                        activeFile={activeFile}
+                                        selectedFiles={selectedFiles}
+                                        runningFiles={runningFiles}
+                                        onToggleGroup={onToggleGroup}
+                                        onSelect={onSelect}
+                                        onToggleSelection={onToggleSelection}
+                                        onRename={onRename}
+                                        onDelete={onDelete}
+                                        onTogglePin={onTogglePin}
+                                        onToggleArchive={onToggleArchive}
+                                        onPrefetch={onPrefetch}
+                                    />
+                                ))}
+                            </div>
                         )
                     ) : sessionRows.length === 0 ? (
                         <EmptyState
@@ -656,6 +720,7 @@ const ArchiveBinIcon = memo(function ArchiveBinIcon({
 const GroupSection = memo(function GroupSection({
     group,
     collapsed,
+    pinnedPaths,
     activeFile,
     selectedFiles,
     runningFiles,
@@ -670,6 +735,7 @@ const GroupSection = memo(function GroupSection({
 }: {
     group: ProjectGroup;
     collapsed: boolean;
+    pinnedPaths: ReadonlySet<string>;
     activeFile: string | null;
     selectedFiles: ReadonlySet<string>;
     runningFiles: ReadonlySet<string>;
@@ -697,8 +763,10 @@ const GroupSection = memo(function GroupSection({
                 aria-expanded={!collapsed}
                 aria-label={`${project.name}, ${group.sessions.length} session${group.sessions.length === 1 ? "" : "s"}`}
                 title={headerTitle}
+                className="!gap-1.5 !px-2 !text-[13px] !font-semibold !text-phi-text-secondary hover:!text-phi-text-primary"
             >
-                <span className="min-w-0 max-w-[calc(100%_-_1.25rem)] truncate text-current">
+                <IconFolderFilled aria-hidden="true" className="size-3.5 shrink-0 text-phi-text-muted" />
+                <span className="min-w-0 max-w-[calc(100%_-_2.5rem)] truncate text-current">
                     {project.name}
                 </span>
             </GroupCollapsibleTrigger>
@@ -716,10 +784,11 @@ const GroupSection = memo(function GroupSection({
                                 <SessionRowMemo
                                     key={s.path}
                                     session={s}
+                                    projectName={project.name}
                                     active={s.path === activeFile}
                                     selected={selectedFiles.has(s.path)}
                                     isStreaming={runningFiles.has(s.path)}
-                                    pinned={false}
+                                    pinned={pinnedPaths.has(s.path)}
                                     archived={false}
                                     onSelect={onSelect}
                                     onToggleSelection={onToggleSelection}
