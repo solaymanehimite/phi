@@ -1600,7 +1600,10 @@ export default function App() {
                                         </div>
                                     )}
                                     {chat.activeFile && (
-                                        <nav className="flex w-11 shrink-0 flex-col items-center px-1.5 pt-2" aria-label="Session panels">
+                                        <nav
+                                            className={`flex w-11 shrink-0 flex-col items-center px-1.5 pt-2 ${activeSidePanel === "session-usage" ? "" : "border-l border-phi-border-faint"}`}
+                                            aria-label="Session panels"
+                                        >
                                             <SessionUsageButton
                                                 percent={sessionStats.stats?.contextUsage?.percent ?? null}
                                                 active={activeSidePanel === "session-usage"}

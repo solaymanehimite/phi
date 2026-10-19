@@ -3,7 +3,6 @@ import {
     IconArchiveOff,
     IconCheckFilled,
     IconChevronDownFilled,
-    IconClockFilled,
     IconDotsFilled,
     IconFilterFilled,
     IconFolderFilled,
@@ -215,9 +214,19 @@ export const Sidebar = memo(function Sidebar({
                 />
             </div>
 
-            <div className="mt-5 flex shrink-0 items-center px-2 pb-2">
+            <div className="mt-7 flex shrink-0 items-center px-3 pb-3">
                 <Button variant="icon" className="!size-7" aria-label="New session" title="New session" onClick={onNewChat}>
                     <IconPlusFilled className="size-4" />
+                </Button>
+                <Button
+                    variant="icon"
+                    aria-label={showArchived ? "Show recent sessions" : "Show archived sessions"}
+                    aria-pressed={showArchived}
+                    title={showArchived ? "Show recent sessions" : "Show archived sessions"}
+                    onClick={() => setShowArchived((showing) => !showing)}
+                    className={showArchived ? "!size-7 bg-phi-overlay-active text-phi-text-primary" : "!size-7"}
+                >
+                    {showArchived ? <IconArchiveOff className="size-4" /> : <IconArchiveFilled className="size-4" />}
                 </Button>
                 <div className="ml-auto flex items-center gap-0">
                     <Button
@@ -230,16 +239,6 @@ export const Sidebar = memo(function Sidebar({
                         className="!size-7"
                     >
                         <SearchLensIcon playRef={searchLensPlay} />
-                    </Button>
-                    <Button
-                        variant="icon"
-                        aria-label={showArchived ? "Show recent sessions" : "Show archived sessions"}
-                        aria-pressed={showArchived}
-                        title={showArchived ? "Show recent sessions" : "Show archived sessions"}
-                        onClick={() => setShowArchived((showing) => !showing)}
-                        className={showArchived ? "!size-7 bg-phi-overlay-active text-phi-text-primary" : "!size-7"}
-                    >
-                        {showArchived ? <IconArchiveOff className="size-4" /> : <IconArchiveFilled className="size-4" />}
                     </Button>
                     <DropdownMenu>
                         <DropdownMenuTrigger
@@ -287,7 +286,7 @@ export const Sidebar = memo(function Sidebar({
                             />
                         ) : (
                             <section aria-label="Archived sessions" className="pb-3">
-                                <h2 className="px-2 pb-1 text-[11px] font-semibold text-phi-text-tertiary">Archived</h2>
+                                <h2 className="px-2 pb-1.5 text-[13px] font-semibold text-phi-text-tertiary">Archived</h2>
                                 <nav aria-label="Archived sessions" className="space-y-0.5">
                                     {archivedRows.map(({ session, projectName }) => (
                                         <SessionRowMemo
@@ -348,10 +347,7 @@ export const Sidebar = memo(function Sidebar({
                         />
                     ) : (
                         <section aria-label="Recent sessions" className="pb-3">
-                            <h2 className="flex items-center gap-1.5 px-2 pb-1.5 text-[13px] font-semibold text-phi-text-secondary">
-                                <IconClockFilled aria-hidden="true" className="size-3.5 text-phi-text-muted" />
-                                Recent
-                            </h2>
+                            <h2 className="px-2 pb-1.5 text-[13px] font-semibold text-phi-text-tertiary">Recent</h2>
                             <nav aria-label="Recent sessions" className="space-y-0.5">
                                 {sessionRows.map(({ session, projectName, pinned }) => (
                                     <SessionRowMemo
