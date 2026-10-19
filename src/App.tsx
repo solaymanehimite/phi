@@ -4,7 +4,6 @@ import { Composer } from "./components/composer";
 import { DirectoryPicker } from "./components/directory-picker";
 import { ModelSelector } from "./components/model-selector";
 import { ThinkingEffortSelector } from "./components/thinking-effort";
-import { SessionHeader } from "./components/session-header";
 import { SessionUsageButton, SessionUsagePanel } from "./components/session-usage-panel";
 import { Conversation } from "./components/conversation/conversation";
 import { Streaming } from "./components/conversation/streaming";
@@ -664,6 +663,7 @@ export default function App() {
         try {
             const res: any = await models.setModel(sessionFile, provider, id);
             if (res?.model) chat.patchModel(res.model, res.thinkingLevel, sessionFile);
+            void sessions.refresh({ silent: true });
         } catch (e) {
             const msg = e instanceof Error ? e.message : String(e);
             // move auth errors to inline block instead of banner
@@ -673,7 +673,7 @@ export default function App() {
                 setInlineFor(sessionFile, err);
             } else setModelError(msg);
         }
-    }, [chat.activeFile, chat.patchModel, models.models, models.setModel, setInlineFor]);
+    }, [chat.activeFile, chat.patchModel, models.models, models.setModel, sessions.refresh, setInlineFor]);
 
     const thinkingCommitRef = useRef<number | null>(null);
     const pendingThinkingRef = useRef<import("./types/session").ThinkingLevel | null>(null);
@@ -1421,6 +1421,7 @@ export default function App() {
                         >
                             <Sidebar
                                 projectGroups={projectGroups}
+                                projects={projectOptions}
                                 pinnedSessions={pinnedSessions}
                                 archivedSessions={archivedSessions}
                                 orphanCount={orphanCount}
@@ -1484,7 +1485,6 @@ export default function App() {
                                 <section className="flex min-h-0 flex-1 flex-col">
                                     <div className="flex min-h-0 flex-1">
                                     <div className={`relative isolate flex min-w-0 flex-1 flex-col ${chat.activeFile ? "" : "justify-center"}`}>
-                                    {chat.activeFile && <SessionHeader sessionTitle={activeTitle} />}
                                     {!chat.activeFile ? <div aria-hidden="true" className="phi-new-chat-bottom-gradient pointer-events-none absolute inset-x-0 bottom-0 z-0" /> : null}
                                     {!chat.activeFile ? (
                                         <div className="relative z-10 mx-auto w-full max-w-4xl shrink-0 px-6">

@@ -683,6 +683,88 @@ let sessionsCache: { at: number; payload: any; etag: string } | null = null;
 const SESSIONS_TTL_MS = 3_000;
 let pendingListAll: Promise<any[]> | null = null;
 
+type SessionModelSummary = { provider: string; modelId: string };
+type SessionModelCacheEntry = { modified: string; model: SessionModelSummary | null };
+const sessionModelCache = new Map<string, SessionModelCacheEntry>();
+const SESSION_MODEL_CACHE_MAX = 1000;
+const SESSION_MODEL_TAIL_BYTES = 24 * 1024;
+
+function sessionModelFromEntry(entry: any): SessionModelSummary | null {
+    if (!entry || typeof entry !== "object") return null;
+    if (entry.type === "model_change" && typeof entry.provider === "string" && typeof entry.modelId === "string") {
+        return { provider: entry.provider, modelId: entry.modelId };
+    }
+    const message = entry.type === "message" ? entry.message : null;
+    if (message?.role !== "assistant" || typeof message.provider !== "string") return null;
+    const modelId = message.responseModel ?? message.model;
+    return typeof modelId === "string" ? { provider: message.provider, modelId } : null;
+}
+
+async function readLastSessionModel(file: string): Promise<SessionModelSummary | null> {
+    try {
+        const handle = await fs.open(file, "r");
+        try {
+            const stat = await handle.stat();
+            const length = Math.min(stat.size, SESSION_MODEL_TAIL_BYTES);
+            if (length <= 0) return null;
+            const buffer = Buffer.alloc(length);
+            await handle.read(buffer, 0, length, stat.size - length);
+            const lines = buffer.toString("utf8").split("\n");
+            if (stat.size > length) lines.shift();
+            for (let index = lines.length - 1; index >= 0; index--) {
+                const line = lines[index]?.trim();
+                if (!line) continue;
+                try {
+                    const model = sessionModelFromEntry(JSON.parse(line));
+                    if (model) return model;
+                } catch {
+                    // A malformed or partial line should not hide the rest of the session list.
+                }
+            }
+        } finally {
+            await handle.close();
+        }
+    } catch {
+        // Model marks are best effort. The session list must remain available.
+    }
+    return null;
+}
+
+async function sessionModelForInfo(info: any): Promise<SessionModelSummary | null> {
+    const key = normalisePath(info.path);
+    const modified = String(info.modified ?? "");
+    const cached = sessionModelCache.get(key);
+    if (cached?.modified === modified) return cached.model;
+
+    const liveModel = runtimeEntries.get(key)?.runtime.session?.model as { provider?: string; id?: string; modelId?: string } | null | undefined;
+    const modelId = liveModel?.modelId ?? liveModel?.id;
+    const model = liveModel?.provider && modelId
+        ? { provider: liveModel.provider, modelId }
+        : await readLastSessionModel(key);
+    sessionModelCache.set(key, { modified, model });
+    if (sessionModelCache.size > SESSION_MODEL_CACHE_MAX) {
+        const oldest = sessionModelCache.keys().next().value as string | undefined;
+        if (oldest) sessionModelCache.delete(oldest);
+    }
+    return model;
+}
+
+async function withSessionModels(infos: any[]): Promise<any[]> {
+    const concurrency = 12;
+    const output = new Array<any>(infos.length);
+    let next = 0;
+    const worker = async () => {
+        while (next < infos.length) {
+            const index = next++;
+            const info = infos[index];
+            const model = await sessionModelForInfo(info);
+            output[index] = model ? { ...info, model } : info;
+        }
+    };
+    await Promise.all(Array.from({ length: Math.min(concurrency, infos.length) }, worker));
+    return output;
+}
+
 function etagFor(payload: any): string {
     if (!Array.isArray(payload) || payload.length === 0) return '"0-0"';
     return `"${payload.length}-${payload[0]?.modified ?? ""}"`;
@@ -714,9 +796,10 @@ app.get("/api/sessions", async (req, res) => {
             const etag = etagFor(infos);
             if (req.headers["if-none-match"] === etag) return res.status(304).end();
             res.setHeader("ETag", etag);
+            infos = await withSessionModels(infos);
             sessionsCache = { at: Date.now(), payload: infos, etag };
         } else {
-            infos = cwd ? await SessionManager.list(cwd) : await (SessionManager as any).listAll();
+            infos = await withSessionModels(cwd ? await SessionManager.list(cwd) : await (SessionManager as any).listAll());
         }
         res.json(infos);
     } catch (error) {

@@ -43,15 +43,16 @@ const MARKS: Record<string, string> = {
     "zai-coding-cn": "zhipu",
 };
 
-export function ProviderLogo({ id, name }: { id: string; name: string }) {
+export function ProviderLogo({ id, name, size = 24 }: { id: string; name: string; size?: number }) {
     const key = MARKS[id];
     const mark = key ? PROVIDER_MARKS[key] : undefined;
+    const markSize = Math.round(size * (20 / 24));
     return (
-        <span aria-hidden="true" className="grid size-6 shrink-0 place-items-center text-phi-text-primary">
+        <span aria-hidden="true" className="grid shrink-0 place-items-center text-phi-text-primary" style={{ width: size, height: size }}>
             {mark ? (
-                <svg viewBox={mark.viewBox} fill="currentColor" width={20} height={20} dangerouslySetInnerHTML={{ __html: mark.body }} />
+                <svg viewBox={mark.viewBox} fill="currentColor" width={markSize} height={markSize} dangerouslySetInnerHTML={{ __html: mark.body }} />
             ) : (
-                <span className="text-[15px] font-semibold leading-none">{name.charAt(0).toUpperCase()}</span>
+                <span className="font-semibold leading-none" style={{ fontSize: Math.round(size * (15 / 24)) }}>{name.charAt(0).toUpperCase()}</span>
             )}
         </span>
     );

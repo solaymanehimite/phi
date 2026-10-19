@@ -12,6 +12,8 @@ export type SessionInfo = {
   messageCount: number;
   firstMessage: string;
   allMessagesText: string;
+  /** Last model observed in the persisted session, supplied by the sidecar. */
+  model?: { provider: string; modelId: string };
 };
 
 export type SessionHeader = {

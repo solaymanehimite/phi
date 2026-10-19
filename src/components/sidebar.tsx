@@ -3,7 +3,9 @@ import {
     IconArchiveOff,
     IconCheckFilled,
     IconChevronDownFilled,
+    IconClockFilled,
     IconDotsFilled,
+    IconFilterFilled,
     IconPencilFilled,
     IconPinnedFilled,
     IconPinnedOff,
@@ -28,13 +30,15 @@ import { GroupCollapsibleTrigger } from "./ui/collapsible";
 import { NavItem } from "./ui/nav-item";
 import { useEffectiveTheme } from "../hooks/useTheme";
 import { brandingUrl } from "../lib/themed-assets";
-import { formatProjectPath, type ProjectGroup } from "../lib/projects";
+import { formatProjectPath, implicitProjectName, type ProjectGroup, type ProjectOption } from "../lib/projects";
 import type { SessionInfo } from "../types/session";
 import { useHasDraft } from "../hooks/useHasDraft";
+import { ProviderLogo } from "./provider-logo";
 
 type SidebarProps = {
     projectGroups: ProjectGroup[];
-    /** Pinned sessions — shown in their own group above Projects. */
+    projects: ProjectOption[];
+    /** Pinned sessions — surfaced in the In work queue. */
     pinnedSessions: SessionInfo[];
     /** Archived sessions — shown in the footer group above Settings. */
     archivedSessions: SessionInfo[];
@@ -83,11 +87,12 @@ function titleFor(s: { name?: string; firstMessage: string }): string {
     if (s.name?.trim()) return s.name.trim();
     const t = s.firstMessage.trim();
     if (!t) return "Untitled session";
-    return t.length > 42 ? `${t.slice(0, 42).trim()}…` : t;
+    return t;
 }
 
 export const Sidebar = memo(function Sidebar({
     projectGroups,
+    projects,
     pinnedSessions,
     archivedSessions,
     orphanCount = 0,
@@ -113,6 +118,7 @@ export const Sidebar = memo(function Sidebar({
     const searchLensPlay = useRef<(() => void) | null>(null);
     const [canScrollUp, setCanScrollUp] = useState(false);
     const [canScrollDown, setCanScrollDown] = useState(false);
+    const [showArchived, setShowArchived] = useState(false);
 
     const updateScrollEdges = useCallback(() => {
         const el = scrollRef.current;
@@ -136,7 +142,7 @@ export const Sidebar = memo(function Sidebar({
             window.removeEventListener("resize", updateScrollEdges);
             ro.disconnect();
         };
-    }, [projectGroups, pinnedSessions, archivedSessions, collapsed, loading, updateScrollEdges]);
+    }, [projectGroups, pinnedSessions, archivedSessions, collapsed, loading, showArchived, updateScrollEdges]);
 
     const scrollByPage = useCallback((direction: 1 | -1) => {
         const el = scrollRef.current;
@@ -153,17 +159,37 @@ export const Sidebar = memo(function Sidebar({
     const scrollUp = useCallback(() => scrollByPage(-1), [scrollByPage]);
     const scrollDown = useCallback(() => scrollByPage(1), [scrollByPage]);
 
-    const pinnedCollapsed = collapsed.has("pinned");
     const archivedCollapsed = collapsed.has("archived");
     const theme = useEffectiveTheme();
-    const handleTogglePinned = useCallback(() => onToggleGroup("pinned"), [onToggleGroup]);
     const handleToggleArchived = useCallback(() => onToggleGroup("archived"), [onToggleGroup]);
+    const projectNames = useMemo(() => new Map(projects.map((project) => [project.path, project.name])), [projects]);
+    const sessionRows = useMemo(() => {
+        const byPath = new Map<string, SessionInfo>();
+        for (const session of pinnedSessions) byPath.set(session.path, session);
+        for (const group of projectGroups) {
+            for (const session of group.sessions) byPath.set(session.path, session);
+        }
+        const pinnedPaths = new Set(pinnedSessions.map((session) => session.path));
+        return [...byPath.values()]
+            .map((session) => ({
+                session,
+                projectName: projectNames.get(session.cwd) ?? implicitProjectName(session.cwd),
+                pinned: pinnedPaths.has(session.path),
+            }))
+            .sort((a, b) => Number(b.pinned) - Number(a.pinned) || new Date(b.session.modified).getTime() - new Date(a.session.modified).getTime());
+    }, [pinnedSessions, projectGroups, projectNames]);
+    const archivedRows = useMemo(
+        () => [...archivedSessions]
+            .sort((a, b) => new Date(b.modified).getTime() - new Date(a.modified).getTime())
+            .map((session) => ({ session, projectName: projectNames.get(session.cwd) ?? implicitProjectName(session.cwd) })),
+        [archivedSessions, projectNames],
+    );
 
     return (
         <aside className="flex h-full w-(--phi-sidebar-width) min-w-(--phi-sidebar-width) shrink-0 flex-col bg-phi-bg-sidebar">
             <div
                 data-tauri-drag-region
-                className="mb-2 flex h-10 shrink-0 items-end pl-[18px] pr-[85px]"
+                className="flex h-10 shrink-0 items-end pl-[18px] pr-[85px]"
                 aria-hidden
             >
                 <img
@@ -174,25 +200,37 @@ export const Sidebar = memo(function Sidebar({
                 />
             </div>
 
-            <div className="shrink-0 space-y-0.5 px-2 pt-2">
-                <Button className="w-full justify-start text-phi-text-secondary hover:text-phi-text-secondary" onClick={onNewChat}>
+            <div className="mt-5 flex shrink-0 items-center px-3 pb-2">
+                <Button variant="icon" className="!size-7" aria-label="New session" title="New session" onClick={onNewChat}>
                     <IconPlusFilled className="size-4" />
-                    New chat
                 </Button>
-                <Button
-                    className="group w-full justify-start text-phi-text-secondary hover:text-phi-text-secondary"
-                    onClick={onOpenSearch}
-                    onMouseEnter={() => searchLensPlay.current?.()}
-                    aria-keyshortcuts="Meta+K Control+K"
-                    title="Search sessions and commands (⌘K)"
-                >
-                    <SearchLensIcon playRef={searchLensPlay} />
-                    <span className="min-w-0 flex-1 truncate text-left">Search</span>
-                    <span className="shrink-0 text-[11px] text-phi-text-faint opacity-0 transition-opacity duration-150 group-hover:opacity-100 group-focus-within:opacity-100">⌘K</span>
-                </Button>
+                <div className="ml-auto flex items-center gap-0">
+                    <Button
+                        variant="icon"
+                        aria-label="Search sessions and commands"
+                        aria-keyshortcuts="Meta+K Control+K"
+                        title="Search sessions and commands (⌘K)"
+                        onClick={onOpenSearch}
+                        onMouseEnter={() => searchLensPlay.current?.()}
+                        className="!size-7"
+                    >
+                        <SearchLensIcon playRef={searchLensPlay} />
+                    </Button>
+                    <Button
+                        variant="icon"
+                        aria-label={showArchived ? "Show recent sessions" : "Show archived sessions"}
+                        aria-pressed={showArchived}
+                        title={showArchived ? "Show recent sessions" : "Show archived sessions"}
+                        onClick={() => setShowArchived((showing) => !showing)}
+                        className={showArchived ? "!size-7 bg-phi-overlay-active text-phi-text-primary" : "!size-7"}
+                    >
+                        {showArchived ? <IconArchiveOff className="size-4" /> : <IconArchiveFilled className="size-4" />}
+                    </Button>
+                    <Button variant="icon" className="!size-7" aria-label="Filter sessions" title="Filter sessions">
+                        <IconFilterFilled className="size-4" />
+                    </Button>
+                </div>
             </div>
-
-            <div aria-hidden="true" className="h-4 shrink-0" />
 
             <div className="relative min-h-0 flex-1">
                 <div
@@ -206,38 +244,26 @@ export const Sidebar = memo(function Sidebar({
                         </p>
                     ) : error ? (
                         <Alert variant="error" className="mx-2 leading-4">{error}</Alert>
-                    ) : projectGroups.length === 0 && pinnedSessions.length === 0 ? (
-                        <EmptyState
-                            title="No projects yet"
-                            description="Create one from the project picker to start chatting in a directory."
-                            detail={orphanCount > 0 ? `${orphanCount} session${orphanCount === 1 ? "" : "s"} outside projects — press ⌘K to find ${orphanCount === 1 ? "it" : "them"}.` : undefined}
-                        />
-                    ) : (
-                        <div>
-                            {pinnedSessions.length > 0 && (
-                                <div className="mb-2">
-                                    <GroupCollapsibleTrigger
-                                        collapsed={pinnedCollapsed}
-                                        onClick={handleTogglePinned}
-                                        aria-expanded={!pinnedCollapsed}
-                                        aria-label={`${pinnedSessions.length} pinned session${pinnedSessions.length === 1 ? "" : "s"}`}
-                                    >
-                                        <span className="min-w-0 max-w-[calc(100%_-_1.25rem)] truncate">Pinned</span>
-                                    </GroupCollapsibleTrigger>
-                                    <div
-                                        className={`grid transition-all duration-300 ease-[cubic-bezier(0.4,0,0.2,1)] ${pinnedCollapsed ? "grid-rows-[0fr] opacity-0" : "grid-rows-[1fr] opacity-100"}`}
-                                    >
-                                        <div className="overflow-hidden">
-                                            <nav aria-label="Pinned sessions" className="mt-1 space-y-0.5">
-                                    {pinnedSessions.map((s) => (
+                    ) : showArchived ? (
+                        archivedRows.length === 0 ? (
+                            <EmptyState
+                                title="No archived sessions"
+                                description="Archived sessions will appear here."
+                            />
+                        ) : (
+                            <section aria-label="Archived sessions" className="pb-3">
+                                <h2 className="px-2 pb-1 text-[11px] font-semibold text-phi-text-tertiary">Archived</h2>
+                                <nav aria-label="Archived sessions" className="space-y-0.5">
+                                    {archivedRows.map(({ session, projectName }) => (
                                         <SessionRowMemo
-                                            key={s.path}
-                                            session={s}
-                                            active={s.path === activeFile}
-                                            selected={selectedFiles.has(s.path)}
-                                            isStreaming={runningFiles.has(s.path)}
-                                            pinned
-                                            archived={false}
+                                            key={session.path}
+                                            session={session}
+                                            projectName={projectName}
+                                            active={session.path === activeFile}
+                                            selected={selectedFiles.has(session.path)}
+                                            isStreaming={runningFiles.has(session.path)}
+                                            pinned={false}
+                                            archived
                                             onSelect={onSelect}
                                             onToggleSelection={onToggleSelection}
                                             onRename={onRename}
@@ -247,32 +273,43 @@ export const Sidebar = memo(function Sidebar({
                                             onPrefetch={onPrefetch}
                                         />
                                     ))}
-                                                    </nav>
-                                        </div>
-                                    </div>
-                                </div>
-                            )}
-                            <div className="space-y-0.5">
-                            {projectGroups.map((group) => (
-                                <GroupSection
-                                    key={group.project.id}
-                                    group={group}
-                                    collapsed={collapsed.has(group.project.id)}
-                                    activeFile={activeFile}
-                                    selectedFiles={selectedFiles}
-                                    runningFiles={runningFiles}
-                                    onToggleGroup={onToggleGroup}
-                                    onSelect={onSelect}
-                                    onToggleSelection={onToggleSelection}
-                                    onRename={onRename}
-                                    onDelete={onDelete}
-                                    onTogglePin={onTogglePin}
-                                    onToggleArchive={onToggleArchive}
-                                    onPrefetch={onPrefetch}
-                                />
-                            ))}
-                            </div>
-                        </div>
+                                </nav>
+                            </section>
+                        )
+                    ) : sessionRows.length === 0 ? (
+                        <EmptyState
+                            title="No sessions yet"
+                            description="Start a session in a workspace to see it here."
+                            detail={orphanCount > 0 ? `${orphanCount} session${orphanCount === 1 ? "" : "s"} outside Projects — press ⌘K to find ${orphanCount === 1 ? "it" : "them"}.` : undefined}
+                        />
+                    ) : (
+                        <section aria-label="Recent sessions" className="pb-3">
+                            <h2 className="flex items-center gap-1.5 px-2 pb-1.5 text-[13px] font-semibold text-phi-text-secondary">
+                                <IconClockFilled aria-hidden="true" className="size-3.5 text-phi-text-muted" />
+                                Recent
+                            </h2>
+                            <nav aria-label="Recent sessions" className="space-y-0.5">
+                                {sessionRows.map(({ session, projectName, pinned }) => (
+                                    <SessionRowMemo
+                                        key={session.path}
+                                        session={session}
+                                        projectName={projectName}
+                                        active={session.path === activeFile}
+                                        selected={selectedFiles.has(session.path)}
+                                        isStreaming={runningFiles.has(session.path)}
+                                        pinned={pinned}
+                                        archived={false}
+                                        onSelect={onSelect}
+                                        onToggleSelection={onToggleSelection}
+                                        onRename={onRename}
+                                        onDelete={onDelete}
+                                        onTogglePin={onTogglePin}
+                                        onToggleArchive={onToggleArchive}
+                                        onPrefetch={onPrefetch}
+                                    />
+                                ))}
+                            </nav>
+                        </section>
                     )}
                 </div>
 
@@ -313,40 +350,16 @@ export const Sidebar = memo(function Sidebar({
                 </div>
             </div>
 
-            <div className="mt-auto shrink-0 px-2 pb-4 pt-2">
-                {archivedSessions.length > 0 && (
-                    <div className="mb-1">
-                        <MetaGroupTrigger
-                            collapsed={archivedCollapsed}
-                            onClick={handleToggleArchived}
-                            label="Archived"
-                            count={archivedSessions.length}
-                            icon={<ArchiveBinIcon />}
-                        />
-                        <ArchivedList
-                            collapsed={archivedCollapsed}
-                            sessions={archivedSessions}
-                            activeFile={activeFile}
-                            selectedFiles={selectedFiles}
-                            runningFiles={runningFiles}
-                            onSelect={onSelect}
-                            onToggleSelection={onToggleSelection}
-                            onRename={onRename}
-                            onDelete={onDelete}
-                            onTogglePin={onTogglePin}
-                            onToggleArchive={onToggleArchive}
-                            onPrefetch={onPrefetch}
-                        />
-                    </div>
-                )}
-                <NavItem
-                    label="Settings"
-                    icon={IconSettingsFilled}
-                    iconClassName="group-hover:animate-spin motion-reduce:group-hover:animate-none"
-                    onClick={() => onOpenSettings?.()}
+            <div className="mt-auto shrink-0 px-3 pb-4 pt-2">
+                <Button
+                    variant="icon"
+                    aria-label="Open settings"
                     title="Settings (Cmd+,)"
-                    ariaLabel="Open settings"
-                />
+                    onClick={() => onOpenSettings?.()}
+                    className="group !size-7"
+                >
+                    <IconSettingsFilled className="size-4 group-hover:animate-spin motion-reduce:group-hover:animate-none" />
+                </Button>
             </div>
         </aside>
     );
@@ -734,6 +747,7 @@ const GroupSection = memo(function GroupSection({
 // Wrapper that derives stable props from session so title/time don't recreate callbacks
 const SessionRowMemo = memo(function SessionRowMemo({
     session,
+    projectName = implicitProjectName(session.cwd),
     active,
     selected,
     isStreaming,
@@ -748,6 +762,7 @@ const SessionRowMemo = memo(function SessionRowMemo({
     onPrefetch,
 }: {
     session: SessionInfo;
+    projectName?: string;
     active: boolean;
     selected: boolean;
     isStreaming?: boolean;
@@ -808,6 +823,8 @@ const SessionRowMemo = memo(function SessionRowMemo({
             active={active}
             selected={selected}
             title={title}
+            projectName={projectName}
+            model={session.model ?? null}
             time={time}
             hasDraft={hasDraft}
             pinned={pinned}
@@ -975,6 +992,8 @@ const SessionRow = memo(function SessionRow({
     active,
     selected,
     title,
+    projectName,
+    model,
     time,
     hasDraft,
     pinned,
@@ -990,6 +1009,8 @@ const SessionRow = memo(function SessionRow({
     active: boolean;
     selected: boolean;
     title: string;
+    projectName: string;
+    model: SessionInfo["model"] | null;
     time: string;
     hasDraft?: boolean;
     pinned: boolean;
@@ -1057,14 +1078,8 @@ const SessionRow = memo(function SessionRow({
         <div
             onMouseEnter={onPrefetch}
             onFocusCapture={onPrefetch}
-            className={`session-row group relative flex h-8 w-full items-center gap-1 rounded-lg px-1 text-left text-[13px] ${selected ? "bg-phi-accent/12 text-phi-text-primary outline outline-1 -outline-offset-1 outline-phi-accent/80" : active ? "bg-phi-overlay-active text-phi-text-primary" : "text-phi-text-secondary hover:bg-phi-overlay-hover hover:text-phi-text-secondary"}`}
+            className={`session-row group relative flex h-[52px] w-full items-center gap-1 rounded-lg px-1 text-left text-[13px] ${selected ? "bg-phi-accent/12 text-phi-text-primary outline outline-1 -outline-offset-1 outline-phi-accent/80" : active ? "bg-phi-overlay-active text-phi-text-primary" : "text-phi-text-secondary hover:bg-phi-overlay-hover hover:text-phi-text-secondary"}`}
         >
-            <span
-                aria-hidden
-                className={`pointer-events-none grid h-6 shrink-0 place-items-center overflow-hidden transition-[width,opacity] duration-300 ease-out motion-reduce:transition-none ${isStreaming ? "w-6 opacity-100" : "w-0 opacity-0"}`}
-            >
-                <Orb variant="S3" size={14} />
-            </span>
             {renaming ? (
                 <div className="flex min-w-0 flex-1 items-center truncate rounded-lg px-1.5 py-1 pr-14">
                     <Input
@@ -1080,25 +1095,46 @@ const SessionRow = memo(function SessionRow({
                 <button
                     type="button"
                     onClick={onClick}
-                    className="flex min-w-0 flex-1 items-center truncate rounded-lg px-1.5 py-1 pr-14 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-phi-accent/40"
+                    className="flex min-w-0 flex-1 flex-col justify-center gap-0.5 overflow-hidden rounded-lg px-1.5 py-1.5 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-phi-accent/40"
                 >
-                    <MarqueeTitle title={title} />
-                    {hasDraft && (
-                        <IconSendFilled
-                            className="ml-2.5 size-3 shrink-0 rotate-45 text-phi-text-muted"
-                            aria-label="Draft"
-                            title="Draft"
-                        />
-                    )}
+                    <span className="flex min-w-0 items-center pr-11">
+                        {pinned && (
+                            <span title="Pinned session" className="mr-1 inline-flex shrink-0 text-phi-text-muted">
+                                <IconPinnedFilled aria-hidden="true" className="size-[11px]" />
+                            </span>
+                        )}
+                        <span
+                            aria-hidden
+                            className={`pointer-events-none grid h-4 shrink-0 place-items-center overflow-hidden transition-[width,opacity,margin] duration-300 ease-out motion-reduce:transition-none ${isStreaming ? "mr-1.5 w-4 opacity-100" : "mr-0 w-0 opacity-0"}`}
+                        >
+                            <Orb variant="S3" size={14} />
+                        </span>
+                        <span title={title} className="min-w-0 flex-1 truncate">{title}</span>
+                        {hasDraft && (
+                            <IconSendFilled
+                                className="ml-2 size-3 shrink-0 rotate-45 text-phi-text-muted"
+                                aria-label="Draft"
+                                title="Draft"
+                            />
+                        )}
+                    </span>
+                    <span className="flex min-w-0 items-center gap-1.5 text-[11px] leading-4 text-phi-text-muted">
+                        <span title={projectName} className="min-w-0 flex-1 truncate">{projectName}</span>
+                        {model && (
+                            <span title={`${model.provider}/${model.modelId}`} className="shrink-0 text-phi-text-tertiary">
+                                <ProviderLogo id={model.provider} name={model.modelId} size={14} />
+                            </span>
+                        )}
+                    </span>
                 </button>
             )}
 
-            <span className="session-row-time pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-[11px] text-phi-text-faint group-hover:opacity-0">
+            <span className="session-row-time pointer-events-none absolute right-2 top-1.5 text-[11px] text-phi-text-faint group-hover:opacity-0 group-focus-within:opacity-0">
                 {time}
             </span>
 
             {!renaming && (
-                <div className="absolute right-1 top-1/2 z-10 flex -translate-y-1/2 items-center gap-0.5">
+                <div className="absolute right-1 top-1.5 z-10 flex items-center gap-0.5">
                     <button
                         type="button"
                         onClick={archived ? onToggleArchive : onTogglePin}
