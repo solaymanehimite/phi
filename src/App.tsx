@@ -4,8 +4,8 @@ import { Composer } from "./components/composer";
 import { DirectoryPicker } from "./components/directory-picker";
 import { ModelSelector } from "./components/model-selector";
 import { ThinkingEffortSelector } from "./components/thinking-effort";
-import { ContextIndicator } from "./components/context-indicator";
 import { SessionHeader } from "./components/session-header";
+import { SessionUsageButton, SessionUsagePanel } from "./components/session-usage-panel";
 import { Conversation } from "./components/conversation/conversation";
 import { Streaming } from "./components/conversation/streaming";
 import { Sidebar } from "./components/sidebar";
@@ -187,13 +187,13 @@ const ConversationScrubber = memo(function ConversationScrubber() {
                 </div>
                 <span
                     aria-hidden="true"
-                    className="absolute left-1/2 h-px w-7 -translate-x-1/2 -translate-y-1/2 bg-phi-thinking-high"
+                    className="absolute left-1/2 h-px w-7 -translate-x-1/2 -translate-y-1/2 bg-phi-accent"
                     style={{ top: `${progress * 100}%` }}
                 />
                 {hoverProgress !== null && (
                     <span
                         aria-hidden="true"
-                        className="absolute left-1/2 h-px w-7 -translate-x-1/2 -translate-y-1/2 bg-phi-thinking-high/35"
+                        className="absolute left-1/2 h-px w-7 -translate-x-1/2 -translate-y-1/2 bg-phi-accent/35"
                         style={{ top: `${hoverProgress * 100}%` }}
                     />
                 )}
@@ -356,6 +356,7 @@ export default function App() {
     // single inline notice per session — interrupts clear on next send, never stack
     const [inlineErrors, setInlineErrors] = useState<Record<string, InlineError>>({});
     const [selectedFiles, setSelectedFiles] = useState<Set<string>>(new Set());
+    const [activeSidePanel, setActiveSidePanel] = useState<"session-usage" | null>(null);
     const streamSonners = useSonners();
 
     // quit guard
@@ -1481,13 +1482,9 @@ export default function App() {
                                     </section>
                                 ) : (
                                 <section className="flex min-h-0 flex-1 flex-col">
-                                    {chat.activeFile && (
-                                        <SessionHeader
-                                            sessionTitle={activeTitle}
-                                            contextIndicator={<ContextIndicator file={chat.activeFile} stats={sessionStats.stats} loading={sessionStats.loading} onRefresh={() => void sessionStats.refresh()} placement="below" />}
-                                        />
-                                    )}
-                                    <div className={`relative isolate flex min-h-0 flex-1 flex-col ${chat.activeFile ? "" : "justify-center"}`}>
+                                    <div className="flex min-h-0 flex-1">
+                                    <div className={`relative isolate flex min-w-0 flex-1 flex-col ${chat.activeFile ? "" : "justify-center"}`}>
+                                    {chat.activeFile && <SessionHeader sessionTitle={activeTitle} />}
                                     {!chat.activeFile ? <div aria-hidden="true" className="phi-new-chat-bottom-gradient pointer-events-none absolute inset-x-0 bottom-0 z-0" /> : null}
                                     {!chat.activeFile ? (
                                         <div className="relative z-10 mx-auto w-full max-w-4xl shrink-0 px-6">
@@ -1582,6 +1579,38 @@ export default function App() {
                                             );
                                         })()}
                                     </div>
+                                    </div>
+                                    {chat.activeFile && (
+                                        <div
+                                            className={`min-h-0 shrink-0 overflow-hidden transition-[width] duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] motion-reduce:transition-none ${activeSidePanel === "session-usage" ? "w-80" : "w-0"}`}
+                                        >
+                                            <div
+                                                inert={activeSidePanel !== "session-usage"}
+                                                aria-hidden={activeSidePanel !== "session-usage"}
+                                                className={`h-full w-80 transition-[opacity,transform] duration-200 ease-[cubic-bezier(0.16,1,0.3,1)] motion-reduce:transition-none ${activeSidePanel === "session-usage" ? "translate-x-0 opacity-100" : "translate-x-3 opacity-0"}`}
+                                            >
+                                                <SessionUsagePanel
+                                                    file={chat.activeFile}
+                                                    stats={sessionStats.stats}
+                                                    loading={sessionStats.loading}
+                                                    onRefresh={() => void sessionStats.refresh()}
+                                                    onClose={() => setActiveSidePanel(null)}
+                                                />
+                                            </div>
+                                        </div>
+                                    )}
+                                    {chat.activeFile && (
+                                        <nav className="flex w-11 shrink-0 flex-col items-center px-1.5 pt-2" aria-label="Session panels">
+                                            <SessionUsageButton
+                                                percent={sessionStats.stats?.contextUsage?.percent ?? null}
+                                                active={activeSidePanel === "session-usage"}
+                                                onClick={() => {
+                                                    setActiveSidePanel((panel) => panel === "session-usage" ? null : "session-usage");
+                                                    void sessionStats.refresh();
+                                                }}
+                                            />
+                                        </nav>
+                                    )}
                                     </div>
                                 </section>
                                 )}
