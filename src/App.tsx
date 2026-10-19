@@ -80,6 +80,128 @@ const ScrollToBottomButton = memo(function ScrollToBottomButton() {
     );
 });
 
+const ConversationScrubber = memo(function ConversationScrubber() {
+    const { scrollRef } = useStickToBottomContext();
+    const [progress, setProgress] = useState(1);
+    const [hoverProgress, setHoverProgress] = useState<number | null>(null);
+    const [hasOverflow, setHasOverflow] = useState(false);
+    const [ridgeCount, setRidgeCount] = useState(12);
+    const trackRef = useRef<HTMLDivElement>(null);
+
+    useEffect(() => {
+        const scrollElement = scrollRef.current;
+        if (!scrollElement) return;
+
+        const sync = () => {
+            const maxScroll = scrollElement.scrollHeight - scrollElement.clientHeight;
+            setHasOverflow(maxScroll > 1);
+            setProgress(maxScroll > 0 ? scrollElement.scrollTop / maxScroll : 1);
+            setRidgeCount(Math.min(36, Math.max(24, Math.ceil(scrollElement.scrollHeight / 240))));
+        };
+
+        sync();
+        scrollElement.addEventListener("scroll", sync, { passive: true });
+        const resizeObserver = new ResizeObserver(sync);
+        resizeObserver.observe(scrollElement);
+        if (scrollElement.firstElementChild) resizeObserver.observe(scrollElement.firstElementChild);
+        return () => {
+            scrollElement.removeEventListener("scroll", sync);
+            resizeObserver.disconnect();
+        };
+    }, [scrollRef]);
+
+    const progressAt = (clientY: number) => {
+        const rect = trackRef.current?.getBoundingClientRect();
+        if (!rect) return 0;
+        const inset = 7;
+        return Math.max(0, Math.min(1, (clientY - rect.top - inset) / (rect.height - inset * 2)));
+    };
+
+    const scrollToProgress = (nextProgress: number) => {
+        const scrollElement = scrollRef.current;
+        if (!scrollElement) return;
+        const maxScroll = scrollElement.scrollHeight - scrollElement.clientHeight;
+        scrollElement.scrollTo({ top: Math.max(0, Math.min(1, nextProgress)) * maxScroll, behavior: "auto" });
+    };
+
+    if (!hasOverflow) return null;
+
+    return (
+        <div
+            ref={trackRef}
+            role="slider"
+            aria-label="Conversation position"
+            aria-valuemin={0}
+            aria-valuemax={100}
+            aria-valuenow={Math.round(progress * 100)}
+            aria-valuetext={`${Math.round(progress * 100)}% through conversation`}
+            tabIndex={0}
+            onPointerDown={(event) => {
+                event.currentTarget.setPointerCapture(event.pointerId);
+                const nextProgress = progressAt(event.clientY);
+                setHoverProgress(nextProgress);
+                scrollToProgress(nextProgress);
+            }}
+            onPointerMove={(event) => {
+                const nextProgress = progressAt(event.clientY);
+                setHoverProgress(nextProgress);
+                if (event.currentTarget.hasPointerCapture(event.pointerId)) scrollToProgress(nextProgress);
+            }}
+            onPointerUp={(event) => event.currentTarget.releasePointerCapture(event.pointerId)}
+            onPointerCancel={(event) => event.currentTarget.releasePointerCapture(event.pointerId)}
+            onPointerLeave={(event) => {
+                if (!event.currentTarget.hasPointerCapture(event.pointerId)) setHoverProgress(null);
+            }}
+            onWheel={(event) => {
+                event.preventDefault();
+                scrollRef.current?.scrollBy({ top: event.deltaY, behavior: "auto" });
+            }}
+            onKeyDown={(event) => {
+                if (event.key === "ArrowUp" || event.key === "ArrowLeft") {
+                    event.preventDefault();
+                    scrollToProgress(progress - 0.05);
+                } else if (event.key === "ArrowDown" || event.key === "ArrowRight") {
+                    event.preventDefault();
+                    scrollToProgress(progress + 0.05);
+                } else if (event.key === "PageUp") {
+                    event.preventDefault();
+                    scrollToProgress(progress - 0.2);
+                } else if (event.key === "PageDown") {
+                    event.preventDefault();
+                    scrollToProgress(progress + 0.2);
+                } else if (event.key === "Home") {
+                    event.preventDefault();
+                    scrollToProgress(0);
+                } else if (event.key === "End") {
+                    event.preventDefault();
+                    scrollToProgress(1);
+                }
+            }}
+            className="absolute right-0 top-1/2 z-20 h-52 w-12 -translate-y-1/2 cursor-grab touch-none outline-none active:cursor-grabbing focus-visible:ring-1 focus-visible:ring-phi-accent/50"
+        >
+            <div className="pointer-events-none absolute inset-0">
+                <div className="absolute inset-x-0 inset-y-0 flex items-center flex-col justify-between py-0.5">
+                    {Array.from({ length: ridgeCount }, (_, index) => (
+                        <span key={index} className="h-px w-4 bg-phi-text-muted/70" />
+                    ))}
+                </div>
+                <span
+                    aria-hidden="true"
+                    className="absolute left-1/2 h-px w-7 -translate-x-1/2 -translate-y-1/2 bg-phi-thinking-high"
+                    style={{ top: `${progress * 100}%` }}
+                />
+                {hoverProgress !== null && (
+                    <span
+                        aria-hidden="true"
+                        className="absolute left-1/2 h-px w-7 -translate-x-1/2 -translate-y-1/2 bg-phi-thinking-high/35"
+                        style={{ top: `${hoverProgress * 100}%` }}
+                    />
+                )}
+            </div>
+        </div>
+    );
+});
+
 // When the user sends a message while scrolled up, re-stick to the bottom.
 // Streaming growth itself is handled by the stick-to-bottom resize observer,
 // which intentionally preserves the position when the user scrolled up to read.
@@ -169,7 +291,7 @@ const ChatViewport = memo(function ChatViewport({
             damping={0.75}
         >
             <StickToBottom.Content
-                scrollClassName="overflow-y-auto px-6 pt-6"
+                scrollClassName="overflow-y-auto scrollbar-none px-6 pt-6"
                 className="flex flex-col items-center"
             >
                 <div className="w-3xl flex h-full max-w-full flex-col">
@@ -187,6 +309,7 @@ const ChatViewport = memo(function ChatViewport({
                     )}
                 </div>
             </StickToBottom.Content>
+            <ConversationScrubber />
             <ScrollToBottomButton />
             <StickOnUserMessage messages={messages} />
         </StickToBottom>
@@ -1360,7 +1483,6 @@ export default function App() {
                                 <section className="flex min-h-0 flex-1 flex-col">
                                     {chat.activeFile && (
                                         <SessionHeader
-                                            projectName={currentProjectDisplay || undefined}
                                             sessionTitle={activeTitle}
                                             contextIndicator={<ContextIndicator file={chat.activeFile} stats={sessionStats.stats} loading={sessionStats.loading} onRefresh={() => void sessionStats.refresh()} placement="below" />}
                                         />
