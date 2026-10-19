@@ -288,7 +288,7 @@ html[data-theme="light"] {
   position: fixed;
   inset: 0;
   z-index: 50;
-  background: transparent;
+  background: color-mix(in srgb, var(--color-phi-scrim) 32%, transparent);
 }
 
 .session-command-content {
@@ -302,7 +302,9 @@ html[data-theme="light"] {
   border-radius: 28px;
   corner-shape: squircle;
   corner-smoothing: 60%;
-  background: transparent;
+  /* Keep a translucent surface behind the blur. Fully transparent surfaces
+     can lose the backdrop effect in packaged Electron windows. */
+  background: color-mix(in srgb, var(--color-phi-bg-elevated) 78%, transparent);
   backdrop-filter: blur(24px);
   -webkit-backdrop-filter: blur(24px);
   box-shadow: 0 24px 80px var(--color-phi-shadow);
@@ -477,6 +479,22 @@ html[data-theme="light"] .phi-empty-logo {
   min-height: 0;
 }
 
+/* The live status swaps from the generic label to each short reasoning line. */
+@keyframes phi-reasoning-swap {
+  from {
+    opacity: 0;
+    transform: translateY(0.7em);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+.phi-reasoning-swap {
+  display: inline-block;
+  animation: phi-reasoning-swap 220ms var(--phi-ease-out) both;
+}
+
 /* Streaming work-item stagger */
 @keyframes phi-work-in {
   from {
@@ -542,6 +560,12 @@ html[data-theme="light"] .phi-empty-logo {
 }
 .phi-work-stagger > *:nth-child(5) {
   animation-delay: 120ms;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .phi-reasoning-swap {
+    animation: none;
+  }
 }
 
 /* Sonner toast enter — slide up + fade from the bottom-right corner */
@@ -945,6 +969,7 @@ html[data-theme="light"] .phi-tab-active {
     border: 3px solid transparent;
     background-clip: content-box;
   }
+
   *::-webkit-scrollbar-button,
   *::-webkit-scrollbar-button:single-button,
   *::-webkit-scrollbar-button:double-button,

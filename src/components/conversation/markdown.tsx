@@ -130,6 +130,35 @@ function MarkdownChunk({ text }: { text: string }) {
     );
 }
 
+export const InlineMarkdown = memo(function InlineMarkdown({ text }: { text: string }) {
+    const trimmed = useMemo(() => text.trim(), [text]);
+    if (!trimmed) return null;
+
+    return (
+        <span className="block min-w-0 truncate [&_strong]:font-semibold [&_em]:italic [&_del]:line-through">
+            <ReactMarkdown
+                remarkPlugins={remarkPlugins as any}
+                components={{
+                    p: ({ children }: any) => <>{children}</>,
+                    h1: ({ children }: any) => <>{children}</>,
+                    h2: ({ children }: any) => <>{children}</>,
+                    h3: ({ children }: any) => <>{children}</>,
+                    h4: ({ children }: any) => <>{children}</>,
+                    h5: ({ children }: any) => <>{children}</>,
+                    h6: ({ children }: any) => <>{children}</>,
+                    ul: ({ children }: any) => <>{children}</>,
+                    ol: ({ children }: any) => <>{children}</>,
+                    li: ({ children }: any) => <>{children} </>,
+                    br: () => <> </>,
+                    code: ({ children }: any) => <code className="font-mono text-[11px]">{children}</code>,
+                }}
+            >
+                {trimmed}
+            </ReactMarkdown>
+        </span>
+    );
+});
+
 export const Markdown = memo(function Markdown({ text }: { text: string }) {
     const trimmed = useMemo(() => text.trim(), [text]);
     if (!trimmed) return null;

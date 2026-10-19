@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import type { WorkItem } from "../../types/work";
 import { IconChevronDownFilled } from "@tabler/icons-react";
 import { ToolGroupLine, ToolLine, groupConsecutiveTools } from "./tool-line";
+import { InlineMarkdown } from "./markdown";
 import { Orb } from "@aicss/react";
 
 type Props = {
@@ -24,9 +25,17 @@ function formatDuration(ms: number): string {
     return rest === 0 ? `${hours}h` : `${hours}h ${rest}m`;
 }
 
+const THINKING_BLOCK_MAX_LENGTH = 180;
+
+function isLargeThinkingBlock(text: string): boolean {
+    const trimmed = text.trim();
+    return trimmed.length > THINKING_BLOCK_MAX_LENGTH || /\r?\n/.test(trimmed);
+}
+
 export function WorkingBlock({ items, isStreaming, variant, animateOnMount, startedAt, durationMs }: Props) {
     const isStreamingVariant = variant === "streaming";
-    const hasWork = items.length > 0;
+    const toolItems = useMemo(() => items.filter((item) => item.kind === "tool"), [items]);
+    const hasWork = toolItems.length > 0;
 
     // Completed work starts collapsed. The streaming block opens while work is
     // active; when it becomes history, it should not flash open again before
@@ -53,9 +62,21 @@ export function WorkingBlock({ items, isStreaming, variant, animateOnMount, star
         return () => window.clearInterval(id);
     }, [showLiveElapsed, startedAt]);
 
+    // Thinking is status text only. The expandable work section is reserved
+    // for actual tool calls.
+    const liveReasoning = useMemo(() => {
+        if (!isStreamingVariant) return null;
+        for (let i = items.length - 1; i >= 0; i--) {
+            const item = items[i];
+            if (item.kind === "thinking" && !isLargeThinkingBlock(item.text)) return item;
+        }
+        return null;
+    }, [isStreamingVariant, items]);
+    const visibleItems = toolItems;
+
     // Consecutive runs of the same groupable tool collapse to one line
     // ("Read 4 files" + chips). Command tools stay separate.
-    const entries = useMemo(() => groupConsecutiveTools(items), [items]);
+    const entries = useMemo(() => groupConsecutiveTools(visibleItems), [visibleItems]);
 
     if (!hasWork && !(isStreamingVariant && isStreaming)) return null;
 
@@ -64,10 +85,16 @@ export function WorkingBlock({ items, isStreaming, variant, animateOnMount, star
     let title: React.ReactNode;
     if (isStreamingVariant) {
         title = (
-            <span className="inline-flex items-baseline gap-1.5 leading-none">
-                <span className="font-medium tracking-wide">{isStreaming ? "Working on it" : "Working"}</span>
+            <span className="inline-flex min-w-0 items-baseline gap-1.5 overflow-hidden leading-none">
+                <span
+                    key={liveReasoning?.id ?? "working"}
+                    className="phi-reasoning-swap min-w-0 max-w-[min(70vw,32rem)] truncate font-medium tracking-wide"
+                    aria-live="polite"
+                >
+                    {isStreaming && liveReasoning ? <InlineMarkdown text={liveReasoning.text} /> : isStreaming ? "Working on it" : "Working"}
+                </span>
                 {liveElapsedMs !== null && (
-                    <span className="font-mono text-[11px] tabular-nums leading-none text-phi-text-muted">{formatDuration(liveElapsedMs)}</span>
+                    <span className="shrink-0 font-mono text-[11px] tabular-nums leading-none text-phi-text-muted">{formatDuration(liveElapsedMs)}</span>
                 )}
             </span>
         );
@@ -126,18 +153,7 @@ export function WorkingBlock({ items, isStreaming, variant, animateOnMount, star
                                 return <ToolGroupLine key={entry.map((t) => t.id).join("|")} items={entry} />;
                             }
                             const item = entry;
-                            if (item.kind === "thinking") {
-                                return (
-                                    <div
-                                        key={item.id}
-                                        className="whitespace-pre-wrap break-words text-[13px] leading-6 text-phi-text-tertiary"
-                                    >
-                                        {item.text}
-                                    </div>
-                                );
-                            }
-
-                            return <ToolLine key={item.id} item={item} />;
+                            return <ToolLine key={item.id} item={item as Extract<WorkItem, { kind: "tool" }>} />;
                         })}
                     </div>
                 </div>

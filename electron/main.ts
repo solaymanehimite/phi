@@ -20,6 +20,37 @@ declare const __dirname: string;
 
 const isDev = !app.isPackaged;
 const RENDERER_DEV_URL = process.env.ELECTRON_RENDERER_URL ?? "http://localhost:5173";
+
+// A packaged GUI app may outlive the terminal that launched it (for example
+// `appimage & disown`). Do not write to inherited stdout/stderr in that mode:
+// once the terminal closes, those file descriptors can fail with EIO and an
+// otherwise healthy Electron main process can crash.
+function safeLog(message: string): void {
+    if (!isDev) return;
+    try {
+        console.log(message);
+    } catch {
+        // The parent terminal may have gone away while the app is running.
+    }
+}
+
+function safeError(message: string): void {
+    if (!isDev) return;
+    try {
+        console.error(message);
+    } catch {
+        // The parent terminal may have gone away while the app is running.
+    }
+}
+
+function safeWrite(stream: NodeJS.WriteStream, message: string): void {
+    if (!isDev) return;
+    try {
+        stream.write(message);
+    } catch {
+        // Logging must never take down the app.
+    }
+}
 const DEV_SERVER_PORT = Number.parseInt(process.env.PHI_SERVER_PORT ?? "3001", 10) || 3001;
 
 let mainWindow: BrowserWindow | null = null;
@@ -140,33 +171,41 @@ async function startSidecar(): Promise<number> {
         // Dev flow mirrors `tauri:dev`: the Express server runs separately
         // (`bun run dev:server` on 3001). Main just points the renderer at it.
         sidecarPort = DEV_SERVER_PORT;
-        console.log(`[phi] dev mode — using external server on port ${sidecarPort}`);
+        safeLog(`[phi] dev mode — using external server on port ${sidecarPort}`);
         return sidecarPort;
     }
     const bin = findSidecarBinary();
     if (!bin) {
-        console.error("[phi] no sidecar binary found — renderer will show FatalState until a server is reachable");
+        safeError("[phi] no sidecar binary found — renderer will show FatalState until a server is reachable");
         sidecarPort = DEV_SERVER_PORT;
         return sidecarPort;
     }
     sidecarPort = await pickFreePort();
-    console.log(`[phi] spawning sidecar ${bin} on port ${sidecarPort}`);
-    sidecar = spawn(bin, [String(sidecarPort)], { stdio: ["ignore", "pipe", "pipe"] });
-    sidecar.stdout?.on("data", (d) => process.stdout.write(`[sidecar] ${d}`));
-    sidecar.stderr?.on("data", (d) => process.stderr.write(`[sidecar] ${d}`));
+    safeLog(`[phi] spawning sidecar ${bin} on port ${sidecarPort}`);
+
+    // There is no useful terminal to forward logs to in a packaged GUI app.
+    // Ignoring the child's stdio also prevents writes to a terminal that was
+    // closed after launching the AppImage with `& disown`.
+    sidecar = spawn(bin, [String(sidecarPort)], {
+        stdio: isDev ? ["ignore", "pipe", "pipe"] : ["ignore", "ignore", "ignore"],
+    });
+    if (isDev) {
+        sidecar.stdout?.on("data", (d) => safeWrite(process.stdout, `[sidecar] ${d}`));
+        sidecar.stderr?.on("data", (d) => safeWrite(process.stderr, `[sidecar] ${d}`));
+    }
     sidecar.on("exit", (code, signal) => {
-        console.error(`[phi] sidecar exited code=${code} signal=${signal}`);
+        safeError(`[phi] sidecar exited code=${code} signal=${signal}`);
         sidecar = null;
     });
     sidecar.on("error", (err) => {
-        console.error(`[phi] sidecar spawn failed: ${err.message}`);
+        safeError(`[phi] sidecar spawn failed: ${err.message}`);
         sidecar = null;
     });
     try {
         await waitForHealth(sidecarPort);
-        console.log(`[phi] sidecar healthy on port ${sidecarPort}`);
+        safeLog(`[phi] sidecar healthy on port ${sidecarPort}`);
     } catch (err) {
-        console.error(`[phi] ${(err as Error).message}`);
+        safeError(`[phi] ${(err as Error).message}`);
     }
     return sidecarPort;
 }
@@ -193,22 +232,22 @@ function createWindow(): void {
         // Forward renderer console to the terminal — proves the React app boots
         // inside Electron and surfaces API/port errors without opening devtools.
         mainWindow.webContents.on("console-message", (_e, level, message, line, sourceId) => {
-            console.log(`[renderer:${level}] ${message} (${sourceId}:${line})`);
+            safeLog(`[renderer:${level}] ${message} (${sourceId}:${line})`);
         });
         mainWindow.webContents.on("did-fail-load", (_e, code, desc) =>
-            console.error(`[phi] renderer load failed ${code}: ${desc}`),
+            safeError(`[phi] renderer load failed ${code}: ${desc}`),
         );
-        mainWindow.webContents.on("did-finish-load", () => console.log("[phi] renderer loaded"));
+        mainWindow.webContents.on("did-finish-load", () => safeLog("[phi] renderer loaded"));
         void mainWindow.loadURL(RENDERER_DEV_URL);
         if (process.env.ELECTRON_OPEN_DEVTOOLS === "1") mainWindow.webContents.openDevTools({ mode: "detach" });
     } else {
         mainWindow.webContents.on("console-message", (_e, level, message, line, sourceId) => {
-            console.log(`[renderer:${level}] ${message} (${sourceId}:${line})`);
+            safeLog(`[renderer:${level}] ${message} (${sourceId}:${line})`);
         });
         mainWindow.webContents.on("did-fail-load", (_e, code, desc) =>
-            console.error(`[phi] renderer load failed ${code}: ${desc}`),
+            safeError(`[phi] renderer load failed ${code}: ${desc}`),
         );
-        mainWindow.webContents.on("did-finish-load", () => console.log("[phi] renderer loaded"));
+        mainWindow.webContents.on("did-finish-load", () => safeLog("[phi] renderer loaded"));
         void mainWindow.loadFile(path.join(__dirname, "..", "dist", "index.html"));
     }
 
@@ -253,9 +292,9 @@ function createWindow(): void {
                         const img = await mainWindow!.capturePage();
                         const { writeFileSync } = await import("node:fs");
                         writeFileSync(out, img.toPNG());
-                        console.log(`[phi] smoke screenshot -> ${out}`);
+                        safeLog(`[phi] smoke screenshot -> ${out}`);
                     } catch (err) {
-                        console.error(`[phi] smoke failed: ${(err as Error).message}`);
+                        safeError(`[phi] smoke failed: ${(err as Error).message}`);
                     } finally {
                         forceClose = true;
                         app.quit();
@@ -339,7 +378,7 @@ async function init(): Promise<void> {
         try {
             await waitForRenderer(RENDERER_DEV_URL);
         } catch (err) {
-            console.error(`[phi] ${(err as Error).message} — opening window anyway`);
+            safeError(`[phi] ${(err as Error).message} — opening window anyway`);
         }
     }
     createWindow();
