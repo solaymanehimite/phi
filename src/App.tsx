@@ -110,6 +110,8 @@ const ConversationScrubber = memo(function ConversationScrubber() {
         };
     }, [scrollRef]);
 
+    const scrubberHeight = Math.max(32, (ridgeCount - 1) * 8 + 2);
+
     const progressAt = (clientY: number) => {
         const rect = trackRef.current?.getBoundingClientRect();
         if (!rect) return 0;
@@ -177,10 +179,11 @@ const ConversationScrubber = memo(function ConversationScrubber() {
                     scrollToProgress(1);
                 }
             }}
-            className="absolute right-0 top-1/2 z-20 h-52 w-12 -translate-y-1/2 cursor-grab touch-none outline-none active:cursor-grabbing focus-visible:ring-1 focus-visible:ring-phi-accent/50"
+            className="absolute right-0 top-1/2 z-20 w-12 -translate-y-1/2 cursor-grab touch-none outline-none active:cursor-grabbing focus-visible:ring-1 focus-visible:ring-phi-accent/50"
+            style={{ height: scrubberHeight }}
         >
             <div className="pointer-events-none absolute inset-0">
-                <div className="absolute inset-x-0 inset-y-0 flex items-center flex-col justify-between py-0.5">
+                <div className="absolute inset-x-0 inset-y-0 flex flex-col items-center justify-center gap-2">
                     {Array.from({ length: ridgeCount }, (_, index) => (
                         <span key={index} className="h-px w-4 bg-phi-text-muted/70" />
                     ))}
