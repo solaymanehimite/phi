@@ -32,6 +32,7 @@ import { useSessionFlags } from "./hooks/useSessionFlags";
 import { useProjects, type NewProjectInput } from "./hooks/useProjects";
 import { resolveProjectOptions, sessionsForProject, type Project, type ProjectOption } from "./lib/projects";
 import { useChat } from "./hooks/useChat";
+import { useStreamSnapshot, type StreamStore } from "./lib/stream-store";
 import { useCompaction } from "./hooks/useCompaction";
 import { clearQueueFor, useMessageQueue } from "./hooks/useMessageQueue";
 import { QueueIndicator } from "./components/queue-indicator";
@@ -95,7 +96,7 @@ const ConversationScrubber = memo(function ConversationScrubber() {
             const maxScroll = scrollElement.scrollHeight - scrollElement.clientHeight;
             setHasOverflow(maxScroll > 1);
             setProgress(maxScroll > 0 ? scrollElement.scrollTop / maxScroll : 1);
-            setRidgeCount(Math.min(36, Math.max(24, Math.ceil(scrollElement.scrollHeight / 240))));
+            setRidgeCount(Math.min(36, Math.max(4, Math.ceil(scrollElement.scrollHeight / 240))));
         };
 
         sync();
@@ -226,7 +227,7 @@ const ChatViewport = memo(function ChatViewport({
     error,
     messages,
     isStreaming,
-    streaming,
+    streamStore,
     inlineError,
     onContinue,
     onDismiss,
@@ -237,17 +238,13 @@ const ChatViewport = memo(function ChatViewport({
     error: string | null;
     messages: unknown[];
     isStreaming: boolean;
-    streaming: {
-        text: string;
-        workItems: import("./types/work").WorkItem[];
-        error?: string;
-        startedAt?: number | null;
-    };
+    streamStore: StreamStore;
     inlineError?: InlineError | null;
     onContinue?: () => void;
     onDismiss?: () => void;
     onUndo?: () => void;
 }) {
+    const streaming = useStreamSnapshot(streamStore, activeFile);
     if (!activeFile) return null;
     if (loading) {
         return (
@@ -1519,7 +1516,7 @@ export default function App() {
                                             error={chat.error}
                                             messages={messages}
                                             isStreaming={chat.isStreaming}
-                                            streaming={chat.streaming}
+                                            streamStore={chat.streamStore}
                                             inlineError={chat.activeFile ? inlineErrors[chat.activeFile] ?? null : null}
                                             onContinue={handleContinue}
                                             onDismiss={() => chat.activeFile && setInlineFor(chat.activeFile, null)}

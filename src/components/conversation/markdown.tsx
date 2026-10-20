@@ -1,17 +1,35 @@
 import { memo, useCallback, useMemo, useState } from "react";
 import ReactMarkdown from "react-markdown";
+import rehypeKatex from "rehype-katex";
 import remarkGfm from "remark-gfm";
+import remarkMath from "remark-math";
 import { IconCheckFilled, IconCopyFilled } from "@tabler/icons-react";
 import { LazyHighlightedCode } from "../code-theme";
 import { Button } from "../ui/button";
 import { InlineCode } from "../ui/code";
 import { FileChip, parseInlineFilePath } from "../ui/file-chip";
 
-// Single shared instance so remarkGfm isn't recreated per render
-const remarkPlugins = [remarkGfm] as const;
+// Single shared instances so markdown plugins aren't recreated per render
+const remarkPlugins = [remarkGfm, remarkMath] as const;
+const rehypePlugins = [rehypeKatex] as const;
 
 const OUTLIER_THRESHOLD = 3500;
 const CHUNK_SIZE = 2500;
+
+// remark-math uses $ / $$ delimiters, while agents commonly emit LaTeX's
+// \\(inline\\) and \\[block\\] delimiters. Normalize only markdown text,
+// leaving fenced code blocks untouched.
+function normalizeMathDelimiters(text: string): string {
+    return text
+        .split(/(```[\s\S]*?```)/g)
+        .map((segment, index) => {
+            if (index % 2 === 1) return segment;
+            return segment
+                .replace(/\\\[([\s\S]*?)\\\]/g, (_, math: string) => `$$\n${math.trim()}\n$$`)
+                .replace(/\\\(([\s\S]*?)\\\)/g, (_, math: string) => `$${math}$`);
+        })
+        .join("");
+}
 
 function chunkByParagraphs(text: string, max = CHUNK_SIZE): string[] {
     const paras = text.split(/\n\n+/);
@@ -122,6 +140,7 @@ function MarkdownChunk({ text }: { text: string }) {
         <div className={PROSE}>
             <ReactMarkdown
                 remarkPlugins={remarkPlugins as any}
+                rehypePlugins={rehypePlugins as any}
                 components={mdComponents}
             >
                 {text}
@@ -131,13 +150,14 @@ function MarkdownChunk({ text }: { text: string }) {
 }
 
 export const InlineMarkdown = memo(function InlineMarkdown({ text }: { text: string }) {
-    const trimmed = useMemo(() => text.trim(), [text]);
+    const trimmed = useMemo(() => normalizeMathDelimiters(text.trim()), [text]);
     if (!trimmed) return null;
 
     return (
         <span className="block min-w-0 truncate [&_strong]:font-semibold [&_em]:italic [&_del]:line-through">
             <ReactMarkdown
                 remarkPlugins={remarkPlugins as any}
+                rehypePlugins={rehypePlugins as any}
                 components={{
                     p: ({ children }: any) => <>{children}</>,
                     h1: ({ children }: any) => <>{children}</>,
@@ -160,7 +180,7 @@ export const InlineMarkdown = memo(function InlineMarkdown({ text }: { text: str
 });
 
 export const Markdown = memo(function Markdown({ text }: { text: string }) {
-    const trimmed = useMemo(() => text.trim(), [text]);
+    const trimmed = useMemo(() => normalizeMathDelimiters(text.trim()), [text]);
     if (!trimmed) return null;
 
     // Lighten outlier: huge messages chunked so no single ReactMarkdown parses >3.5KB at once
@@ -206,6 +226,7 @@ export const Markdown = memo(function Markdown({ text }: { text: string }) {
         <div className={PROSE}>
             <ReactMarkdown
                 remarkPlugins={remarkPlugins as any}
+                rehypePlugins={rehypePlugins as any}
                 components={mdComponents}
             >
                 {trimmed}

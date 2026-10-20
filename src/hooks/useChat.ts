@@ -12,19 +12,18 @@ import {
   responseContainsNotices,
   withNoticesAppended,
   type StreamDraft,
-  type StreamingState,
 } from "../lib/stream-reducer";
+import { createStreamStore } from "../lib/stream-store";
 
-// Effect handle for one in-flight stream. The rAF id stays here in the hook;
-// everything else lives in the pure `StreamDraft` owned by stream-reducer.
+// Text and thinking are coalesced before rendering. Tool boundaries and
+// errors still commit immediately so they never wait on this timer.
+const STREAM_FLUSH_MS = 40;
 type PendingEntry = {
   draft: StreamDraft;
-  rafId: number | null;
+  timerId: number | null;
 };
 
 const MAX_CACHE = 20;
-
-const emptyStream = emptyStreamState;
 
 /**
  * Keeps transient chat state per persisted session file. The selected file only
@@ -37,7 +36,7 @@ export function useChat() {
   const dataRef = useRef<SessionMessagesResponse | null>(null);
   const [loadingFiles, setLoadingFiles] = useState<Set<string>>(new Set());
   const [errorsByFile, setErrorsByFile] = useState<Record<string, string>>({});
-  const [streamsByFile, setStreamsByFile] = useState<Record<string, StreamingState>>({});
+  const [streamStore] = useState(createStreamStore);
   const [runningFiles, setRunningFiles] = useState<Set<string>>(new Set());
   const runningFilesRef = useRef<Set<string>>(new Set());
 
@@ -108,17 +107,13 @@ export function useChat() {
     setRunningFiles(next);
   }, []);
 
-  const updateStream = useCallback((file: string, update: (current: StreamingState) => StreamingState) => {
-    setStreamsByFile((previous) => ({
-      ...previous,
-      [file]: update(previous[file] ?? emptyStream()),
-    }));
-  }, []);
+  const updateStream = streamStore.update;
 
   const flushStream = useCallback((file: string) => {
     const entry = pendingStreamsRef.current.get(file);
     if (!entry) return;
-    entry.rafId = null;
+    if (entry.timerId !== null) window.clearTimeout(entry.timerId);
+    entry.timerId = null;
     const captured = entry.draft;
     if (!captured.text && captured.thinking.length === 0) return;
     entry.draft = { ...captured, text: "", thinking: [] };
@@ -127,18 +122,18 @@ export function useChat() {
 
   const scheduleFlush = useCallback((file: string) => {
     const pending = pendingStreamsRef.current.get(file);
-    if (!pending || pending.rafId !== null) return;
-    pending.rafId = requestAnimationFrame(() => flushStream(file));
+    if (!pending || pending.timerId !== null) return;
+    pending.timerId = window.setTimeout(() => flushStream(file), STREAM_FLUSH_MS);
   }, [flushStream]);
 
   const clearPendingStream = useCallback((file: string) => {
     const pending = pendingStreamsRef.current.get(file);
-    if (pending?.rafId !== null && pending?.rafId !== undefined) cancelAnimationFrame(pending.rafId);
+    if (pending?.timerId !== null && pending?.timerId !== undefined) window.clearTimeout(pending.timerId);
     pendingStreamsRef.current.delete(file);
   }, []);
 
   // Single code path for prompt and continuation events. Pure reduction lives
-  // in `stream-reducer`; this only plumbs refs, stream state, and rAF.
+  // in `stream-reducer`; this only plumbs refs, stream state, and timed flushes.
   const applyStreamEvent = useCallback((file: string, event: SseEvent) => {
     const entry = pendingStreamsRef.current.get(file);
     if (!entry) return;
@@ -154,10 +149,10 @@ export function useChat() {
   const beginStream = useCallback((file: string) => {
     const controller = new AbortController();
     controllersRef.current.set(file, controller);
-    pendingStreamsRef.current.set(file, { draft: createPendingStream(), rafId: null });
+    pendingStreamsRef.current.set(file, { draft: createPendingStream(), timerId: null });
     noticesRef.current.set(file, []);
     seenAgentRef.current.delete(file);
-    updateStream(file, () => ({ ...emptyStream(), startedAt: Date.now() }));
+    updateStream(file, () => ({ ...emptyStreamState(), startedAt: Date.now() }));
     markRunning(file, true);
     setFileError(file, null);
     return controller;
@@ -188,7 +183,7 @@ export function useChat() {
       noticesRef.current.delete(file);
       seenAgentRef.current.delete(file);
       markRunning(file, false);
-      setStreamsByFile((previous) => ({ ...previous, [file]: emptyStream() }));
+      streamStore.remove(file);
     }
   }, [clearPendingStream, flushStream, markRunning, storeResponse, updateCachedResponse]);
 
@@ -274,10 +269,7 @@ export function useChat() {
     seenAgentRef.current.delete(file);
     cacheRef.current.delete(file);
     markRunning(file, false);
-    setStreamsByFile((previous) => {
-      const { [file]: _removed, ...rest } = previous;
-      return rest;
-    });
+    streamStore.remove(file);
     setErrorsByFile((previous) => {
       const { [file]: _removed, ...rest } = previous;
       return rest;
@@ -449,7 +441,6 @@ export function useChat() {
   const activeFile = activeFileState;
   const data = activeFile ? (dataState?.file === activeFile ? dataState : cacheRef.current.get(activeFile) ?? null) : null;
   const isStreaming = Boolean(activeFile && runningFiles.has(activeFile));
-  const streaming = activeFile ? streamsByFile[activeFile] ?? emptyStream() : emptyStream();
   const loading = Boolean(activeFile && loadingFiles.has(activeFile));
   const error = activeFile ? errorsByFile[activeFile] ?? null : null;
 
@@ -460,7 +451,7 @@ export function useChat() {
     error,
     errorsByFile,
     isStreaming,
-    streaming,
+    streamStore,
     runningFiles,
     openFile,
     prepareSwitch,

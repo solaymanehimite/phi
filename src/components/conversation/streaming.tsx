@@ -1,36 +1,15 @@
-import { memo, useEffect, useState } from "react";
+import { memo } from "react";
 import { Alert } from "../ui/alert";
 import { WorkingBlock } from "./working-block";
 import type { WorkItem } from "../../types/work";
 
 function StreamingText({ text }: { text: string }) {
-    const [shown, setShown] = useState("");
-
-    useEffect(() => {
-        let cancelled = false;
-        const tick = () => {
-            if (cancelled) return;
-            setShown((current) => {
-                if (current.length >= text.length) return text;
-                return text.slice(0, current.length + 2);
-            });
-        };
-
-        tick();
-        const interval = window.setInterval(tick, 9);
-        return () => {
-            cancelled = true;
-            window.clearInterval(interval);
-        };
-    }, [text]);
-
-    const isCatchingUp = shown.length < text.length;
     return (
         <p className="max-w-full whitespace-pre-wrap break-words text-[14px] leading-[19px] text-phi-text-secondary">
-            {shown}
+            {text}
             <span
                 aria-hidden="true"
-                className={`ml-0.5 inline-block h-[1.05em] w-2 align-text-bottom bg-phi-text-primary motion-reduce:animate-none ${isCatchingUp ? "" : "animate-pulse"}`}
+                className="ml-0.5 inline-block h-[1.05em] w-2 align-text-bottom animate-pulse bg-phi-text-primary motion-reduce:animate-none"
             />
         </p>
     );
