@@ -1,12 +1,11 @@
-import { useCallback, useEffect, useMemo, useState, type ComponentType, type ReactNode } from "react";
+import { lazy, Suspense, useMemo, useState, type ComponentType } from "react";
 import { useTheme, useEffectiveTheme, type Theme } from "../hooks/useTheme";
 import { useCustomThemes, setActiveCustomThemeId, clearActiveCustomTheme } from "../hooks/useCustomThemes";
 import { formatThemeForAppCss } from "../lib/custom-themes";
 import type { CustomTheme } from "../lib/custom-themes";
-import { IconBox, IconCheckFilled, IconChevronDownFilled, IconCode, IconKeyFilled, IconPaletteFilled, IconPencil, IconPlus, IconTrash } from "@tabler/icons-react";
+import { IconBox, IconCheckFilled, IconChevronDownFilled, IconCode, IconKeyFilled, IconPaletteFilled, IconPencil, IconTrash } from "@tabler/icons-react";
 import { useClose } from "@headlessui/react";
-import { Alert } from "./ui/alert";
-import { Button, buttonClass } from "./ui/button";
+import { buttonClass } from "./ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "./ui/dropdown-menu";
 import { Input } from "./ui/input";
 import { MenuItem } from "./ui/menu";
@@ -14,11 +13,13 @@ import { NavItem } from "./ui/nav-item";
 import { Popover, PopoverContent, PopoverTrigger } from "./ui/popover";
 import { Highlight, type PrismTheme } from "prism-react-renderer";
 import { CODE_THEMES, setCodeTheme, useCodeTheme, type CodeThemeId } from "./code-theme";
-import { ThemeEditorToggle } from "./dev/ThemeEditor";
-import { ProviderLogo } from "./provider-logo";
-import { Switch } from "./ui/switch";
-import { listProviders, deleteProvider, testProvider, listPiAuth, listSkills, toggleSkill, type ProviderRow, type PiAuthRow, type SkillRow } from "../lib/api";
-
+import { ThemeEditorToggle } from "./dev/theme-editor-toggle";
+const SkillsTab = lazy(() =>
+    import("./settings-agent-tabs").then((module) => ({ default: module.SkillsTab })),
+);
+const ProvidersTab = lazy(() =>
+    import("./settings-agent-tabs").then((module) => ({ default: module.ProvidersTab })),
+);
 
 export type SettingsSection = "appearance" | "providers" | "skills";
 
@@ -73,7 +74,15 @@ export function SettingsPanel({
                         <h1 className="text-[20px] font-semibold tracking-[-0.02em] text-phi-text-primary">{active.label}</h1>
                         <p className="mt-1 text-[12px] text-phi-text-muted">{active.description}</p>
                     </header>
-                    {section === "appearance" ? <AppearanceTab /> : section === "skills" ? <SkillsTab cwd={cwd} /> : <ProvidersTab onChanged={onProvidersChanged} onAddProvider={onAddProvider} providersVersion={providersVersion} />}
+                    {section === "appearance" ? (
+                        <AppearanceTab />
+                    ) : (
+                        <Suspense fallback={<p className="text-[12px] text-phi-text-muted">Loading…</p>}>
+                            {section === "skills"
+                                ? <SkillsTab cwd={cwd} />
+                                : <ProvidersTab onChanged={onProvidersChanged} onAddProvider={onAddProvider} providersVersion={providersVersion} />}
+                        </Suspense>
+                    )}
                 </div>
             </div>
         </div>
@@ -413,166 +422,6 @@ function AppearanceTab() {
             <CodeThemeSection />
 
             <ThemeEditorToggle />
-        </div>
-    );
-}
-
-
-/** Attached settings rows — one rounded object, same sizing as the Advanced Settings toggle row. */
-function ListGroup({ children }: { children: ReactNode }) {
-    return (
-        <div className="overflow-hidden rounded-2xl bg-phi-bg-surface">{children}</div>
-    );
-}
-
-const LIST_ROW_CLASS = "group relative flex min-h-[60px] w-full items-center gap-4 px-4 py-3 text-left hover:bg-phi-overlay-hover";
-
-function ListRow({ children }: { children: ReactNode }) {
-    return <div className={LIST_ROW_CLASS}>{children}</div>;
-}
-
-function SkillsTab({ cwd }: { cwd?: string }) {
-    const [skills, setSkills] = useState<SkillRow[]>([]);
-    const [loading, setLoading] = useState(true);
-    const [error, setError] = useState<string | null>(null);
-    const [toggling, setToggling] = useState<string | null>(null);
-
-    const refresh = useCallback(async () => {
-        setLoading(true);
-        try {
-            const r = await listSkills(cwd || undefined);
-            setSkills(r.skills);
-            setError(null);
-        } catch (e) {
-            setError(e instanceof Error ? e.message : String(e));
-        } finally {
-            setLoading(false);
-        }
-    }, [cwd]);
-    useEffect(() => { void refresh(); }, [refresh]);
-
-    const handleToggle = useCallback(async (skill: SkillRow) => {
-        const next = !skill.enabled;
-        setToggling(skill.filePath);
-        setSkills((prev) => prev.map((s) => (s.filePath === skill.filePath ? { ...s, enabled: next } : s)));
-        try {
-            await toggleSkill(skill.filePath, next, cwd || undefined);
-        } catch (e) {
-            setSkills((prev) => prev.map((s) => (s.filePath === skill.filePath ? { ...s, enabled: !next } : s)));
-            setError(e instanceof Error ? e.message : String(e));
-        } finally {
-            setToggling(null);
-        }
-    }, [cwd]);
-
-    if (loading) return <p className="text-[12px] text-phi-text-muted">Loading…</p>;
-
-    return (
-        <div>
-            {error && <Alert variant="error">{error}</Alert>}
-            {skills.length === 0 ? (
-                <p className="rounded-lg border border-dashed border-phi-border px-3 py-3 text-[12px] text-phi-text-muted">No skills found — add SKILL.md files under <span className="font-mono">~/.pi/agent/skills</span>.</p>
-            ) : (
-                <ListGroup>
-                    {skills.map((skill) => (
-                        <label key={skill.filePath} className={`${LIST_ROW_CLASS} cursor-pointer`}>
-                            <span aria-hidden="true" className="grid size-6 shrink-0 place-items-center text-phi-text-tertiary"><IconBox className="size-5" /></span>
-                            <div className="min-w-0 flex-1" title={skill.filePath}>
-                                <div className="truncate text-[13px] font-medium text-phi-text-primary">{skill.name}</div>
-                                {skill.description && <div className="mt-0.5 truncate text-[12px] text-phi-text-muted">{skill.description}</div>}
-                            </div>
-                            <span className="shrink-0 text-[13px] text-phi-text-muted">{skill.scope === "project" ? "Project" : "Personal"}</span>
-                            <Switch checked={skill.enabled} disabled={toggling === skill.filePath} label={`${skill.enabled ? "Disable" : "Enable"} skill ${skill.name}`} onClick={() => void handleToggle(skill)} />
-                        </label>
-                    ))}
-                </ListGroup>
-            )}
-        </div>
-    );
-}
-
-function ProvidersTab({ onChanged, onAddProvider, providersVersion }: { onChanged?: () => void; onAddProvider: () => void; providersVersion: number }) {
-    const [providers, setProviders] = useState<ProviderRow[]>([]);
-    const [piProviders, setPiProviders] = useState<PiAuthRow[]>([]);
-    const [loading, setLoading] = useState(true);
-    const [piLoading, setPiLoading] = useState(true);
-    const [error, setError] = useState<string | null>(null);
-    const [testing, setTesting] = useState<string | null>(null);
-    const [testResult, setTestResult] = useState<Record<string, string>>({});
-
-    const refresh = useCallback(async () => {
-        setLoading(true);
-        setPiLoading(true);
-        try { const r = await listProviders(); setProviders(r.providers); setError(null); } catch (e) { setError(e instanceof Error ? e.message : String(e)); } finally { setLoading(false); }
-        try { const r = await listPiAuth(); setPiProviders(r.providers); } catch { setPiProviders([]); } finally { setPiLoading(false); }
-    }, []);
-    // Refresh on mount and whenever a provider is saved via the shared menu.
-    useEffect(() => { void refresh(); }, [refresh, providersVersion]);
-
-    const handleTest = useCallback(async (id: string) => {
-        setTesting(id); setTestResult((p) => ({ ...p, [id]: "" }));
-        try { await testProvider(id); setTestResult((p) => ({ ...p, [id]: "OK" })); } catch (e) { setTestResult((p) => ({ ...p, [id]: e instanceof Error ? e.message : String(e) })); } finally { setTesting(null); }
-    }, []);
-
-    const handleDelete = useCallback(async (id: string) => {
-        if (!confirm(`Delete provider ${id}?`)) return;
-        try { await deleteProvider(id); await refresh(); onChanged?.(); } catch (e) { setError(e instanceof Error ? e.message : String(e)); }
-    }, [refresh, onChanged]);
-
-    return (
-        <div className="space-y-4">
-            {error && <Alert variant="error">{error}</Alert>}
-
-            <ListGroup>
-                {piProviders.map((p) => (
-                    <ListRow key={`pi-${p.id}`}>
-                        <ProviderLogo id={p.id} name={p.name} />
-                        <div className="min-w-0 flex-1" title={p.source ? `${p.type} · ${p.source}` : p.type}>
-                            <div className="truncate text-[13px] font-medium text-phi-text-primary">{p.name}</div>
-                            <div className="mt-0.5 truncate text-[12px] text-phi-text-muted">{p.source ? `${p.type} · ${p.source}` : p.type}</div>
-                        </div>
-                    </ListRow>
-                ))}
-                {loading ? (
-                    <ListRow>
-                        <div className="min-w-0 flex-1">
-                            <div className="text-[12px] text-phi-text-muted">Loading…</div>
-                        </div>
-                    </ListRow>
-                ) : (
-                    providers.map((p) => (
-                        <ListRow key={`custom-${p.id}`}>
-                            <ProviderLogo id={p.id} name={p.label || p.id} />
-                            <div className="min-w-0 flex-1" title={p.baseUrl}>
-                                <div className="truncate text-[13px] font-medium text-phi-text-primary">{p.label || p.id}</div>
-                                <div className="mt-0.5 truncate font-mono text-[12px] text-phi-text-muted">{p.baseUrl}</div>
-                                <div className="mt-0.5 flex items-center gap-1 text-[11px]">
-                                    <span className="font-mono text-phi-text-muted" title="The full key stays on the sidecar. This masked value is all the UI ever sees.">{p.maskedKey || (p.hasKey ? "••••" : "no key saved")}</span>
-                                </div>
-                                {testResult[p.id] && <div className={`mt-1 text-[11px] ${testResult[p.id] === "OK" ? "text-phi-thinking-low" : "text-phi-error-text"}`}>{testResult[p.id]}</div>}
-                            </div>
-                            <div className="flex shrink-0 items-center gap-1">
-                                <Button onClick={() => void handleTest(p.id)} disabled={testing === p.id} variant="secondary" size="xs" className="!text-[11px]">{testing === p.id ? "Testing…" : "Test connection"}</Button>
-                                <Button onClick={() => void handleDelete(p.id)} variant="secondary" size="xs" className="!border-phi-error-border !bg-phi-error-bg !text-[11px] !text-phi-error-text hover:!bg-phi-error-bg">Delete</Button>
-                            </div>
-                        </ListRow>
-                    ))
-                )}
-                {!piLoading && !loading && piProviders.length === 0 && providers.length === 0 && (
-                    <ListRow>
-                        <div className="min-w-0 flex-1">
-                            <div className="text-[12px] text-phi-text-muted">No providers yet — run <span className="font-mono">pi login</span> in the terminal.</div>
-                        </div>
-                    </ListRow>
-                )}
-                <button
-                    onClick={onAddProvider}
-                    className="flex min-h-[60px] w-full items-center gap-3 border-t border-phi-border px-6 py-3 text-left text-[13px] font-medium text-phi-text-muted hover:bg-phi-overlay-hover hover:text-phi-text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-phi-accent/40"
-                >
-                    <IconPlus className="size-4 shrink-0" />
-                    Add provider
-                </button>
-            </ListGroup>
         </div>
     );
 }

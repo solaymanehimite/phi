@@ -2,8 +2,6 @@ import { useEffect, useMemo, useState } from "react";
 import type { WorkItem } from "../../types/work";
 import { IconChevronDownFilled } from "@tabler/icons-react";
 import { ToolGroupLine, ToolLine, groupConsecutiveTools } from "./tool-line";
-import { InlineMarkdown } from "./markdown";
-import { Orb } from "@aicss/react";
 
 type Props = {
     items: WorkItem[];
@@ -23,13 +21,6 @@ function formatDuration(ms: number): string {
     const hours = Math.floor(minutes / 60);
     const rest = minutes % 60;
     return rest === 0 ? `${hours}h` : `${hours}h ${rest}m`;
-}
-
-const THINKING_BLOCK_MAX_LENGTH = 180;
-
-function isLargeThinkingBlock(text: string): boolean {
-    const trimmed = text.trim();
-    return trimmed.length > THINKING_BLOCK_MAX_LENGTH || /\r?\n/.test(trimmed);
 }
 
 export function WorkingBlock({ items, isStreaming, variant, animateOnMount, startedAt, durationMs }: Props) {
@@ -62,16 +53,6 @@ export function WorkingBlock({ items, isStreaming, variant, animateOnMount, star
         return () => window.clearInterval(id);
     }, [showLiveElapsed, startedAt]);
 
-    // Thinking is status text only. The expandable work section is reserved
-    // for actual tool calls.
-    const liveReasoning = useMemo(() => {
-        if (!isStreamingVariant) return null;
-        for (let i = items.length - 1; i >= 0; i--) {
-            const item = items[i];
-            if (item.kind === "thinking" && !isLargeThinkingBlock(item.text)) return item;
-        }
-        return null;
-    }, [isStreamingVariant, items]);
     const visibleItems = toolItems;
 
     // Consecutive runs of the same groupable tool collapse to one line
@@ -87,11 +68,10 @@ export function WorkingBlock({ items, isStreaming, variant, animateOnMount, star
         title = (
             <span className="inline-flex min-w-0 items-baseline gap-1.5 overflow-hidden leading-none">
                 <span
-                    key={liveReasoning?.id ?? "working"}
-                    className="phi-reasoning-swap min-w-0 max-w-[min(70vw,32rem)] truncate font-medium tracking-wide"
+                    className="min-w-0 max-w-[min(70vw,32rem)] truncate font-medium tracking-wide"
                     aria-live="polite"
                 >
-                    {isStreaming && liveReasoning ? <InlineMarkdown text={liveReasoning.text} /> : isStreaming ? "Working on it" : "Working"}
+                    {isStreaming ? "Thinking..." : "Thinking"}
                 </span>
                 {liveElapsedMs !== null && (
                     <span className="shrink-0 font-mono text-[11px] tabular-nums leading-none text-phi-text-muted">{formatDuration(liveElapsedMs)}</span>
@@ -129,7 +109,6 @@ export function WorkingBlock({ items, isStreaming, variant, animateOnMount, star
                     </>
                 ) : (
                     <>
-                        {isStreaming && <Orb variant="S3" size={24} className="-translate-y-px shrink-0" />}
                         {title}
                         <IconChevronDownFilled
                             className={`size-4 shrink-0 -translate-y-px text-phi-text-muted transition-all duration-200 ${open ? "rotate-0" : "-rotate-90"} opacity-0 group-hover:opacity-100 group-focus-visible:opacity-100`}

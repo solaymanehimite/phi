@@ -1,19 +1,15 @@
-import { memo, useCallback, useEffect, useMemo, useRef, useState, lazy, Suspense } from "react";
-import { StickToBottom, useStickToBottomContext } from "use-stick-to-bottom";
+import { useCallback, useEffect, useMemo, useRef, useState, lazy, Suspense } from "react";
 import { Composer } from "./components/composer";
 import { DirectoryPicker } from "./components/directory-picker";
 import { ModelSelector } from "./components/model-selector";
 import { ThinkingEffortSelector } from "./components/thinking-effort";
 import { SessionUsageButton, SessionUsagePanel } from "./components/session-usage-panel";
-import { Conversation } from "./components/conversation/conversation";
-import { Streaming } from "./components/conversation/streaming";
 import { Sidebar } from "./components/sidebar";
 import { SidebarToggleIcon } from "./components/sidebar-toggle-icon";
 import { SearchSessionsButton, SessionCommand, type CommandAction } from "./components/session-command";
 import { NEW_TAB_PREFIX, SETTINGS_TAB_ID, Tabs, UI_DEMO_TAB_ID, isNewTabId } from "./components/tabs";
 import { closeTab, nextTabAfterClose, promoteDraftTab } from "./lib/tabs";
 import {
-    IconArrowDown,
     IconComponents,
     IconLayoutSidebarFilled,
     IconMessageCircleFilled,
@@ -30,290 +26,42 @@ import { InlineCode } from "./components/ui/code";
 import { useSessions } from "./hooks/useSessions";
 import { useSessionFlags } from "./hooks/useSessionFlags";
 import { useProjects, type NewProjectInput } from "./hooks/useProjects";
-import { resolveProjectOptions, sessionsForProject, type Project, type ProjectOption } from "./lib/projects";
+import { resolveProjectOptions, type Project, type ProjectOption } from "./lib/projects";
 import { useChat } from "./hooks/useChat";
-import { useStreamSnapshot, type StreamStore } from "./lib/stream-store";
 import { useCompaction } from "./hooks/useCompaction";
 import { clearQueueFor, useMessageQueue } from "./hooks/useMessageQueue";
 import { QueueIndicator } from "./components/queue-indicator";
 import { useModels } from "./hooks/useModels";
 import { useSessionStats } from "./hooks/useSessionStats";
+import { useSidebarSessions } from "./hooks/useSidebarSessions";
 import { createSession, health, redoTurn, streamContinue, undoTurn } from "./lib/api";
 import { CompactionIndicator } from "./components/compaction-indicator";
 import { useEffectiveTheme, useTheme } from "./hooks/useTheme";
 import { refreshCustomThemeApplication, clearActiveCustomTheme } from "./hooks/useCustomThemes";
 import { useHealth } from "./hooks/useHealth";
 import { FatalState } from "./components/fatal";
-import { SettingsPanel, type SettingsSection } from "./components/settings";
+import type { SettingsSection } from "./components/settings";
+import { useThemeEditorEnabled } from "./components/dev/theme-editor-state";
+
+const ChatViewport = lazy(() =>
+    import("./components/conversation/chat-viewport").then((module) => ({ default: module.ChatViewport })),
+);
+const SettingsPanel = lazy(() =>
+    import("./components/settings").then((m) => ({ default: m.SettingsPanel })),
+);
+const UiDemoPanel = lazy(() =>
+    import("./components/ui-demo").then((m) => ({ default: m.UiDemoPanel })),
+);
+const ThemeEditor = lazy(() =>
+    import("./components/dev/ThemeEditor").then((m) => ({ default: m.ThemeEditor })),
+);
 const ProviderMenuDialog = lazy(() =>
     import("./components/provider-menu").then((m) => ({ default: m.ProviderMenuDialog })),
 );
-import { UiDemoPanel } from "./components/ui-demo";
-import { ThemeEditor, useThemeEditorEnabled } from "./components/dev/ThemeEditor";
 import { useShortcuts } from "./hooks/useShortcuts";
 import { useZoom } from "./hooks/useZoom";
 import { clearDraftFor } from "./hooks/useDraft";
-import { InlineErrorBlock, InterruptedBlock, isInterruption, type InlineError } from "./components/inline-error";
-
-function prefersReducedMotion(): boolean {
-    if (typeof window === "undefined" || typeof window.matchMedia !== "function") return false;
-    return window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-}
-
-// Small floating arrow-down indicator, visible only when the viewport is not stuck to the bottom
-const ScrollToBottomButton = memo(function ScrollToBottomButton() {
-    const { isAtBottom, scrollToBottom } = useStickToBottomContext();
-    const visible = !isAtBottom;
-    return (
-        <button
-            type="button"
-            aria-label="Scroll to bottom"
-            title="Scroll to bottom"
-            aria-hidden={!visible}
-            tabIndex={visible ? 0 : -1}
-            onClick={() => void scrollToBottom(prefersReducedMotion() ? "instant" : undefined)}
-            data-visible={visible ? "true" : "false"}
-            className="absolute bottom-4 left-1/2 z-10 inline-flex size-8 -translate-x-1/2 items-center justify-center rounded-full border border-phi-border-strong bg-phi-bg-elevated text-phi-text-secondary shadow-[0_4px_16px_var(--color-phi-shadow-strong)] transition-all duration-200 hover:bg-phi-overlay-active hover:text-phi-text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-phi-accent/40 data-[visible=false]:pointer-events-none data-[visible=false]:translate-y-2 data-[visible=false]:opacity-0"
-        >
-            <IconArrowDown className="size-4" />
-        </button>
-    );
-});
-
-const ConversationScrubber = memo(function ConversationScrubber() {
-    const { scrollRef } = useStickToBottomContext();
-    const [progress, setProgress] = useState(1);
-    const [hoverProgress, setHoverProgress] = useState<number | null>(null);
-    const [hasOverflow, setHasOverflow] = useState(false);
-    const [ridgeCount, setRidgeCount] = useState(12);
-    const trackRef = useRef<HTMLDivElement>(null);
-
-    useEffect(() => {
-        const scrollElement = scrollRef.current;
-        if (!scrollElement) return;
-
-        const sync = () => {
-            const maxScroll = scrollElement.scrollHeight - scrollElement.clientHeight;
-            setHasOverflow(maxScroll > 1);
-            setProgress(maxScroll > 0 ? scrollElement.scrollTop / maxScroll : 1);
-            setRidgeCount(Math.min(36, Math.max(4, Math.ceil(scrollElement.scrollHeight / 240))));
-        };
-
-        sync();
-        scrollElement.addEventListener("scroll", sync, { passive: true });
-        const resizeObserver = new ResizeObserver(sync);
-        resizeObserver.observe(scrollElement);
-        if (scrollElement.firstElementChild) resizeObserver.observe(scrollElement.firstElementChild);
-        return () => {
-            scrollElement.removeEventListener("scroll", sync);
-            resizeObserver.disconnect();
-        };
-    }, [scrollRef]);
-
-    const scrubberHeight = Math.max(32, (ridgeCount - 1) * 8 + 2);
-
-    const progressAt = (clientY: number) => {
-        const rect = trackRef.current?.getBoundingClientRect();
-        if (!rect) return 0;
-        const inset = 7;
-        return Math.max(0, Math.min(1, (clientY - rect.top - inset) / (rect.height - inset * 2)));
-    };
-
-    const scrollToProgress = (nextProgress: number) => {
-        const scrollElement = scrollRef.current;
-        if (!scrollElement) return;
-        const maxScroll = scrollElement.scrollHeight - scrollElement.clientHeight;
-        scrollElement.scrollTo({ top: Math.max(0, Math.min(1, nextProgress)) * maxScroll, behavior: "auto" });
-    };
-
-    if (!hasOverflow) return null;
-
-    return (
-        <div
-            ref={trackRef}
-            role="slider"
-            aria-label="Conversation position"
-            aria-valuemin={0}
-            aria-valuemax={100}
-            aria-valuenow={Math.round(progress * 100)}
-            aria-valuetext={`${Math.round(progress * 100)}% through conversation`}
-            tabIndex={0}
-            onPointerDown={(event) => {
-                event.currentTarget.setPointerCapture(event.pointerId);
-                const nextProgress = progressAt(event.clientY);
-                setHoverProgress(nextProgress);
-                scrollToProgress(nextProgress);
-            }}
-            onPointerMove={(event) => {
-                const nextProgress = progressAt(event.clientY);
-                setHoverProgress(nextProgress);
-                if (event.currentTarget.hasPointerCapture(event.pointerId)) scrollToProgress(nextProgress);
-            }}
-            onPointerUp={(event) => event.currentTarget.releasePointerCapture(event.pointerId)}
-            onPointerCancel={(event) => event.currentTarget.releasePointerCapture(event.pointerId)}
-            onPointerLeave={(event) => {
-                if (!event.currentTarget.hasPointerCapture(event.pointerId)) setHoverProgress(null);
-            }}
-            onWheel={(event) => {
-                event.preventDefault();
-                scrollRef.current?.scrollBy({ top: event.deltaY, behavior: "auto" });
-            }}
-            onKeyDown={(event) => {
-                if (event.key === "ArrowUp" || event.key === "ArrowLeft") {
-                    event.preventDefault();
-                    scrollToProgress(progress - 0.05);
-                } else if (event.key === "ArrowDown" || event.key === "ArrowRight") {
-                    event.preventDefault();
-                    scrollToProgress(progress + 0.05);
-                } else if (event.key === "PageUp") {
-                    event.preventDefault();
-                    scrollToProgress(progress - 0.2);
-                } else if (event.key === "PageDown") {
-                    event.preventDefault();
-                    scrollToProgress(progress + 0.2);
-                } else if (event.key === "Home") {
-                    event.preventDefault();
-                    scrollToProgress(0);
-                } else if (event.key === "End") {
-                    event.preventDefault();
-                    scrollToProgress(1);
-                }
-            }}
-            className="absolute right-0 top-1/2 z-20 w-12 -translate-y-1/2 cursor-grab touch-none outline-none active:cursor-grabbing focus-visible:ring-1 focus-visible:ring-phi-accent/50"
-            style={{ height: scrubberHeight }}
-        >
-            <div className="pointer-events-none absolute inset-0">
-                <div className="absolute inset-x-0 inset-y-0 flex flex-col items-center justify-center gap-2">
-                    {Array.from({ length: ridgeCount }, (_, index) => (
-                        <span key={index} className="h-px w-4 bg-phi-text-muted/70" />
-                    ))}
-                </div>
-                <span
-                    aria-hidden="true"
-                    className="absolute left-1/2 h-px w-7 -translate-x-1/2 -translate-y-1/2 bg-phi-accent"
-                    style={{ top: `${progress * 100}%` }}
-                />
-                {hoverProgress !== null && (
-                    <span
-                        aria-hidden="true"
-                        className="absolute left-1/2 h-px w-7 -translate-x-1/2 -translate-y-1/2 bg-phi-accent/35"
-                        style={{ top: `${hoverProgress * 100}%` }}
-                    />
-                )}
-            </div>
-        </div>
-    );
-});
-
-// When the user sends a message while scrolled up, re-stick to the bottom.
-// Streaming growth itself is handled by the stick-to-bottom resize observer,
-// which intentionally preserves the position when the user scrolled up to read.
-const StickOnUserMessage = memo(function StickOnUserMessage({ messages }: { messages: unknown[] }) {
-    const { scrollToBottom } = useStickToBottomContext();
-    const prevLengthRef = useRef(messages.length);
-    useEffect(() => {
-        const prevLength = prevLengthRef.current;
-        prevLengthRef.current = messages.length;
-        if (messages.length <= prevLength) return;
-        const last = messages[messages.length - 1] as Record<string, unknown> | undefined;
-        if (last && String(last.role ?? "") === "user") {
-            void scrollToBottom(prefersReducedMotion() ? "instant" : undefined);
-        }
-    }, [messages, scrollToBottom]);
-    return null;
-});
-
-// Isolated scroll-aware viewport so App doesn't need to re-render on every streaming token
-const ChatViewport = memo(function ChatViewport({
-    activeFile,
-    loading,
-    error,
-    messages,
-    isStreaming,
-    streamStore,
-    inlineError,
-    onContinue,
-    onDismiss,
-    onUndo,
-}: {
-    activeFile: string | null;
-    loading: boolean;
-    error: string | null;
-    messages: unknown[];
-    isStreaming: boolean;
-    streamStore: StreamStore;
-    inlineError?: InlineError | null;
-    onContinue?: () => void;
-    onDismiss?: () => void;
-    onUndo?: () => void;
-}) {
-    const streaming = useStreamSnapshot(streamStore, activeFile);
-    if (!activeFile) return null;
-    if (loading) {
-        return (
-            <div className="mx-auto flex w-full max-w-4xl flex-1 flex-col overflow-y-auto px-6 pt-6">
-                <p className="py-10 text-center text-[13px] text-phi-text-muted">Loading messages…</p>
-            </div>
-        );
-    }
-    if (error && messages.length === 0) {
-        return (
-            <div className="mx-auto flex w-full max-w-4xl flex-1 flex-col overflow-y-auto px-6 pt-6">
-                <Alert variant="error" className="mx-auto mt-6 max-w-xl text-[13px]">{error}</Alert>
-            </div>
-        );
-    }
-    if (messages.length === 0) {
-        return (
-            <div className="mx-auto flex w-full max-w-4xl flex-1 flex-col overflow-y-auto px-6 pt-6">
-                <div className="flex flex-1 flex-col items-center justify-center pb-16 text-center">
-                    <p className="text-[13px] text-phi-text-muted">No messages in this session yet.</p>
-                    <p className="mt-1 text-[12px] text-phi-text-muted">Prompt streaming lands in Phase C.</p>
-                    {inlineError && (isInterruption(inlineError.reason)
-                        ? <InterruptedBlock onContinue={onContinue} />
-                        : <InlineErrorBlock error={inlineError} onContinue={onContinue} onDismiss={onDismiss!} />)}
-                </div>
-            </div>
-        );
-    }
-    const showLive = isStreaming;
-    const hideLastWork = showLive && streaming.workItems.length > 0;
-    const resizeAnimation: "instant" | "smooth" = prefersReducedMotion() ? "instant" : "smooth";
-    return (
-        <StickToBottom
-            key={activeFile}
-            className="relative min-h-0 w-full flex-1"
-            resize={resizeAnimation}
-            initial="instant"
-            mass={0.9}
-            stiffness={0.08}
-            damping={0.75}
-        >
-            <StickToBottom.Content
-                scrollClassName="overflow-y-auto scrollbar-none px-6 pt-6"
-                className="flex flex-col items-center"
-            >
-                <div className="w-3xl flex h-full max-w-full flex-col">
-                    <Conversation messages={messages} hideLastWork={hideLastWork} isStreaming={isStreaming} onUndo={onUndo} />
-                    {showLive && (
-                        <div className="pt-2 phi-work-stagger">
-                            <Streaming text={streaming.text} workItems={streaming.workItems} error={streaming.error} isStreaming={isStreaming} startedAt={streaming.startedAt} />
-                        </div>
-                    )}
-                    {inlineError && (isInterruption(inlineError.reason)
-                        ? <InterruptedBlock onContinue={onContinue} />
-                        : <InlineErrorBlock error={inlineError} onContinue={onContinue} onDismiss={onDismiss!} />)}
-                    {error && !isStreaming && !inlineError && (
-                        <Alert variant="error" className="mx-auto mt-3 w-full max-w-4xl text-[13px]">{error}</Alert>
-                    )}
-                </div>
-            </StickToBottom.Content>
-            <ConversationScrubber />
-            <ScrollToBottomButton />
-            <StickOnUserMessage messages={messages} />
-        </StickToBottom>
-    );
-});
+import type { InlineError } from "./components/inline-error";
 
 export default function App() {
     const [sidebarOpen, setSidebarOpen] = useState(true);
@@ -587,42 +335,12 @@ export default function App() {
         persistDraftProject(id);
     }, [persistDraftProject]);
 
-    // Pinned sessions move out of their project into the Pinned group above
-    // Projects; archived sessions move to the footer group. Both stay
-    // searchable via Cmd+K. Newest first in both groups.
-    const byModifiedDesc = (a: { modified: string }, b: { modified: string }) =>
-        new Date(b.modified).getTime() - new Date(a.modified).getTime();
-    const pinnedSessions = useMemo(
-        () => sessions.sessions
-            .filter((s) => sessionFlags.pinned.has(s.path) && !sessionFlags.archived.has(s.path))
-            .sort(byModifiedDesc),
-        [sessions.sessions, sessionFlags.pinned, sessionFlags.archived],
+    const { pinnedSessions, archivedSessions, projectGroups, orphanCount } = useSidebarSessions(
+        sessions.sessions,
+        projectOptions,
+        sessionFlags.pinned,
+        sessionFlags.archived,
     );
-    const archivedSessions = useMemo(
-        () => sessions.sessions
-            .filter((s) => sessionFlags.archived.has(s.path))
-            .sort(byModifiedDesc),
-        [sessions.sessions, sessionFlags.archived],
-    );
-    // Sidebar sections only include projects with visible sessions. Pinned /
-    // archived sessions are excluded — they live in their own groups.
-    const projectGroups = useMemo(
-        () => projectOptions
-            .map((project) => ({
-                project,
-                sessions: sessionsForProject(sessions.sessions, project)
-                    .filter((s) => !sessionFlags.pinned.has(s.path) && !sessionFlags.archived.has(s.path)),
-            }))
-            .filter((group) => group.sessions.length > 0),
-        [projectOptions, sessions.sessions, sessionFlags.pinned, sessionFlags.archived],
-    );
-    const orphanCount = useMemo(() => {
-        const claimed = new Set<string>();
-        for (const group of projectGroups) {
-            for (const s of group.sessions) claimed.add(s.path);
-        }
-        return sessions.sessions.filter((s) => !claimed.has(s.path) && !sessionFlags.pinned.has(s.path) && !sessionFlags.archived.has(s.path)).length;
-    }, [projectGroups, sessions.sessions, sessionFlags.pinned, sessionFlags.archived]);
 
 
     const activeTitle = useMemo(() => {
@@ -1475,11 +1193,15 @@ export default function App() {
                             <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border border-phi-border-subtle bg-phi-bg-main shadow-[0_4px_18px_var(--color-phi-shadow)]">
                                 {settingsActive ? (
                                     <section className="flex min-h-0 flex-1" aria-label="Settings">
-                                        <SettingsPanel section={settingsSection} onSectionChange={setSettingsSection} onProvidersChanged={() => models.refresh({ silent: true })} onAddProvider={openProviderMenu} providersVersion={providersVersion} cwd={activeCwd || newChatCwd || homeCwd || undefined} />
+                                        <Suspense fallback={<div className="flex flex-1 items-center justify-center text-[12px] text-phi-text-muted">Loading settings…</div>}>
+                                            <SettingsPanel section={settingsSection} onSectionChange={setSettingsSection} onProvidersChanged={() => models.refresh({ silent: true })} onAddProvider={openProviderMenu} providersVersion={providersVersion} cwd={activeCwd || newChatCwd || homeCwd || undefined} />
+                                        </Suspense>
                                     </section>
                                 ) : uiDemoActive ? (
                                     <section className="flex min-h-0 flex-1" aria-label="UI demo">
-                                        <UiDemoPanel />
+                                        <Suspense fallback={<div className="flex flex-1 items-center justify-center text-[12px] text-phi-text-muted">Loading UI demo…</div>}>
+                                            <UiDemoPanel />
+                                        </Suspense>
                                     </section>
                                 ) : (
                                 <section className="flex min-h-0 flex-1 flex-col">
@@ -1513,18 +1235,20 @@ export default function App() {
                                             </div>
                                         </div>
                                     ) : (
-                                        <ChatViewport
-                                            activeFile={chat.activeFile}
-                                            loading={chat.loading}
-                                            error={chat.error}
-                                            messages={messages}
-                                            isStreaming={chat.isStreaming}
-                                            streamStore={chat.streamStore}
-                                            inlineError={chat.activeFile ? inlineErrors[chat.activeFile] ?? null : null}
-                                            onContinue={handleContinue}
-                                            onDismiss={() => chat.activeFile && setInlineFor(chat.activeFile, null)}
-                                            onUndo={() => void handleUndo()}
-                                        />
+                                        <Suspense fallback={<div className="flex flex-1 items-center justify-center text-[12px] text-phi-text-muted">Loading session…</div>}>
+                                            <ChatViewport
+                                                activeFile={chat.activeFile}
+                                                loading={chat.loading}
+                                                error={chat.error}
+                                                messages={messages}
+                                                isStreaming={chat.isStreaming}
+                                                streamStore={chat.streamStore}
+                                                inlineError={chat.activeFile ? inlineErrors[chat.activeFile] ?? null : null}
+                                                onContinue={handleContinue}
+                                                onDismiss={() => chat.activeFile && setInlineFor(chat.activeFile, null)}
+                                                onUndo={() => void handleUndo()}
+                                            />
+                                        </Suspense>
                                     )}
 
                                     <div className={`relative z-10 w-full shrink-0 px-4 pb-4 sm:px-7 sm:pb-5 ${chat.activeFile ? "phi-composer-dock-active" : "pt-5 phi-composer-dock-new"}`}>
@@ -1620,7 +1344,9 @@ export default function App() {
                             </div>
                             {!settingsActive && !uiDemoActive && themeEditorEnabled && (
                                 <div className="absolute bottom-4 right-4 z-40">
-                                    <ThemeEditor />
+                                    <Suspense fallback={null}>
+                                        <ThemeEditor />
+                                    </Suspense>
                                 </div>
                             )}
                         </main>

@@ -2,12 +2,13 @@
 # Tauri is gone: the sidecar is a self-contained Bun binary built to binaries/
 # via `bun run build:sidecar`.
 appId: com.solaymanehimite.phi
-productName: phi
+productName: Phi
 directories:
   output: release
 files:
   - dist/**
   - dist-electron/**
+  - build/icon.png
   - package.json
   # Main + preload are esbuild-bundled (only `electron` builtin at runtime),
   # the sidecar is a self-contained Bun binary — no node_modules ships.
@@ -24,10 +25,7 @@ extraResources:
     to: binaries/
     filter:
       - server*
-# No branded icons yet: win/mac/linux `icon` keys stay out on purpose so
-# packaging uses the default Electron icon (loud) instead of pointing at
-# build/icon.* files that do not exist (silent). Add real assets under
-# build/ and re-add the keys when they land.
+icon: build/icon.png
 win:
   target:
     - nsis

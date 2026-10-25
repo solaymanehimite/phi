@@ -7,10 +7,6 @@ function StreamingText({ text }: { text: string }) {
     return (
         <p className="max-w-full whitespace-pre-wrap break-words text-[14px] leading-[19px] text-phi-text-secondary">
             {text}
-            <span
-                aria-hidden="true"
-                className="ml-0.5 inline-block h-[1.05em] w-2 align-text-bottom animate-pulse bg-phi-text-primary motion-reduce:animate-none"
-            />
         </p>
     );
 }

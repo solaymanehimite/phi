@@ -72,7 +72,7 @@ export const CompactionIndicator = memo(function CompactionIndicator({
     >
       <IconRefresh
         aria-hidden
-        className="size-4 shrink-0 animate-spin text-phi-text-tertiary"
+        className="size-4 shrink-0 text-phi-text-tertiary"
       />
       <span className="min-w-0 flex-1 truncate text-[14px] leading-6 text-phi-text-secondary" title={customInstructions ?? undefined}>
         Compacting transcript

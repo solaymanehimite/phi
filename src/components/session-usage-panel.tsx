@@ -109,7 +109,7 @@ export const SessionUsagePanel = memo(function SessionUsagePanel({
                 <h2 className="text-[13px] font-semibold text-phi-text-primary">Session usage</h2>
                 <div className="flex items-center gap-0.5">
                     <Button variant="mini" aria-label="Refresh session usage" title="Refresh" onClick={onRefresh}>
-                        <IconRefresh className={`size-3.5 ${loading ? "animate-spin" : ""}`} />
+                        <IconRefresh className="size-3.5" />
                     </Button>
                     <Button variant="mini" aria-label="Close session usage" title="Close" onClick={onClose}>
                         <IconX className="size-3.5" />

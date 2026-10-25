@@ -14,8 +14,7 @@ import {
     IconSettingsFilled,
     IconTrashFilled,
 } from "@tabler/icons-react";
-import { Orb } from "@aicss/react";
-import { memo, useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type MouseEvent, type ReactNode } from "react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState, type MouseEvent } from "react";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
 import { Alert } from "./ui/alert";
@@ -27,7 +26,6 @@ import {
     DropdownMenuTrigger,
 } from "./ui/dropdown-menu";
 import { GroupCollapsibleTrigger } from "./ui/collapsible";
-import { NavItem } from "./ui/nav-item";
 import { useEffectiveTheme } from "../hooks/useTheme";
 import { brandingUrl } from "../lib/themed-assets";
 import { formatProjectPath, implicitProjectName, type ProjectGroup, type ProjectOption } from "../lib/projects";
@@ -243,7 +241,6 @@ export const Sidebar = memo(function Sidebar({
                     <DropdownMenu>
                         <DropdownMenuTrigger
                             aria-label="Filter sessions"
-                            title="Filter sessions"
                             className={`!size-7 !rounded-lg !opacity-100 ${sessionFilter === "projects" ? "bg-phi-overlay-active text-phi-text-primary" : ""}`}
                         >
                             <IconFilterFilled className="size-4" />
@@ -418,7 +415,7 @@ export const Sidebar = memo(function Sidebar({
                     onClick={() => onOpenSettings?.()}
                     className="group !size-7"
                 >
-                    <IconSettingsFilled className="size-4 group-hover:animate-spin motion-reduce:group-hover:animate-none" />
+                    <IconSettingsFilled className="size-4" />
                 </Button>
             </div>
         </aside>
@@ -494,221 +491,6 @@ const SearchLensIcon = memo(function SearchLensIcon({
         >
             <path ref={lensRef} d={lensD(LENS_R)} />
             <path d="M21 21l-6 -6" />
-        </svg>
-    );
-});
-
-// Group header for the Archived meta-group. Same row treatment as
-// GroupCollapsibleTrigger but with a fixed archive icon plus a collapse
-// chevron instead of the folder open/closed pair.
-const MetaGroupTrigger = memo(function MetaGroupTrigger({
-    collapsed,
-    onClick,
-    label,
-    count,
-    icon,
-}: {
-    collapsed: boolean;
-    onClick: () => void;
-    label: string;
-    count: number;
-    icon?: ReactNode;
-}) {
-    return (
-        <button
-            type="button"
-            onClick={onClick}
-            aria-expanded={!collapsed}
-            aria-label={`${label}, ${count} session${count === 1 ? "" : "s"}`}
-            className="group flex h-8 w-full items-center gap-2 rounded-lg px-2.5 text-left text-[13px] font-medium text-phi-text-tertiary hover:bg-phi-overlay-hover hover:text-phi-text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-phi-accent/40"
-        >
-            {icon}
-            <span className="min-w-0 flex-1 truncate text-current">
-                {label}
-            </span>
-            <IconChevronDownFilled
-                aria-hidden
-                className={`size-3.5 shrink-0 opacity-0 transition-all duration-200 group-hover:opacity-100 group-focus-within:opacity-100 focus-visible:opacity-100 ${collapsed ? "-rotate-90" : ""}`}
-            />
-        </button>
-    );
-});
-
-// Archived list with its own overflow fades + scroll chevrons, mirroring the
-// main sidebar scroll treatment at a smaller scale (max-h-44 viewport).
-const ArchivedList = memo(function ArchivedList({
-    collapsed,
-    sessions,
-    activeFile,
-    selectedFiles,
-    runningFiles,
-    onSelect,
-    onToggleSelection,
-    onRename,
-    onDelete,
-    onTogglePin,
-    onToggleArchive,
-    onPrefetch,
-}: {
-    collapsed: boolean;
-    sessions: SessionInfo[];
-    activeFile: string | null;
-    selectedFiles: ReadonlySet<string>;
-    runningFiles: ReadonlySet<string>;
-    onSelect: (file: string) => void;
-    onToggleSelection: (file: string) => void;
-    onRename: (file: string, name: string) => Promise<void>;
-    onDelete: (file: string) => Promise<void>;
-    onTogglePin: (file: string) => void;
-    onToggleArchive: (file: string) => void;
-    onPrefetch?: (file: string) => void;
-}) {
-    const scrollRef = useRef<HTMLElement>(null);
-    const [canScrollUp, setCanScrollUp] = useState(false);
-    const [canScrollDown, setCanScrollDown] = useState(false);
-
-    const updateScrollEdges = useCallback(() => {
-        const el = scrollRef.current;
-        if (!el) return;
-        const threshold = 2;
-        setCanScrollUp(el.scrollTop > threshold);
-        setCanScrollDown(el.scrollHeight - el.scrollTop - el.clientHeight > threshold);
-    }, []);
-
-    useEffect(() => {
-        updateScrollEdges();
-        const el = scrollRef.current;
-        if (!el) return;
-        const ro = new ResizeObserver(() => updateScrollEdges());
-        ro.observe(el);
-        // Collapse transition animates height; re-check after it settles
-        const t = window.setTimeout(updateScrollEdges, 320);
-        return () => {
-            window.clearTimeout(t);
-            ro.disconnect();
-        };
-    }, [sessions, collapsed, updateScrollEdges]);
-
-    const scrollByPage = useCallback((direction: 1 | -1) => {
-        const el = scrollRef.current;
-        if (!el) return;
-        const reduceMotion =
-            typeof window !== "undefined" &&
-            typeof window.matchMedia === "function" &&
-            window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-        el.scrollBy({
-            top: direction * Math.max(el.clientHeight * 0.8, 80),
-            behavior: reduceMotion ? "instant" as ScrollBehavior : "smooth",
-        });
-    }, []);
-    const scrollUp = useCallback(() => scrollByPage(-1), [scrollByPage]);
-    const scrollDown = useCallback(() => scrollByPage(1), [scrollByPage]);
-
-    const showUp = canScrollUp && !collapsed;
-    const showDown = canScrollDown && !collapsed;
-
-    return (
-        <div
-            className={`grid transition-all duration-300 ease-[cubic-bezier(0.4,0,0.2,1)] ${collapsed ? "grid-rows-[0fr] opacity-0" : "grid-rows-[1fr] opacity-100"}`}
-        >
-            <div className="overflow-hidden">
-                <div className="relative">
-                    <nav
-                        ref={scrollRef}
-                        aria-label="Archived"
-                        onScroll={updateScrollEdges}
-                        className="mt-1 max-h-44 space-y-0.5 overflow-y-auto scrollbar-none pb-0.5"
-                    >
-                        {sessions.map((s) => (
-                            <SessionRowMemo
-                                key={s.path}
-                                session={s}
-                                active={s.path === activeFile}
-                                selected={selectedFiles.has(s.path)}
-                                isStreaming={runningFiles.has(s.path)}
-                                pinned={false}
-                                archived
-                                onSelect={onSelect}
-                                onToggleSelection={onToggleSelection}
-                                onRename={onRename}
-                                onDelete={onDelete}
-                                onTogglePin={onTogglePin}
-                                onToggleArchive={onToggleArchive}
-                                onPrefetch={onPrefetch}
-                            />
-                        ))}
-                    </nav>
-
-                    {/* Top fade + more-content indicator */}
-                    <div
-                        aria-hidden={!showUp}
-                        className={`pointer-events-none absolute inset-x-0 top-0 z-10 flex h-8 items-start justify-center pt-0.5 transition-opacity duration-200 ${showUp ? "opacity-100" : "opacity-0"}`}
-                        style={{ background: "linear-gradient(to bottom, var(--color-phi-bg-sidebar) 15%, transparent)" }}
-                    >
-                        <button
-                            type="button"
-                            tabIndex={showUp ? 0 : -1}
-                            aria-label="Scroll archived up"
-                            title="Scroll up"
-                            onClick={scrollUp}
-                            className={`pointer-events-auto inline-flex items-center justify-center text-phi-text-tertiary transition-all duration-200 hover:text-phi-text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-phi-accent/40 ${showUp ? "translate-y-0 opacity-100" : "pointer-events-none -translate-y-1 opacity-0"}`}
-                        >
-                            <IconChevronDownFilled className="size-3.5 rotate-180" />
-                        </button>
-                    </div>
-
-                    {/* Bottom fade + more-content indicator */}
-                    <div
-                        aria-hidden={!showDown}
-                        className={`pointer-events-none absolute inset-x-0 bottom-0 z-10 flex h-8 items-end justify-center pb-0.5 transition-opacity duration-200 ${showDown ? "opacity-100" : "opacity-0"}`}
-                        style={{ background: "linear-gradient(to top, var(--color-phi-bg-sidebar) 15%, transparent)" }}
-                    >
-                        <button
-                            type="button"
-                            tabIndex={showDown ? 0 : -1}
-                            aria-label="Scroll archived down"
-                            title="Scroll down"
-                            onClick={scrollDown}
-                            className={`pointer-events-auto inline-flex items-center justify-center text-phi-text-tertiary transition-all duration-200 hover:text-phi-text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-phi-accent/40 ${showDown ? "translate-y-0 opacity-100" : "pointer-events-none translate-y-1 opacity-0"}`}
-                        >
-                            <IconChevronDownFilled className="size-3.5" />
-                        </button>
-                    </div>
-                </div>
-            </div>
-        </div>
-    );
-});
-
-// Test: archive bin whose lid lifts + tilts when the Archived row is hovered.
-// Vendored from Tabler's filled archive so the lid (first path) is directly
-// addressable and the icon keeps its filled look.
-const ArchiveBinIcon = memo(function ArchiveBinIcon({
-    className = "size-4 shrink-0 text-current",
-    hoverOn = "group",
-}: {
-    className?: string;
-    /** Which hover group opens the lid: the row (`group`) or the button itself (`group/archive`). */
-    hoverOn?: "group" | "archive";
-}) {
-    // Both variants must appear literally so Tailwind generates them.
-    const lidHover =
-        hoverOn === "archive"
-            ? "group-hover/archive:-translate-y-[2px] group-hover/archive:-rotate-[10deg]"
-            : "group-hover:-translate-y-[2px] group-hover:-rotate-[10deg]";
-    return (
-        <svg
-            aria-hidden
-            viewBox="0 0 24 24"
-            fill="currentColor"
-            stroke="none"
-            className={className}
-        >
-            <path
-                d="M2 5a2 2 0 0 1 2 -2h16a2 2 0 0 1 2 2a2 2 0 0 1 -2 2h-16a2 2 0 0 1 -2 -2z"
-                className={`origin-center transition-transform duration-300 ease-out [transform-box:fill-box] motion-reduce:transition-none ${lidHover}`}
-            />
-            <path d="M19 9c.513 0 .936 .463 .993 1.06l.007 .14v7.2c0 1.917 -1.249 3.484 -2.824 3.594l-.176 .006h-10c-1.598 0 -2.904 -1.499 -2.995 -3.388l-.005 -.212v-7.2c0 -.663 .448 -1.2 1 -1.2h14zm-5 2h-4l-.117 .007a1 1 0 0 0 0 1.986l.117 .007h4l.117 -.007a1 1 0 0 0 0 -1.986l-.117 -.007z" />
         </svg>
     );
 });
@@ -905,154 +687,6 @@ const SessionRowMemo = memo(function SessionRowMemo({
     );
 });
 
-function MarqueeTitle({ title }: { title: string }) {
-    const outerRef = useRef<HTMLSpanElement>(null);
-    const innerRef = useRef<HTMLSpanElement>(null);
-    const [dist, setDist] = useState(0);
-
-    useEffect(() => {
-        const measure = () => {
-            const outer = outerRef.current;
-            const inner = innerRef.current;
-            if (!outer || !inner) return;
-            const overflow = inner.scrollWidth - outer.clientWidth;
-            setDist(overflow > 8 ? Math.ceil(overflow) : 0);
-        };
-        measure();
-        const t = window.setTimeout(measure, 120);
-        window.addEventListener("resize", measure);
-        return () => {
-            window.clearTimeout(t);
-            window.removeEventListener("resize", measure);
-        };
-    }, [title]);
-
-    // Linear ping-pong marquee driven by rAF so the edge fade (vignette)
-    // is only visible while the text is actually moving, and fades only
-    // the edge(s) that still hide content.
-    useEffect(() => {
-        const outer = outerRef.current;
-        const inner = innerRef.current;
-        if (!outer || !inner || dist <= 0) return;
-        if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
-        const row = outer.closest(".session-row");
-        if (!row) return;
-
-        const SPEED = 45; // px per second, constant (linear)
-        const START_DELAY = 350;
-        const END_PAUSE = 800;
-        let raf = 0;
-        let timer: number | null = null;
-        let alive = true;
-        let hovering = false;
-
-        const clear = () => {
-            inner.style.transform = "";
-            (outer.style as CSSProperties & { webkitMaskImage?: string }).webkitMaskImage = "none";
-            outer.style.maskImage = "none";
-        };
-        const paintMask = (x: number) => {
-            const atStart = x > -1.5;
-            const atEnd = x < -(dist - 1.5);
-            let mask: string | null = null;
-            if (!atStart && !atEnd)
-                mask = "linear-gradient(to right, transparent, #000 10px, #000 calc(100% - 12px), transparent)";
-            else if (!atStart)
-                mask = "linear-gradient(to right, transparent, #000 10px)";
-            else if (!atEnd)
-                mask = "linear-gradient(to right, #000 calc(100% - 12px), transparent)";
-            if (mask) {
-                (outer.style as CSSProperties & { webkitMaskImage?: string }).webkitMaskImage = mask;
-                outer.style.maskImage = mask;
-            } else {
-                (outer.style as CSSProperties & { webkitMaskImage?: string }).webkitMaskImage = "none";
-                outer.style.maskImage = "none";
-            }
-        };
-        const run = (from: number, to: number, done: () => void) => {
-            const span = Math.abs(to - from);
-            const dur = Math.max(500, (span / SPEED) * 1000);
-            const t0 = performance.now();
-            const step = (now: number) => {
-                if (!alive || !hovering) return;
-                const p = Math.min(1, (now - t0) / dur);
-                const x = from + (to - from) * p; // linear, no easing
-                inner.style.transform = `translateX(${x}px)`;
-                paintMask(x);
-                if (p < 1) raf = requestAnimationFrame(step);
-                else done();
-            };
-            raf = requestAnimationFrame(step);
-        };
-        const loop = () => {
-            if (!alive || !hovering) return;
-            run(0, -dist, () => {
-                if (!alive || !hovering) return;
-                timer = window.setTimeout(() => {
-                    if (!alive || !hovering) return;
-                    run(-dist, 0, () => {
-                        if (!alive || !hovering) return;
-                        clear();
-                        timer = window.setTimeout(() => {
-                            if (alive && hovering) loop();
-                        }, START_DELAY);
-                    });
-                }, END_PAUSE);
-            });
-        };
-        const enter = () => {
-            hovering = true;
-            cancelAnimationFrame(raf);
-            if (timer != null) window.clearTimeout(timer);
-            timer = window.setTimeout(() => {
-                if (alive && hovering) loop();
-            }, START_DELAY);
-        };
-        const leave = () => {
-            hovering = false;
-            cancelAnimationFrame(raf);
-            if (timer != null) {
-                window.clearTimeout(timer);
-                timer = null;
-            }
-            clear();
-        };
-        row.addEventListener("mouseenter", enter);
-        row.addEventListener("mouseleave", leave);
-        row.addEventListener("focusin", enter);
-        row.addEventListener("focusout", leave);
-        return () => {
-            alive = false;
-            hovering = false;
-            cancelAnimationFrame(raf);
-            if (timer != null) window.clearTimeout(timer);
-            row.removeEventListener("mouseenter", enter);
-            row.removeEventListener("mouseleave", leave);
-            row.removeEventListener("focusin", enter);
-            row.removeEventListener("focusout", leave);
-            clear();
-        };
-    }, [dist]);
-
-    const overflowing = dist > 0;
-    return (
-        <span
-            ref={outerRef}
-            data-active={overflowing ? "true" : "false"}
-            className="session-title-mask min-w-0 flex-1 overflow-hidden"
-        >
-            <span
-                ref={innerRef}
-                title={title}
-                data-marquee={overflowing ? "true" : "false"}
-                className="session-title-inner"
-            >
-                {title}
-            </span>
-        </span>
-    );
-}
-
 const SessionRow = memo(function SessionRow({
     active,
     selected,
@@ -1168,12 +802,6 @@ const SessionRow = memo(function SessionRow({
                                 <IconPinnedFilled aria-hidden="true" className="size-[11px]" />
                             </span>
                         )}
-                        <span
-                            aria-hidden
-                            className={`pointer-events-none grid h-4 shrink-0 place-items-center overflow-hidden transition-[width,opacity,margin] duration-300 ease-out motion-reduce:transition-none ${isStreaming ? "mr-1.5 w-4 opacity-100" : "mr-0 w-0 opacity-0"}`}
-                        >
-                            <Orb variant="S3" size={14} />
-                        </span>
                         <span title={title} className="min-w-0 flex-1 truncate">{title}</span>
                         {hasDraft && (
                             <IconSendFilled

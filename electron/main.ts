@@ -19,6 +19,7 @@ import * as path from "node:path";
 declare const __dirname: string;
 
 const isDev = !app.isPackaged;
+app.setName("Phi");
 const RENDERER_DEV_URL = process.env.ELECTRON_RENDERER_URL ?? "http://localhost:5173";
 
 // A packaged GUI app may outlive the terminal that launched it (for example
@@ -213,6 +214,7 @@ async function startSidecar(): Promise<number> {
 function createWindow(): void {
     mainWindow = new BrowserWindow({
         title: "Phi",
+        icon: path.join(__dirname, "..", "build", "icon.png"),
         width: 1200,
         height: 750,
         backgroundColor: "#101012",

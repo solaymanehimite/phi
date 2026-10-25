@@ -6,7 +6,6 @@ import {
 } from "@tabler/icons-react";
 import { memo, useLayoutEffect, useRef, type ReactNode } from "react";
 import { useHasDraft } from "../hooks/useHasDraft";
-import { RunningOrb } from "./running-orb";
 
 export const SETTINGS_TAB_ID = "phi:settings";
 export const UI_DEMO_TAB_ID = "phi:ui-demo";
@@ -51,7 +50,7 @@ const TabItem = memo(function TabItem({ tab, active, canClose, onSelect, onClose
                 onClick={() => onSelect(tab.id)}
                 className="flex min-w-0 flex-1 items-center self-stretch truncate rounded-tl-lg pl-3 pr-1 text-left text-[12px] font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-phi-accent/50"
             >
-                {isSettings ? <IconSettingsFilled className="mr-2 size-3.5 shrink-0 text-phi-text-muted" /> : isUiDemo ? <IconComponents className="mr-2 size-3.5 shrink-0 text-phi-text-muted" /> : <RunningOrb running={tab.isRunning} size={18} gap={8} />}
+                {isSettings ? <IconSettingsFilled className="mr-2 size-3.5 shrink-0 text-phi-text-muted" /> : isUiDemo ? <IconComponents className="mr-2 size-3.5 shrink-0 text-phi-text-muted" /> : null}
                 <span className="min-w-0 truncate">{tab.title}</span>
                 {!isSpecial && hasDraft && <IconSendFilled className="ml-2 size-3 shrink-0 rotate-45 text-phi-text-muted" aria-label="Has draft" title="Draft" />}
             </button>
