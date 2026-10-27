@@ -1,0 +1,9 @@
+node_modules/
+package-lock.json
+.vite/
+dist/
+dist-electron/
+binaries/
+release/
+*.log
+.DS_Store

@@ -1,0 +1,13 @@
+{
+  "name": "phi",
+  "private": true,
+  "version": "0.1.0",
+  "main": "electron/main.cjs",
+  "scripts": {
+    "dev": "electron .",
+    "start": "electron ."
+  },
+  "devDependencies": {
+    "electron": "^44.3.0"
+  }
+}
