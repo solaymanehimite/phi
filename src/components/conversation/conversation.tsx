@@ -1,4 +1,4 @@
-import { memo, useEffect, useMemo, useRef, useState } from "react";
+import { memo, useMemo, useState } from "react";
 import { IconArrowBackUp, IconCheckFilled, IconCopyFilled } from "@tabler/icons-react";
 import type { WorkItem } from "../../types/work";
 import { Markdown } from "./markdown";
@@ -174,7 +174,6 @@ const TurnRow = memo(function TurnRow({
     turn,
     toolResults,
     hideWork,
-    animateWorkCollapse,
     isLatestAssistant,
     onUndo,
     undoDisabled,
@@ -182,7 +181,6 @@ const TurnRow = memo(function TurnRow({
     turn: Turn;
     toolResults: Map<string, { text: string; isError: boolean; diff?: string }>;
     hideWork?: boolean;
-    animateWorkCollapse?: boolean;
     isLatestAssistant?: boolean;
     onUndo?: () => void;
     undoDisabled?: boolean;
@@ -242,7 +240,6 @@ const TurnRow = memo(function TurnRow({
                         <WorkingBlock
                             items={workItems}
                             variant="history"
-                            animateOnMount={animateWorkCollapse}
                             durationMs={turn.durationMs}
                         />
                     )}
@@ -262,11 +259,6 @@ export const Conversation = memo(function Conversation({
     isStreaming = false,
     onUndo,
 }: Props) {
-    const wasStreaming = useRef(false);
-    const justFinishedStreaming = wasStreaming.current && !isStreaming;
-    useEffect(() => {
-        wasStreaming.current = isStreaming;
-    }, [isStreaming]);
     const msgs = useMemo(() => asMessages(messages), [messages]);
 
     const toolResults = useMemo(() => {
@@ -479,7 +471,6 @@ export const Conversation = memo(function Conversation({
                             idx === lastTurnWithWork &&
                             lastTurnWithWork === turns.length - 1
                         }
-                        animateWorkCollapse={justFinishedStreaming && idx === lastTurnWithWork}
                         isLatestAssistant={idx === lastAssistantIndex}
                         onUndo={onUndo}
                         undoDisabled={isStreaming}

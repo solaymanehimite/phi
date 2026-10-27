@@ -1,0 +1,98 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Phi | Architecture review</title>
+  <style>
+    :root { color-scheme: light; font: 16px/1.55 system-ui, -apple-system, sans-serif; background: #f7f7f5; color: #202522; }
+    * { box-sizing: border-box; }
+    body { margin: 0; }
+    main { max-width: 820px; margin: 0 auto; padding: 56px 24px 88px; }
+    h1 { font-size: clamp(2rem, 5vw, 3rem); line-height: 1.1; letter-spacing: -.045em; margin: 8px 0 14px; }
+    h2 { font-size: 1.2rem; letter-spacing: -.025em; margin: 0 0 14px; }
+    p { margin: 0 0 14px; }
+    .eyebrow, .label { font-size: .75rem; font-weight: 750; text-transform: uppercase; letter-spacing: .09em; color: #536259; }
+    .lede { font-size: 1.12rem; max-width: 65ch; }
+    .meta, .source, .muted { color: #626b63; font-size: .88rem; }
+    section { border-top: 1px solid #d8ddd7; padding-top: 26px; margin-top: 30px; }
+    .callout { border-left: 3px solid #2b694e; padding: 14px 18px; background: #eaf1eb; margin-top: 22px; }
+    .callout p:last-child, li p:last-child { margin-bottom: 0; }
+    ol, ul { padding-left: 1.35rem; margin: 0; }
+    li { padding-left: .2rem; margin: 0 0 17px; }
+    li:last-child { margin-bottom: 0; }
+    strong { color: #17281e; }
+    a { color: #24583e; text-underline-offset: 2px; overflow-wrap: anywhere; }
+    code { font: .87em/1.5 ui-monospace, SFMono-Regular, Consolas, monospace; background: #e9ede8; padding: 1px 4px; border-radius: 3px; }
+    .source { display: block; margin-top: 5px; }
+    .grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; }
+    .grid > div { padding: 16px; background: #fff; border: 1px solid #e0e4df; }
+    .grid p { margin: 4px 0 0; }
+    @media (max-width: 620px) { main { padding: 32px 18px 64px; } .grid { grid-template-columns: 1fr; } }
+  </style>
+</head>
+<body>
+<main>
+  <header>
+    <div class="eyebrow">Code review / current working tree</div>
+    <h1>Keep the engine. Rebuild the conversation surface.</h1>
+    <p class="lede">Phi has a workable session and streaming foundation. Its main risk is the renderer: long conversations stay mounted, while one large app component coordinates most of the product. Replacing UI components alone will not fix scrolling.</p>
+    <p class="meta">Scope: renderer, sidecar, Electron, tests and packaging. Based on code inspection and the previously captured scroll trace, not a new runtime profile. No PRDs used. Application code was not changed.</p>
+  </header>
+
+  <div class="callout">
+    <div class="label">Decision</div>
+    <p><strong>Freeze this branch as a prototype.</strong> Build a narrow conversation flow on a new branch. Reuse the Pi session integration, API contract, stream reducer and tested helpers. Choose a component library for presentation, then virtualize the transcript before adding visual detail.</p>
+  </div>
+
+  <section>
+    <h2>How it works today</h2>
+    <div class="grid">
+      <div><div class="label">Desktop</div><p>Electron owns the window and launches the packaged Bun sidecar on localhost. A preload bridge exposes a small set of native actions.</p><span class="source"><a href="../electron/main.ts">electron/main.ts</a> · <a href="../electron/preload.ts">preload.ts</a></span></div>
+      <div><div class="label">Sessions</div><p>Express uses the Pi SDK and the existing JSONL files. Live runtimes are keyed by session file and idle runtimes are evicted.</p><span class="source"><a href="../server/index.ts">server/index.ts</a></span></div>
+      <div><div class="label">Transport</div><p>The renderer calls the sidecar through <code>/api</code>. Prompts stream as SSE; event reduction and per-session stream storage are separate from the UI.</p><span class="source"><a href="../src/lib/api.ts">api.ts</a> · <a href="../src/lib/stream-reducer.ts">stream-reducer.ts</a> · <a href="../src/lib/stream-store.ts">stream-store.ts</a></span></div>
+      <div><div class="label">Renderer</div><p><code>App</code> orchestrates session tabs, prompts, queues, model selection and panels. <code>useChat</code> keeps session-specific requests and cached messages.</p><span class="source"><a href="../src/App.tsx">App.tsx</a> · <a href="../src/hooks/useChat.ts">useChat.ts</a></span></div>
+    </div>
+  </section>
+
+  <section>
+    <h2>Findings, in order</h2>
+    <ol>
+      <li><strong>Long-session scrolling is the first blocker.</strong> Every turn is rendered with <code>turns.map</code> inside a full-height scroll container. There is no transcript windowing. The earlier trace recorded 107 dropped scroll frames and about 12,600 layout objects. Memoization and a new UI library do not remove those objects. Start with variable-height turn virtualization and test with a real long session; preserve bottom anchoring and expanded tool state.<span class="source"><a href="../src/components/conversation/conversation.tsx">conversation.tsx</a> · <a href="../src/components/conversation/chat-viewport.tsx">chat-viewport.tsx</a></span></li>
+      <li><strong>App coordination is too concentrated.</strong> <code>App.tsx</code> is 1,371 lines; the composer is 858 and sidebar 889. Session selection, drafts, queue draining, model changes, errors, tabs and keyboard actions meet in the app root. Extract workflow boundaries as the new flow is built, not by copying these files into a new shell.<span class="source"><a href="../src/App.tsx">App.tsx</a> · <a href="../src/components/composer.tsx">composer.tsx</a> · <a href="../src/components/sidebar.tsx">sidebar.tsx</a></span></li>
+      <li><strong>The prompt lock has a gap before it starts.</strong> The sidecar checks <code>isPromptActive</code>, then awaits a Git snapshot before assigning <code>activePrompt</code>. Two requests for the same session can pass the check during that await. Reserve the session before snapshot capture and cover concurrent prompts with an integration test. Runtime cleanup also checks activity before this reservation exists.<span class="source"><a href="../server/index.ts">server/index.ts</a>, <code>/api/prompt</code> and <code>cleanupRuntimeRegistry</code></span></li>
+      <li><strong>Undo needs a file-safety test before being treated as stable.</strong> Restoration uses <code>git checkout &lt;tree&gt; -- &lt;paths&gt;</code>, which also writes the index. The current conflict check uses a worktree diff. Test staged changes, untracked files and partial restore failures against a temporary Git repository before promising that undo leaves unrelated work intact.<span class="source"><a href="../server/index.ts">server/index.ts</a>, <code>restoreWorktreeToTree</code></span></li>
+      <li><strong>Desktop boundaries need explicit hardening.</strong> The window has context isolation and Node integration disabled, but sandbox is disabled. There is no visible navigation guard or content security policy, and the localhost sidecar has no request authentication. Keep the narrow preload bridge, then review external navigation, permissions and local API access before distribution. This is a risk assessment, not a demonstrated exploit.<span class="source"><a href="../electron/main.ts">electron/main.ts</a> · <a href="../server/index.ts">server/index.ts</a> · <a href="../index.html">index.html</a></span></li>
+      <li><strong>Health polling is duplicated.</strong> <code>useHealth</code> creates one interval that runs while fatal and another that always runs, so failures trigger two checks every three seconds. Keep one polling loop and prevent overlapping requests.<span class="source"><a href="../src/hooks/useHealth.ts">useHealth.ts</a></span></li>
+    </ol>
+  </section>
+
+  <section>
+    <h2>What is worth keeping</h2>
+    <ul>
+      <li><strong>The Pi SDK and JSONL session boundary.</strong> Sessions have one source of truth. The sidecar already separates per-session live runtimes and does not stop a prompt when an SSE client disconnects.</li>
+      <li><strong>The stream pipeline.</strong> The SSE parser, pure reducer, per-session store and <code>useChat</code> buffering are useful seams. Keep their behavior and tests; simplify orchestration later.</li>
+      <li><strong>The testable domain helpers.</strong> Path safety, navigation selection, provider input, queue ordering and tab behavior have unit coverage. Keep these tests as a migration guard, not as proof that end-to-end flows work.</li>
+    </ul>
+    <p class="source"><a href="../src/lib/__tests__/">src/lib/__tests__/</a> · <a href="../server/__tests__/">server/__tests__/</a></p>
+  </section>
+
+  <section>
+    <h2>Start here</h2>
+    <ol>
+      <li><strong>Preserve the prototype.</strong> Resolve the current uncommitted conversation changes before branching. Confirm the recent collapsible crash fix in a running session. Do not carry the conversation presentation code into the new surface by default.</li>
+      <li><strong>Establish a small vertical slice.</strong> Open a persisted session, send a prompt, stream text and tool output, stop, continue, and use a composer. Leave themes, extra panels and presentation polish out of the first pass.</li>
+      <li><strong>Set the performance gate immediately.</strong> Render a long real transcript with a virtualized turn list. Measure dropped frames, mounted nodes and memory while scrolling and streaming. Compare against the earlier trace rather than judging only a short session.</li>
+      <li><strong>Protect behavior at the boundary.</strong> Add sidecar integration tests for concurrent prompts and navigation/file restore, then an Electron smoke pass for packaged loading and API reachability. Separate service routes from <code>server/index.ts</code> only where those tests need seams.</li>
+      <li><strong>Adopt a UI library deliberately.</strong> Use it for accessible primitives and consistent states. Keep Phi-specific session and stream semantics outside the library. Choose the library after the vertical slice proves scroll performance.</li>
+    </ol>
+  </section>
+
+  <section>
+    <h2>Verification and limits</h2>
+    <p><code>bun run typecheck</code> passed. <code>bun test</code> passed: 93 tests across 11 files. The tests mainly cover helpers and stream logic; they do not validate long-session scrolling, concurrent HTTP requests, native navigation or packaged startup.</p>
+    <p class="muted">No dev server was started. No fresh browser profile or package build was run. Findings about scroll behavior combine the current unvirtualized render path with the earlier trace. The current conversation files include uncommitted work and may change.</p>
+  </section>
+</main>
+</body>
+</html>

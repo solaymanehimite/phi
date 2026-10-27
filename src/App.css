@@ -264,7 +264,6 @@ html[data-theme="light"] {
   --phi-tabs-action-width: 68px;
   --phi-motion-sidebar: 300ms;
   --phi-motion-tab: 180ms;
-  --phi-motion-stream: 160ms;
   --phi-motion-composer: 150ms;
   --phi-ease-default: cubic-bezier(0.4, 0, 0.2, 1);
   --phi-ease-out: cubic-bezier(0.16, 1, 0.3, 1);
@@ -415,44 +414,11 @@ html[data-theme="light"] .phi-empty-logo {
   min-height: 0;
 }
 
-/* Streaming work-item stagger */
-@keyframes phi-work-in {
-  from {
-    opacity: 0;
-    transform: translateY(4px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
-
-
 .phi-tab-enter {
   animation: phi-tab-in var(--phi-motion-tab) var(--phi-ease-out);
 }
 .phi-tab-exit {
   animation: phi-tab-out var(--phi-motion-tab) var(--phi-ease-default) forwards;
-}
-
-.phi-work-stagger > * {
-  animation: phi-work-in var(--phi-motion-stream) var(--phi-ease-out) both;
-}
-.phi-work-stagger > *:nth-child(1) {
-  animation-delay: 0ms;
-}
-.phi-work-stagger > *:nth-child(2) {
-  animation-delay: 30ms;
-}
-.phi-work-stagger > *:nth-child(3) {
-  animation-delay: 60ms;
-}
-.phi-work-stagger > *:nth-child(4) {
-  animation-delay: 90ms;
-}
-.phi-work-stagger > *:nth-child(5) {
-  animation-delay: 120ms;
 }
 
 /* Sonner toast enter — slide up + fade from the bottom-right corner */
@@ -637,7 +603,6 @@ html[data-theme="light"] .phi-tab-active {
 @media (prefers-reduced-motion: reduce) {
   .phi-tab-enter,
   .phi-tab-exit,
-  .phi-work-stagger > *,
   .phi-sonner-enter,
   .phi-compaction-appear,
   .phi-sidebar-enter,
@@ -647,9 +612,6 @@ html[data-theme="light"] .phi-tab-active {
     animation: none !important;
     opacity: 1 !important;
     transform: none !important;
-  }
-  .phi-work-stagger > * {
-    animation-delay: 0ms !important;
   }
 }
 

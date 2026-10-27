@@ -1,5 +1,10 @@
+import { Disclosure, DisclosureButton, DisclosurePanel } from "@headlessui/react";
 import { IconChevronDownFilled } from "@tabler/icons-react";
-import type { ButtonHTMLAttributes, ReactNode } from "react";
+import type { ButtonHTMLAttributes, ComponentProps, ReactNode } from "react";
+
+export const Collapsible = Disclosure;
+export const CollapsibleTrigger = DisclosureButton;
+export const CollapsibleContent = DisclosurePanel;
 
 type GroupCollapsibleTriggerProps = ButtonHTMLAttributes<HTMLButtonElement> & {
     collapsed: boolean;
@@ -26,3 +31,5 @@ export function GroupCollapsibleTrigger({
         </button>
     );
 }
+
+export type CollapsibleProps = ComponentProps<typeof Disclosure>;

@@ -1,142 +1,137 @@
 import { useEffect, useMemo, useState } from "react";
 import type { WorkItem } from "../../types/work";
-import { IconChevronDownFilled } from "@tabler/icons-react";
-import { ToolGroupLine, ToolLine, groupConsecutiveTools } from "./tool-line";
+import { ToolLine, type ToolItem } from "./tool-line";
+import { InlineMarkdown } from "./markdown";
+import {
+    ChainOfThought,
+    ChainOfThoughtContent,
+    ChainOfThoughtItem,
+    ChainOfThoughtStep,
+    ChainOfThoughtTrigger,
+} from "./chain-of-thought";
 
 type Props = {
     items: WorkItem[];
     isStreaming?: boolean;
     variant: "streaming" | "history";
-    animateOnMount?: boolean;
     startedAt?: number | null;
     durationMs?: number | null;
 };
 
+type ThoughtGroup = {
+    id: string;
+    thoughts: string[];
+    tools: ToolItem[];
+};
+
 function formatDuration(ms: number): string {
-    const totalSeconds = Math.max(0, Math.round(ms / 1000));
-    if (totalSeconds < 60) return `${totalSeconds}s`;
-    const minutes = Math.floor(totalSeconds / 60);
-    const seconds = totalSeconds % 60;
-    if (minutes < 60) return seconds === 0 ? `${minutes}m` : `${minutes}m ${seconds}s`;
-    const hours = Math.floor(minutes / 60);
-    const rest = minutes % 60;
-    return rest === 0 ? `${hours}h` : `${hours}h ${rest}m`;
+    const seconds = Math.max(0, Math.round(ms / 1000));
+    if (seconds < 60) return `${seconds}s`;
+    const minutes = Math.floor(seconds / 60);
+    return seconds % 60 === 0 ? `${minutes}m` : `${minutes}m ${seconds % 60}s`;
 }
 
-export function WorkingBlock({ items, isStreaming, variant, animateOnMount, startedAt, durationMs }: Props) {
-    const isStreamingVariant = variant === "streaming";
-    const toolItems = useMemo(() => items.filter((item) => item.kind === "tool"), [items]);
-    const hasWork = toolItems.length > 0;
+function groupWork(items: WorkItem[]): ThoughtGroup[] {
+    const groups: ThoughtGroup[] = [];
+    let current: ThoughtGroup | null = null;
 
-    // Completed work starts collapsed. The streaming block opens while work is
-    // active; when it becomes history, it should not flash open again before
-    // the collapse effect runs.
-    const [open, setOpen] = useState(() =>
-        isStreamingVariant ? Boolean(isStreaming) : false,
-    );
-    const [now, setNow] = useState(() => Date.now());
-
-    useEffect(() => {
-        if (isStreamingVariant) {
-            if (isStreaming) setOpen(true);
-            return;
+    for (const item of items) {
+        if (item.kind === "thinking") {
+            // A run of thought with no intervening tool belongs in one step.
+            // This avoids empty collapsibles while retaining the full trail.
+            if (current && current.tools.length === 0) {
+                current.thoughts.push(item.text);
+            } else {
+                current = { id: item.id, thoughts: [item.text], tools: [] };
+                groups.push(current);
+            }
+            continue;
         }
-        if (!animateOnMount) return;
-        const frame = requestAnimationFrame(() => setOpen(false));
-        return () => cancelAnimationFrame(frame);
-    }, [animateOnMount, isStreaming, isStreamingVariant]);
-
-    const showLiveElapsed = Boolean(isStreamingVariant && isStreaming && startedAt);
-    useEffect(() => {
-        if (!showLiveElapsed) return;
-        const id = window.setInterval(() => setNow(Date.now()), 1000);
-        return () => window.clearInterval(id);
-    }, [showLiveElapsed, startedAt]);
-
-    const visibleItems = toolItems;
-
-    // Consecutive runs of the same groupable tool collapse to one line
-    // ("Read 4 files" + chips). Command tools stay separate.
-    const entries = useMemo(() => groupConsecutiveTools(visibleItems), [visibleItems]);
-
-    if (!hasWork && !(isStreamingVariant && isStreaming)) return null;
-
-    const liveElapsedMs = showLiveElapsed && startedAt ? Math.max(0, now - startedAt) : null;
-
-    let title: React.ReactNode;
-    if (isStreamingVariant) {
-        title = (
-            <span className="inline-flex min-w-0 items-baseline gap-1.5 overflow-hidden leading-none">
-                <span
-                    className="min-w-0 max-w-[min(70vw,32rem)] truncate font-medium tracking-wide"
-                    aria-live="polite"
-                >
-                    {isStreaming ? "Thinking..." : "Thinking"}
-                </span>
-                {liveElapsedMs !== null && (
-                    <span className="shrink-0 font-mono text-[11px] tabular-nums leading-none text-phi-text-muted">{formatDuration(liveElapsedMs)}</span>
-                )}
-            </span>
-        );
-    } else if (durationMs !== null && durationMs !== undefined) {
-        title = (
-            <span className="inline-flex items-baseline gap-1.5 leading-none">
-                <span className="font-medium tracking-wide">Worked for</span>
-                <span className="font-mono text-[11px] tabular-nums leading-none">{formatDuration(durationMs)}</span>
-            </span>
-        );
-    } else {
-        title = <span className="font-medium tracking-wide">Show work</span>;
+        if (!current) {
+            current = { id: "tools", thoughts: [], tools: [] };
+            groups.push(current);
+        }
+        current.tools.push(item);
     }
 
-    return (
-        <div className={`mt-0 w-full ${open ? "pb-2" : "pb-0"}`}>
-            {/* muted label — no border/background container */}
-            <button
-                type="button"
-                onClick={() => setOpen((v) => !v)}
-                className="group flex min-h-6 items-center gap-2 text-left text-[12px] leading-none text-phi-text-muted hover:text-phi-text-tertiary transition-colors"
-                aria-expanded={open}
-            >
-                {!isStreamingVariant ? (
-                    // history variant — chevron right next to the label
-                    <>
-                        {title}
-                        <IconChevronDownFilled
-                            className={`size-4 shrink-0 -translate-y-px text-phi-text-muted transition-transform duration-200 ${open ? "rotate-0" : "-rotate-90"}`}
-                            aria-hidden
-                        />
-                    </>
-                ) : (
-                    <>
-                        {title}
-                        <IconChevronDownFilled
-                            className={`size-4 shrink-0 -translate-y-px text-phi-text-muted transition-all duration-200 ${open ? "rotate-0" : "-rotate-90"} opacity-0 group-hover:opacity-100 group-focus-visible:opacity-100`}
-                            aria-hidden
-                        />
-                    </>
-                )}
-            </button>
+    return groups;
+}
 
-            {/* animated reveal — no border/background */}
-            <div
-                className={`grid transition-all duration-300 ease-[cubic-bezier(0.4,0,0.2,1)] ${open ? "grid-rows-[1fr] opacity-100" : "grid-rows-[0fr] opacity-0"
-                    }`}
-            >
-                <div className="overflow-hidden">
-                    <div
-                        className={`${isStreaming && isStreamingVariant ? "phi-work-stagger " : ""}space-y-3 pb-1 pt-1`}
-                    >
-                        {entries.map((entry) => {
-                            if (Array.isArray(entry)) {
-                                return <ToolGroupLine key={entry.map((t) => t.id).join("|")} items={entry} />;
-                            }
-                            const item = entry;
-                            return <ToolLine key={item.id} item={item as Extract<WorkItem, { kind: "tool" }>} />;
-                        })}
-                    </div>
-                </div>
-            </div>
-        </div>
+function ThoughtStep({
+    group,
+    defaultOpen,
+    isStreaming,
+    elapsed,
+}: {
+    group: ThoughtGroup;
+    defaultOpen: boolean;
+    isStreaming: boolean;
+    elapsed: string | null;
+}) {
+    const hasSeveralThoughts = group.thoughts.length > 1;
+    const hasThought = group.thoughts.length > 0;
+    const label = hasSeveralThoughts
+        ? "Cerebration"
+        : hasThought
+            ? <InlineMarkdown text={group.thoughts[0]} />
+            : isStreaming
+                ? "Thinking..."
+                : elapsed
+                    ? `Worked for ${elapsed}`
+                    : "Operations";
+
+    return (
+        <ChainOfThoughtStep defaultOpen={defaultOpen}>
+            <ChainOfThoughtTrigger className="w-full px-1.5 py-0.5">
+                <span className="min-w-0 flex-1 truncate">{label}</span>
+                {elapsed && !hasThought && <span className="shrink-0 font-mono text-[11px] tabular-nums text-phi-text-faint">{elapsed}</span>}
+            </ChainOfThoughtTrigger>
+            <ChainOfThoughtContent>
+                {hasSeveralThoughts && group.thoughts.map((thought, index) => (
+                    <ChainOfThoughtItem key={`${group.id}-${index}`}>
+                        <InlineMarkdown text={thought} />
+                    </ChainOfThoughtItem>
+                ))}
+                {group.tools.map((tool) => <ToolLine key={tool.id} item={tool} />)}
+                {group.tools.length === 0 && !hasSeveralThoughts && !isStreaming && (
+                    <ChainOfThoughtItem>No tools used.</ChainOfThoughtItem>
+                )}
+            </ChainOfThoughtContent>
+        </ChainOfThoughtStep>
+    );
+}
+
+export function WorkingBlock({ items, isStreaming, variant, startedAt, durationMs }: Props) {
+    const groups = useMemo(() => groupWork(items), [items]);
+    const [now, setNow] = useState(() => Date.now());
+    const live = variant === "streaming" && Boolean(isStreaming);
+
+    useEffect(() => {
+        if (!live || !startedAt) return;
+        const id = window.setInterval(() => setNow(Date.now()), 1000);
+        return () => window.clearInterval(id);
+    }, [live, startedAt]);
+
+    if (groups.length === 0 && !live) return null;
+
+    const elapsed = live && startedAt
+        ? formatDuration(Math.max(0, now - startedAt))
+        : durationMs != null
+            ? formatDuration(durationMs)
+            : null;
+    const displayGroups = groups.length > 0 ? groups : [{ id: "thinking", thoughts: [], tools: [] }];
+
+    return (
+        <ChainOfThought className="w-full py-1">
+            {displayGroups.map((group, index) => (
+                <ThoughtStep
+                    key={group.id}
+                    group={group}
+                    defaultOpen={live}
+                    isStreaming={live}
+                    elapsed={index === 0 ? elapsed : null}
+                />
+            ))}
+        </ChainOfThought>
     );
 }

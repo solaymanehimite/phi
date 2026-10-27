@@ -249,7 +249,7 @@ export const ChatViewport = memo(function ChatViewport({
                 <div className="w-3xl flex h-full max-w-full flex-col">
                     <Conversation messages={messages} hideLastWork={hideLastWork} isStreaming={isStreaming} onUndo={onUndo} />
                     {showLive && (
-                        <div className="pt-2 phi-work-stagger">
+                        <div className="pt-2">
                             <Streaming text={streaming.text} workItems={streaming.workItems} error={streaming.error} isStreaming={isStreaming} startedAt={streaming.startedAt} />
                         </div>
                     )}
